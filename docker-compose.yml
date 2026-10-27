@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  focus-dns:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: focusdns-backend:latest
+    container_name: focusdns_backend
+    restart: unless-stopped
+    environment:
+      - DNS_HOST=0.0.0.0
+      - DNS_PORT=53
+      - HTTP_PORT=8080
+      - ADMIN_MASTER_KEY=${ADMIN_MASTER_KEY:-FocusDNS-Master-2026}
+    ports:
+      # Standard RFC 1035 DNS (UDP & TCP Port 53)
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      # Persistent SQLite database & threat cache
+      - focusdns_data:/app/server
+    networks:
+      - focusdns_net
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: focusdns_caddy
+    restart: unless-stopped
+    ports:
+      # Automated Let's Encrypt TLS & Web traffic
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 QUIC
+    environment:
+      - FOCUS_DOMAIN=${FOCUS_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - focus-dns
+    networks:
+      - focusdns_net
+
+volumes:
+  focusdns_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  focusdns_net:
+    driver: bridge

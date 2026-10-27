@@ -4,7 +4,9 @@ enum SecurityFeature {
   googleSafe,
   typosquatting,
   cryptojacking,
-  dnsRebinding
+  dnsRebinding,
+  safesearch,
+  youtubeRestricted,
 }
 
 enum PrivacyFeature {

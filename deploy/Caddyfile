@@ -1,0 +1,77 @@
+# ==============================================================================
+# FocusDNS Caddy Automated Reverse Proxy & SSL/TLS Termination
+# ==============================================================================
+# Replace {$FOCUS_DOMAIN:localhost} with your public domain (e.g. dns.example.com)
+# Caddy automatically provisions and renews Let's Encrypt certificates.
+
+{$FOCUS_DOMAIN:localhost} {
+    # Encode responses for speed (zstd and gzip)
+    encode zstd gzip
+
+    # RFC 8484 DNS-over-HTTPS (DoH) Endpoint
+    @doh {
+        path /dns-query /dns-query/*
+    }
+    handle @doh {
+        reverse_proxy focus-dns:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Operator Web Admin Portal
+    @admin {
+        path /admin /admin/*
+    }
+    handle @admin {
+        reverse_proxy focus-dns:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Server-Sent Events (SSE) Live Telescope Stream (disables response buffering)
+    @stream {
+        path /api/admin/stream
+    }
+    handle @stream {
+        reverse_proxy focus-dns:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            flush_interval -1
+        }
+    }
+
+    # Mobile App REST API Endpoints
+    @api {
+        path /api/*
+    }
+    handle @api {
+        reverse_proxy focus-dns:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Fallback / Healthcheck
+    handle {
+        reverse_proxy focus-dns:8080
+    }
+}

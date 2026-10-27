@@ -16,6 +16,7 @@ import os
 import threading
 import time
 import urllib.parse
+import uuid
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from typing import Dict, Any, Optional, Tuple
@@ -255,6 +256,18 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
             return self._send_error(f"Endpoint GET {path} not found", 404)
 
+        # Apple iOS / macOS .mobileconfig Profile Download (NextDNS Parity)
+        if path.endswith("/apple.mobileconfig") or path == "/api/profile/apple.mobileconfig":
+            req_profile_id = profile_id
+            if path.startswith("/api/profile/") and "/apple.mobileconfig" in path:
+                parts = path.split("/")
+                if len(parts) >= 4 and parts[3] != "apple.mobileconfig":
+                    req_profile_id = parts[3]
+            p = db.get_profile(req_profile_id)
+            if not p:
+                return self._send_error(f"Profile '{req_profile_id}' not found", 404)
+            return self._handle_apple_mobileconfig(req_profile_id, p['name'])
+
         # All other GET endpoints require API token authentication
         if not self._verify_auth():
             return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
@@ -265,6 +278,10 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             if not p:
                 return self._send_error("Profile not found", 404)
             return self._send_json({"profile": p, "success": True})
+
+        if path == "/api/profiles":
+            profiles = db.get_all_profiles_admin()
+            return self._send_json({"profiles": profiles, "success": True})
 
         if path == "/api/analytics/summary":
             analytics = db.get_analytics(profile_id, '7d')
@@ -277,6 +294,10 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 return self._send_error("Profile not found", 404)
             client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] or "127.0.0.1").split(',')[0].strip()
             linked_ip = p.get('linked_ip', 'No IP linked')
+            host_hdr = self.headers.get("Host", "127.0.0.1:8080")
+            proto = self.headers.get("X-Forwarded-Proto", "https" if ":443" in host_hdr or ("." in host_hdr and not host_hdr.startswith("127.") and not host_hdr.startswith("10.") and not host_hdr.startswith("192.168.")) else "http")
+            doh_endpoint = f"{proto}://{host_hdr}/dns-query?profile_id={profile_id}"
+            apple_url = f"{proto}://{host_hdr}/api/profile/{profile_id}/apple.mobileconfig"
             return self._send_json({
                 "profile_id": profile_id,
                 "name": p['name'],
@@ -285,8 +306,9 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 "is_matched": (linked_ip == client_ip and linked_ip != 'No IP linked'),
                 "ipv4_endpoints": ['45.90.28.140', '45.90.30.140'],
                 "ipv6_endpoints": [f'2a07:a8c0::{profile_id}', f'2a07:a8c1::{profile_id}'],
-                "doh_endpoint": f"http://127.0.0.1:8080/dns-query?profile_id={profile_id}",
+                "doh_endpoint": doh_endpoint,
                 "dot_endpoint": f"{profile_id}.dns.local",
+                "apple_mobileconfig_url": apple_url,
                 "success": True
             })
 
@@ -548,6 +570,14 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
         if err:
             return self._send_error(err, 400)
         profile_id = body.get('profile_id', 'a1b2c3')
+
+        # Profiles
+        if path == "/api/profiles":
+            name = str(body.get('name', 'New Profile')).strip()
+            if not name:
+                name = 'New Profile'
+            pid = db.create_profile(name)
+            return self._send_json({"success": True, "profile_id": pid, "name": name})
 
         # Toggle Protection
         if path == "/api/profile/toggle-protection":
@@ -900,3 +930,72 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             pass
         finally:
             resolver.unsubscribe_logs(on_event)
+
+    def _handle_apple_mobileconfig(self, profile_id: str, profile_name: str):
+        """Generates native Apple Encrypted DNS .mobileconfig profile for zero-app iOS/macOS enrollment."""
+        host_hdr = self.headers.get("Host", "127.0.0.1:8080")
+        fwd_proto = self.headers.get("X-Forwarded-Proto", "")
+        if fwd_proto:
+            proto = fwd_proto
+        elif ":443" in host_hdr or ("." in host_hdr and not host_hdr.startswith("127.") and not host_hdr.startswith("10.") and not host_hdr.startswith("192.168.")):
+            proto = "https"
+        else:
+            proto = "http"
+
+        doh_url = f"{proto}://{host_hdr}/dns-query?profile_id={profile_id}"
+        uuid_dns = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"focusdns-{profile_id}-dns"))
+        uuid_top = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"focusdns-{profile_id}-top"))
+
+        xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>DNSSettings</key>
+            <dict>
+                <key>DNSProtocol</key>
+                <string>HTTPS</string>
+                <key>ServerURL</key>
+                <string>{doh_url}</string>
+            </dict>
+            <key>PayloadDescription</key>
+            <string>Configures Apple device to use FocusDNS Encrypted DNS over HTTPS.</string>
+            <key>PayloadDisplayName</key>
+            <string>FocusDNS DoH ({profile_name})</string>
+            <key>PayloadIdentifier</key>
+            <string>com.focusdns.profile.{profile_id}.dns</string>
+            <key>PayloadType</key>
+            <string>com.apple.dnsSettings.managed</string>
+            <key>PayloadUUID</key>
+            <string>{uuid_dns}</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>FocusDNS Encrypted DNS profile for tamper-proof digital focus and threat protection.</string>
+    <key>PayloadDisplayName</key>
+    <string>FocusDNS ({profile_name})</string>
+    <key>PayloadIdentifier</key>
+    <string>com.focusdns.profile.{profile_id}</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>{uuid_top}</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>"""
+        content = xml.encode('utf-8')
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-apple-aspen-config; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="focusdns-{profile_id}.mobileconfig"')
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(content)
+

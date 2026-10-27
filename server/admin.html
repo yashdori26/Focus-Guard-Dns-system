@@ -1368,8 +1368,8 @@
             <td><strong>${p.name}</strong></td>
             <td>${modeBadge}</td>
             <td class="mono">${p.queries_today.toLocaleString()}</td>
-            <td class="mono" style="font-size:12px; color:var(--muted)">${p.linked_ip}</td>
-            <td>
+            <td style="white-space:nowrap;">
+              <a href="/api/profile/${p.profile_id}/apple.mobileconfig" class="btn btn-subtle btn-sm" download style="text-decoration:none; margin-right:6px;" title="Download Apple iOS / macOS DNS Profile">🍏 Apple Config</a>
               ${p.profile_id !== 'a1b2c3' ? `<button class="btn btn-danger btn-sm" onclick="revokeProfile('${p.profile_id}', '${p.name}')">Revoke</button>` : `<span style="font-size:11px;color:var(--dimmed)">DEFAULT</span>`}
             </td>
           `;

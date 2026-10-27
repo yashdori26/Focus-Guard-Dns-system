@@ -537,20 +537,22 @@ def forward_wire_query(query_bytes: bytes, timeout: float = UPSTREAM_TIMEOUT) ->
     try:
         sock.sendto(query_bytes, (primary_host, UPSTREAM_DNS_PORT))
         reply, _ = sock.recvfrom(4096)
-        sock.close()
     except (socket.timeout, Exception):
+        pass
+    finally:
         sock.close()
 
     if not reply:
         # Fallback secondary upstream
+        sock_fb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock_fb.settimeout(timeout)
         try:
-            sock_fb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock_fb.settimeout(timeout)
             sock_fb.sendto(query_bytes, (secondary_host, UPSTREAM_DNS_PORT))
             reply, _ = sock_fb.recvfrom(4096)
-            sock_fb.close()
         except Exception:
             return None, 'SERVFAIL'
+        finally:
+            sock_fb.close()
 
     if reply:
         # Check TC (Truncation) bit: flags byte 1, bit 1 (0x02)
@@ -616,6 +618,34 @@ def resolve_wire_packet(query_bytes: bytes, profile_id: str = 'a1b2c3', client_i
             'client_ip': client_ip
         }
         db.log_query_async(profile_id, base_domain, subdomain, 'blocked', reason, client_ip)
+        broadcast_log(res)
+        return reply.pack(), res
+
+    def build_safesearch_reply(target_ipv4: str, target_ipv6: str, reason: str) -> Tuple[bytes, Dict[str, Any]]:
+        reply = req.reply()
+        reply.header.rcode = RCODE.NOERROR
+        reply.header.ra = 1
+        resolved_ip = target_ipv4
+        if qtype_int == QTYPE.A:
+            reply.add_answer(RR(f"{qname}.", QTYPE.A, ttl=300, rdata=A(target_ipv4)))
+        elif qtype_int == QTYPE.AAAA:
+            reply.add_answer(RR(f"{qname}.", QTYPE.AAAA, ttl=300, rdata=AAAA(target_ipv6)))
+            resolved_ip = target_ipv6
+        else:
+            return _forward_and_process_allowed(req, query_bytes, profile_id, base_domain, subdomain, qtype_str, client_ip, reason)
+
+        res = {
+            'profile_id': profile_id,
+            'domain': base_domain,
+            'subdomain': subdomain,
+            'qtype': qtype_str,
+            'status': 'allowed',
+            'reason': reason,
+            'ip': resolved_ip,
+            'rcode': 'NOERROR',
+            'client_ip': client_ip
+        }
+        db.log_query_async(profile_id, base_domain, subdomain, 'allowed', reason, client_ip)
         broadcast_log(res)
         return reply.pack(), res
 
@@ -705,6 +735,23 @@ def resolve_wire_packet(query_bytes: bytes, profile_id: str = 'a1b2c3', client_i
         for trk in KNOWN_TRACKERS:
             if domain_matches(qname, trk):
                 return build_block_reply('Privacy: Disguised Tracker Blocklist')
+
+    # 7b. SafeSearch & YouTube Restricted Mode DNS Rewriting
+    if sec.get('safesearch', False) or sec.get('youtube_restricted', False):
+        is_youtube = qname in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtubei.googleapis.com', 'youtube-nocookie.com')
+        if is_youtube and (sec.get('youtube_restricted', False) or sec.get('safesearch', False)):
+            return build_safesearch_reply('216.239.38.119', '2001:4860:4806::77', 'SafeSearch: YouTube Restricted Mode Enforced')
+
+        if sec.get('safesearch', False):
+            is_google = (qname == 'google.com' or qname.startswith('www.google.') or (base_domain and base_domain.startswith('google.')))
+            if is_google:
+                return build_safesearch_reply('216.239.38.120', '2001:4860:4806::78', 'SafeSearch: Google SafeSearch VIP Enforced')
+
+            if qname in ('bing.com', 'www.bing.com'):
+                return build_safesearch_reply('204.79.197.220', '2620:1ec:c11::200', 'SafeSearch: Bing Strict VIP Enforced')
+
+            if qname in ('duckduckgo.com', 'www.duckduckgo.com'):
+                return build_safesearch_reply('52.142.124.215', '2603:1030:20a:3::1', 'SafeSearch: DuckDuckGo Safe VIP Enforced')
 
     # 8. Clean Query -> Forward Wire Query Upstream
     return _forward_and_process_allowed(req, query_bytes, profile_id, base_domain, subdomain, qtype_str, client_ip, 'Clean Query')

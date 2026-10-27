@@ -85,6 +85,26 @@ class SecurityTab extends ConsumerWidget {
             (val) => _onToggle(context, ref, strictState, SecurityFeature.dnsRebinding, val),
           ),
         ),
+        secCard(
+          'Enforce SafeSearch',
+          'Force strict SafeSearch across Google, Bing, and DuckDuckGo via canonical DNS virtual IP rewriting.',
+          child: switchRow(
+            'Enforce SafeSearch',
+            'Filter explicit search engine results',
+            securityState[SecurityFeature.safesearch] ?? true,
+            (val) => _onToggle(context, ref, strictState, SecurityFeature.safesearch, val),
+          ),
+        ),
+        secCard(
+          'YouTube Restricted Mode',
+          'Lock YouTube into Strict Restricted Mode across apps and web browsers via restrict.youtube.com rewrite.',
+          child: switchRow(
+            'YouTube Restricted Mode',
+            'Hide mature & explicit videos',
+            securityState[SecurityFeature.youtubeRestricted] ?? false,
+            (val) => _onToggle(context, ref, strictState, SecurityFeature.youtubeRestricted, val),
+          ),
+        ),
       ],
     );
   }

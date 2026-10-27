@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class FocusDnsApiClient {
-  final String baseUrl;
-  final String profileId;
+  String baseUrl;
+  String profileId;
   String? apiKey;
 
   FocusDnsApiClient({
@@ -11,6 +11,19 @@ class FocusDnsApiClient {
     this.profileId = 'a1b2c3',
     this.apiKey,
   });
+
+  void updateConfig({String? newBaseUrl, String? newProfileId}) {
+    if (newBaseUrl != null && newBaseUrl.isNotEmpty) {
+      var url = newBaseUrl.trim();
+      if (url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (url.endsWith('/dns-query')) url = url.replaceAll('/dns-query', '');
+      baseUrl = url;
+      apiKey = null; // Re-authenticate with new host
+    }
+    if (newProfileId != null && newProfileId.isNotEmpty) {
+      profileId = newProfileId.trim();
+    }
+  }
 
   Uri _uri(String path, [Map<String, String>? params]) {
     final queryParams = {'profile_id': profileId, ...?params};
@@ -203,5 +216,83 @@ class FocusDnsApiClient {
       }
     } catch (_) {}
     return null;
+  }
+
+  // --- Profile Fleet Operations ---
+  Future<List<Map<String, dynamic>>> getProfiles() async {
+    await ensureToken();
+    try {
+      final res = await http.get(_uri('/api/profiles'), headers: _headers()).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final list = data['profiles'] as List<dynamic>?;
+        if (list != null) {
+          return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> createProfile(String name) async {
+    await ensureToken();
+    try {
+      final res = await http.post(
+        _uri('/api/profiles'),
+        headers: _headers(),
+        body: json.encode({'name': name}),
+      ).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        return json.decode(res.body);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // --- Settings Tab ---
+  Future<bool> updateProfileName(String name) async {
+    await ensureToken();
+    try {
+      final res = await http.post(
+        _uri('/api/settings'),
+        headers: _headers(),
+        body: json.encode({'profile_id': profileId, 'profile_name': name}),
+      ).timeout(const Duration(seconds: 3));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateLogRetention(String retention) async {
+    await ensureToken();
+    try {
+      final res = await http.post(
+        _uri('/api/settings'),
+        headers: _headers(),
+        body: json.encode({'profile_id': profileId, 'log_retention': retention}),
+      ).timeout(const Duration(seconds: 3));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateWeb3Setting(String feature, bool value) async {
+    await ensureToken();
+    try {
+      final res = await http.post(
+        _uri('/api/settings'),
+        headers: _headers(),
+        body: json.encode({
+          'profile_id': profileId,
+          'web3_feature': feature,
+          'web3_value': value,
+        }),
+      ).timeout(const Duration(seconds: 3));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 }

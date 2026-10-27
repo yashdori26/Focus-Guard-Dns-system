@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,10 +39,10 @@ class RulesStoreTest {
 
     @Test
     fun testEvaluateIsBlocked_ourAppNeverBlocked() {
-        val blocked = setOf("com.example.focus_dns")
+        val blocked = setOf("com.focusdns.app")
         assertFalse(
             "FocusDNS must never block itself",
-            RulesStore.evaluateIsBlocked("com.example.focus_dns", blocked, isStrict = true, isVpnLost = true, isOurApp = true)
+            RulesStore.evaluateIsBlocked("com.focusdns.app", blocked, isStrict = true, isVpnLost = true, isOurApp = true)
         )
     }
 

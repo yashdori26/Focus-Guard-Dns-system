@@ -30,7 +30,7 @@ class FocusDnsVpnManager {
 
   /// Starts the local DNS-only VPN service.
   static Future<bool> startVpn({
-    String serverUrl = 'http://10.0.2.2:8080/dns-query',
+    String serverUrl = 'http://127.0.0.1:8080/dns-query',
     String profileId = 'a1b2c3',
     String apiToken = '',
   }) async {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../state_management/providers.dart';
 import 'profile_settings_sheet.dart';
+import 'profile_switcher_sheet.dart';
 import 'theme/wabi_sabi_theme.dart';
 import 'more_screen.dart';
 import 'tabs/deep_focus_tab.dart';
@@ -70,6 +71,15 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen> {
     } catch (_) {}
   }
 
+  void _openProfileSwitcherSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const ProfileSwitcherSheet(),
+    );
+  }
+
   void _openAllProfileSettingsSheet() {
     showModalBottomSheet(
       context: context,
@@ -86,6 +96,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen> {
     final vpn = ref.watch(vpnProvider);
     final blocker = ref.watch(blockerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final settings = ref.watch(settingsProvider);
     final palette = themeMode == ThemeMode.light
         ? WabiSabiPalette.light
         : WabiSabiPalette.dark;
@@ -106,7 +117,8 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen> {
                     GestureDetector(
                       key: const Key('header_profile_pill'),
                       behavior: HitTestBehavior.opaque,
-                      onTap: _openAllProfileSettingsSheet,
+                      onTap: _openProfileSwitcherSheet,
+                      onLongPress: _openAllProfileSettingsSheet,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
@@ -127,7 +139,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'My First Profile',
+                              settings.profileName,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

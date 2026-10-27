@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/server_config.dart';
 import '../../state_management/providers.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../ui_helpers.dart';
@@ -77,9 +78,20 @@ class SetupTab extends ConsumerWidget {
                 subtitle: 'For IPv6-native connections and dual-stack routers',
                 palette: palette,
               ),
+              if (setup.appleMobileConfigUrl != null && setup.appleMobileConfigUrl!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _endpointField(
+                  context,
+                  label: 'Apple iOS & macOS Profile (.mobileconfig)',
+                  value: setup.appleMobileConfigUrl!,
+                  subtitle: 'Download in Safari to install FocusDNS into Apple Settings (zero app needed)',
+                  palette: palette,
+                ),
+              ],
             ],
           ),
         ),
+        _ServerConfigCard(palette: palette, ref: ref),
         secCard(
           'Linked IP',
           'Link your current external IP to apply profile filters to this network without device-level software.',
@@ -597,3 +609,188 @@ class SetupTab extends ConsumerWidget {
     );
   }
 }
+
+class _ServerConfigCard extends StatefulWidget {
+  final WabiSabiPalette palette;
+  final WidgetRef ref;
+
+  const _ServerConfigCard({required this.palette, required this.ref});
+
+  @override
+  State<_ServerConfigCard> createState() => _ServerConfigCardState();
+}
+
+class _ServerConfigCardState extends State<_ServerConfigCard> {
+  final TextEditingController _controller = TextEditingController();
+  bool _isTesting = false;
+  ConnectionTestResult? _testResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConfig();
+  }
+
+  Future<void> _loadConfig() async {
+    final cfg = await ServerConfig.load();
+    _controller.text = cfg.serverUrl;
+  }
+
+  Future<void> _testConnection() async {
+    setState(() {
+      _isTesting = true;
+      _testResult = null;
+    });
+    final cfg = ServerConfig(serverUrl: _controller.text.trim());
+    final result = await cfg.testReachability();
+    if (mounted) {
+      setState(() {
+        _isTesting = false;
+        _testResult = result;
+      });
+    }
+  }
+
+  Future<void> _saveAndApply() async {
+    final newUrl = _controller.text.trim();
+    if (newUrl.isEmpty) return;
+
+    final cfg = ServerConfig(serverUrl: newUrl);
+    await widget.ref.read(vpnProvider.notifier).updateServerConfig(cfg);
+    await widget.ref.read(setupProvider.notifier).updateServerHost(cfg.normalizedBaseUrl);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Server endpoint applied: $newUrl'),
+          backgroundColor: widget.palette.surface,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = widget.palette;
+    return secCard(
+      'Server & Cloud Endpoint',
+      'Specify your custom cloud domain (e.g. https://dns.example.com) or local server IP to eliminate the 10.0.2.2 emulator trap.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: palette.canvas,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'BACKEND SERVER HOST / DOH DOMAIN',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                    color: palette.mutedInk,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _controller,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    color: palette.ink,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'https://dns.example.com or http://192.168.1.50:8080',
+                    hintStyle: TextStyle(color: palette.subtleInk, fontSize: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: palette.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: palette.ink, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_testResult != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _testResult!.isSuccess ? palette.ink.withOpacity(0.08) : palette.strictAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _testResult!.isSuccess ? palette.ink.withOpacity(0.2) : palette.strictAccent.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _testResult!.isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
+                          size: 14,
+                          color: _testResult!.isSuccess ? palette.ink : palette.strictAccent,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _testResult!.isSuccess ? 'Online (${_testResult!.latencyMs} ms)' : _testResult!.message,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _testResult!.isSuccess ? palette.ink : palette.strictAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Row(
+                  children: [
+                    OutlinedButton(
+                      onPressed: _isTesting ? null : _testConnection,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: palette.ink,
+                        side: BorderSide(color: palette.border),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      child: _isTesting
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('PROBE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _saveAndApply,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: palette.ink,
+                        foregroundColor: palette.canvas,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      child: const Text('SAVE & CONNECT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

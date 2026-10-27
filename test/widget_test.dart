@@ -135,8 +135,13 @@ void main() {
     await tester.tap(find.byKey(const Key('nav_0')));
     await tester.pumpAndSettle();
 
-    // Tap header profile pill to open profile settings sheet
+    // Tap header profile pill to open profile switcher sheet
     await tester.tap(find.byKey(const Key('header_profile_pill')));
+    await tester.pumpAndSettle();
+    expect(find.text('DNS Profiles'), findsOneWidget);
+
+    // Tap Detailed Profile Settings button to open all tabs sheet
+    await tester.tap(find.text('Detailed Profile Settings & Rules'));
     await tester.pumpAndSettle();
     expect(find.text('Setup'), findsWidgets);
     expect(find.text('Security'), findsWidgets);

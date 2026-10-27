@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -30,9 +30,8 @@ class FocusDnsVpnService : VpnService() {
         const val CHANNEL_ID = "focus_dns_vpn_channel"
         const val NOTIFICATION_ID = 1001
 
-
-        const val ACTION_START = "com.example.focus_dns.START_VPN"
-        const val ACTION_STOP = "com.example.focus_dns.STOP_VPN"
+        const val ACTION_START = "com.focusdns.app.START_VPN"
+        const val ACTION_STOP = "com.focusdns.app.STOP_VPN"
 
         const val EXTRA_SERVER_URL = "server_url"
         const val EXTRA_PROFILE_ID = "profile_id"
@@ -73,7 +72,7 @@ class FocusDnsVpnService : VpnService() {
     private lateinit var threadPool: ThreadPoolExecutor
     private val outputLock = Any()
 
-    private var serverUrl: String = "http://10.0.2.2:8080/dns-query"
+    private var serverUrl: String = "http://127.0.0.1:8080/dns-query"
     private var profileId: String = "a1b2c3"
     private var apiToken: String = ""
 
@@ -139,7 +138,7 @@ class FocusDnsVpnService : VpnService() {
 
         when (intent.action) {
             ACTION_START -> {
-                serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "http://10.0.2.2:8080/dns-query"
+                serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "http://127.0.0.1:8080/dns-query"
                 profileId = intent.getStringExtra(EXTRA_PROFILE_ID) ?: "a1b2c3"
                 apiToken = intent.getStringExtra(EXTRA_API_TOKEN) ?: ""
 

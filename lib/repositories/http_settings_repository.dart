@@ -23,6 +23,10 @@ class HttpSettingsRepository implements SettingsRepository {
         return 'dns_rebinding';
       case SecurityFeature.typosquatting:
         return 'typosquatting';
+      case SecurityFeature.safesearch:
+        return 'safesearch';
+      case SecurityFeature.youtubeRestricted:
+        return 'youtube_restricted';
       default:
         return feature.name;
     }

@@ -9,6 +9,7 @@ class SetupState {
   final String dotHostname;
   final List<String> ipv4Endpoints;
   final List<String> ipv6Endpoints;
+  final String? appleMobileConfigUrl;
   final bool isLoading;
   final bool isUpdatingIp;
   final String? errorMessage;
@@ -21,6 +22,7 @@ class SetupState {
     required this.dotHostname,
     required this.ipv4Endpoints,
     required this.ipv6Endpoints,
+    this.appleMobileConfigUrl,
     this.isLoading = false,
     this.isUpdatingIp = false,
     this.errorMessage,
@@ -39,6 +41,7 @@ class SetupState {
     String? dotHostname,
     List<String>? ipv4Endpoints,
     List<String>? ipv6Endpoints,
+    String? appleMobileConfigUrl,
     bool? isLoading,
     bool? isUpdatingIp,
     String? errorMessage,
@@ -51,6 +54,7 @@ class SetupState {
       dotHostname: dotHostname ?? this.dotHostname,
       ipv4Endpoints: ipv4Endpoints ?? this.ipv4Endpoints,
       ipv6Endpoints: ipv6Endpoints ?? this.ipv6Endpoints,
+      appleMobileConfigUrl: appleMobileConfigUrl ?? this.appleMobileConfigUrl,
       isLoading: isLoading ?? this.isLoading,
       isUpdatingIp: isUpdatingIp ?? this.isUpdatingIp,
       errorMessage: errorMessage,
@@ -71,10 +75,19 @@ class SetupNotifier extends StateNotifier<SetupState> {
           dotHostname: 'a1b2c3.dns.focusdns.net',
           ipv4Endpoints: ['45.90.28.140', '45.90.30.140'],
           ipv6Endpoints: ['2a07:a8c0::a1b2:c3', '2a07:a8c1::a1b2:c3'],
+          appleMobileConfigUrl: null,
           isLoading: false,
           isUpdatingIp: false,
         )) {
     loadSetupDetails();
+  }
+
+  Future<void> updateServerHost([String? newHost, String? profileId]) async {
+    _client.updateConfig(newBaseUrl: newHost, newProfileId: profileId);
+    if (profileId != null && profileId.isNotEmpty) {
+      state = state.copyWith(profileId: profileId);
+    }
+    await loadSetupDetails();
   }
 
   Future<void> loadSetupDetails() async {
@@ -94,6 +107,7 @@ class SetupNotifier extends StateNotifier<SetupState> {
       final serverClientIp = details['client_ip']?.toString() ?? detectedIp ?? state.currentClientIp;
       final serverDoh = details['doh_endpoint']?.toString() ?? state.dohUrl;
       final serverDot = details['dot_endpoint']?.toString() ?? state.dotHostname;
+      final serverApple = details['apple_mobileconfig_url']?.toString();
 
       List<String> ipv4 = state.ipv4Endpoints;
       if (details['ipv4_endpoints'] is List) {
@@ -108,6 +122,7 @@ class SetupNotifier extends StateNotifier<SetupState> {
       }
 
       state = state.copyWith(
+        isLoading: false,
         profileId: serverProfileId,
         linkedIp: (serverLinkedIp != null && serverLinkedIp.isNotEmpty) ? serverLinkedIp : state.linkedIp,
         currentClientIp: serverClientIp,
@@ -115,7 +130,7 @@ class SetupNotifier extends StateNotifier<SetupState> {
         dotHostname: serverDot,
         ipv4Endpoints: ipv4,
         ipv6Endpoints: ipv6,
-        isLoading: false,
+        appleMobileConfigUrl: serverApple,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());

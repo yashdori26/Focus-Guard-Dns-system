@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import android.Manifest
 import android.app.Activity
@@ -86,7 +86,7 @@ class MainActivity: FlutterActivity() {
                     }
                     "startVpn" -> {
                         requestNotificationPermissionIfNeeded()
-                        val serverUrl = call.argument<String>("serverUrl") ?: "http://10.0.2.2:8080/dns-query"
+                        val serverUrl = call.argument<String>("serverUrl") ?: "http://127.0.0.1:8080/dns-query"
                         val profileId = call.argument<String>("profileId") ?: "a1b2c3"
                         val apiToken = call.argument<String>("apiToken") ?: ""
 

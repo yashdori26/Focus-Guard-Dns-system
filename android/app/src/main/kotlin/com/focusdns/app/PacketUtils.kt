@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import java.nio.ByteBuffer
 

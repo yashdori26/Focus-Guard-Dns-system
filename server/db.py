@@ -26,7 +26,8 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "focus_dns.db")
 # Whitelists for allowed column updates
 SECURITY_COLUMNS = {
     'threat_intel', 'ai_threat', 'google_safe',
-    'cryptojacking', 'dns_rebinding', 'typosquatting'
+    'cryptojacking', 'dns_rebinding', 'typosquatting',
+    'safesearch', 'youtube_restricted'
 }
 
 PRIVACY_COLUMNS = {
@@ -92,9 +93,21 @@ def init_db():
         cryptojacking INTEGER DEFAULT 1,
         dns_rebinding INTEGER DEFAULT 1,
         typosquatting INTEGER DEFAULT 0,
+        safesearch INTEGER DEFAULT 1,
+        youtube_restricted INTEGER DEFAULT 0,
         FOREIGN KEY(profile_id) REFERENCES profiles(profile_id)
     );
     """)
+
+    # Schema migrations for existing databases
+    try:
+        cursor.execute("ALTER TABLE security_settings ADD COLUMN safesearch INTEGER DEFAULT 1")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE security_settings ADD COLUMN youtube_restricted INTEGER DEFAULT 0")
+    except Exception:
+        pass
 
     # 3. Privacy Settings Table
     cursor.execute("""
@@ -197,6 +210,30 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_query_logs_profile_time 
     ON query_logs(profile_id, timestamp);
     """)
+
+    # Migration: Ensure deep_focus_items uses composite PRIMARY KEY (profile_id, id)
+    schema_row = cursor.execute("SELECT sql FROM sqlite_master WHERE name='deep_focus_items'").fetchone()
+    if schema_row and "PRIMARY KEY (profile_id, id)" not in schema_row[0]:
+        cursor.execute("ALTER TABLE deep_focus_items RENAME TO deep_focus_items_old")
+        cursor.execute("""
+        CREATE TABLE deep_focus_items (
+            id TEXT NOT NULL,
+            profile_id TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            icon TEXT DEFAULT '',
+            color TEXT DEFAULT '#007AFF',
+            description TEXT DEFAULT '',
+            is_blocked INTEGER DEFAULT 1,
+            PRIMARY KEY (profile_id, id),
+            FOREIGN KEY(profile_id) REFERENCES profiles(profile_id)
+        );
+        """)
+        cursor.execute("""
+        INSERT OR IGNORE INTO deep_focus_items (id, profile_id, item_type, name, icon, color, description, is_blocked)
+        SELECT id, profile_id, item_type, name, icon, color, description, is_blocked FROM deep_focus_items_old;
+        """)
+        cursor.execute("DROP TABLE deep_focus_items_old")
 
     # Seed Default Threat Feeds
     cursor.execute("SELECT id FROM threat_feeds LIMIT 1")
@@ -564,6 +601,8 @@ def get_security_settings(profile_id: str = 'a1b2c3') -> Dict[str, bool]:
         'cryptojacking': bool(row['cryptojacking']),
         'dns_rebinding': bool(row['dns_rebinding']),
         'typosquatting': bool(row['typosquatting']),
+        'safesearch': bool(row['safesearch']) if 'safesearch' in row.keys() else True,
+        'youtube_restricted': bool(row['youtube_restricted']) if 'youtube_restricted' in row.keys() else False,
     }
 
 def update_security_setting(profile_id: str, feature: str, value: bool):

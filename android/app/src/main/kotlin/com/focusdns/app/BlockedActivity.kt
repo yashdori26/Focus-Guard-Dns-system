@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import android.app.Activity
 import android.content.Intent
@@ -27,7 +27,7 @@ class BlockedActivity : Activity() {
     companion object {
         const val EXTRA_PACKAGE_NAME = "extra_package_name"
         const val EXTRA_REASON = "extra_reason"
-        const val ACTION_RESTORE_VPN = "com.example.focus_dns.ACTION_RESTORE_VPN"
+        const val ACTION_RESTORE_VPN = "com.focusdns.app.ACTION_RESTORE_VPN"
     }
 
     private var blockedPackage: String = ""

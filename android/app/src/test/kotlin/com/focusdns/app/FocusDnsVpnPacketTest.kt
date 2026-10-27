@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../backend/api_client.dart';
 import '../backend/vpn_service.dart';
+import '../models/server_config.dart';
 
 class VpnState {
   final bool isRunning;
@@ -16,7 +17,7 @@ class VpnState {
     this.isBackendReachable = true,
     this.errorMessage,
     this.dnsServerIp = '10.254.1.2',
-    this.serverUrl = 'http://10.0.2.2:8080/dns-query',
+    this.serverUrl = 'http://127.0.0.1:8080/dns-query',
   });
 
   VpnState copyWith({
@@ -45,11 +46,23 @@ class VpnNotifier extends StateNotifier<VpnState> {
     _init();
   }
 
-  void _init() {
+  Future<void> _init() async {
+    final config = await ServerConfig.load();
+    _apiClient.updateConfig(newBaseUrl: config.serverUrl, newProfileId: config.activeProfileId);
+    state = state.copyWith(serverUrl: config.dohEndpoint);
     checkStatus();
     FocusDnsVpnManager.registerStateListener((running, reachable) {
       state = state.copyWith(isRunning: running, isBackendReachable: reachable);
     });
+  }
+
+  Future<void> updateServerConfig(ServerConfig config) async {
+    await config.save();
+    _apiClient.updateConfig(newBaseUrl: config.serverUrl, newProfileId: config.activeProfileId);
+    state = state.copyWith(serverUrl: config.dohEndpoint);
+    if (state.isRunning) {
+      await start();
+    }
   }
 
   Future<void> checkStatus() async {

@@ -1,4 +1,4 @@
-package com.example.focus_dns
+package com.focusdns.app
 
 import android.content.Context
 import android.content.Intent
@@ -185,8 +185,8 @@ object RulesStore {
     }
 
     fun getServerUrl(context: Context): String {
-        return getSecurePrefs(context).getString(KEY_SERVER_URL, "http://10.0.2.2:8080/dns-query")
-            ?: "http://10.0.2.2:8080/dns-query"
+        return getSecurePrefs(context).getString(KEY_SERVER_URL, "http://127.0.0.1:8080/dns-query")
+            ?: "http://127.0.0.1:8080/dns-query"
     }
 
     fun setProfileId(context: Context, profileId: String) {

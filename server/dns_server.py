@@ -60,10 +60,10 @@ def start_http_api_server(host: str = '127.0.0.1', port: int = 8080):
     server.serve_forever()
 
 def main():
-    # Default to loopback for security. To bind to all LAN interfaces, explicitly set FOCUS_DNS_HOST=0.0.0.0
-    host = os.environ.get('FOCUS_DNS_HOST', '127.0.0.1')
-    http_port = int(os.environ.get('FOCUS_DNS_HTTP_PORT', '8080'))
-    udp_port = int(os.environ.get('FOCUS_DNS_UDP_PORT', '5354'))
+    # Default to loopback for security. In containers or VPS, set DNS_HOST=0.0.0.0
+    host = os.environ.get('DNS_HOST', os.environ.get('FOCUS_DNS_HOST', '127.0.0.1'))
+    http_port = int(os.environ.get('HTTP_PORT', os.environ.get('FOCUS_DNS_HTTP_PORT', '8080')))
+    udp_port = int(os.environ.get('DNS_PORT', os.environ.get('FOCUS_DNS_UDP_PORT', '5354')))
 
     print("=" * 60)
     print("      FOCUS-DNS HARDENED BACKEND & DOH SERVER      ")
