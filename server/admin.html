@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusDNS — Operator Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #141413;
+      --card-bg: #1c1c1a;
+      --card-hover: #222220;
+      --surface-subtle: #262624;
+      --border: #2a2a28;
+      --border-bright: #383835;
+      --ink: #f5f4f0;
+      --muted: #a8a69e;
+      --dimmed: #686762;
+      --vermilion: #e11d48;
+      --vermilion-subtle: rgba(225, 29, 72, 0.14);
+      --vermilion-border: rgba(225, 29, 72, 0.35);
+      --emerald: #10b981;
+      --emerald-subtle: rgba(16, 185, 129, 0.12);
+      --amber: #f59e0b;
+      --amber-subtle: rgba(245, 158, 11, 0.14);
+      --blue: #3b82f6;
+      --blue-subtle: rgba(59, 130, 246, 0.14);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    /* Auth Screen */
+    #auth-screen {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .auth-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+
+    .seal-disc {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: var(--bg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .auth-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .auth-input-group {
+      margin-bottom: 18px;
+      text-align: left;
+    }
+
+    .auth-input-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .input-box {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      color: var(--ink);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .input-box:focus {
+      border-color: var(--ink);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
+      user-select: none;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--ink);
+      color: var(--bg);
+    }
+
+    .btn-primary:hover {
+      background: #eae9e4;
+    }
+
+    .btn-danger {
+      background: var(--vermilion);
+      color: #fff;
+    }
+
+    .btn-danger:hover {
+      background: #c8163c;
+    }
+
+    .btn-subtle {
+      background: var(--surface-subtle);
+      color: var(--ink);
+      border: 1px solid var(--border);
+    }
+
+    .btn-subtle:hover {
+      background: var(--card-hover);
+      border-color: var(--border-bright);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    .auth-error {
+      background: var(--vermilion-subtle);
+      border: 1px solid var(--vermilion-border);
+      color: #fda4af;
+      font-size: 12.5px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      display: none;
+      text-align: left;
+    }
+
+    /* Main Dashboard Layout */
+    #dashboard-screen {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .mini-seal {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .brand-text {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-op {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 8px var(--emerald);
+    }
+
+    .status-dot.bypass {
+      background: var(--vermilion);
+      box-shadow: 0 0 8px var(--vermilion);
+    }
+
+    .pulse {
+      animation: pulseAnim 2s infinite;
+    }
+
+    @keyframes pulseAnim {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Emergency Bypass Banner */
+    #emergency-banner {
+      display: none;
+      background: var(--vermilion);
+      color: #fff;
+      padding: 10px 24px;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      padding: 14px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--ink);
+    }
+
+    .tab-btn.active {
+      color: var(--ink);
+      border-bottom-color: var(--ink);
+    }
+
+    /* Main Container */
+    main {
+      padding: 28px;
+      max-width: 1320px;
+      margin: 0 auto;
+      width: 100%;
+      flex: 1;
+    }
+
+    .module-pane {
+      display: none;
+    }
+
+    .module-pane.active {
+      display: block;
+      animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pane-header {
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .pane-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .pane-desc {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Grid & Cards */
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.15s ease;
+    }
+
+    .card:hover {
+      border-color: var(--border-bright);
+    }
+
+    .metric-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metric-value {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      color: var(--ink);
+    }
+
+    .metric-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Tables */
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--surface-subtle);
+      padding: 12px 18px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      color: var(--ink);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--card-hover);
+    }
+
+    /* Chips & Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-allowed {
+      background: var(--emerald-subtle);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .badge-blocked {
+      background: var(--vermilion-subtle);
+      color: #fda4af;
+      border: 1px solid var(--vermilion-border);
+    }
+
+    .badge-cache {
+      background: var(--blue-subtle);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+
+    .badge-warning {
+      background: var(--amber-subtle);
+      color: #fde68a;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--surface-subtle);
+      border: 1px solid var(--border);
+      transition: .2s;
+      border-radius: 22px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--muted);
+      transition: .2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--ink);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(18px);
+      background-color: var(--bg);
+    }
+
+    /* Tags / Chips List */
+    .chips-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .chip-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip-del {
+      cursor: pointer;
+      color: var(--dimmed);
+      font-weight: 700;
+    }
+
+    .chip-del:hover {
+      color: var(--vermilion);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      padding: 28px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        padding: 12px 16px;
+      }
+      .nav-tabs {
+        padding: 0 16px;
+      }
+      main {
+        padding: 16px;
+      }
+      .grid-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <script>
+    if (window.location.search.includes('preview=1')) {
+      document.write('<style>#auth-screen { display: none !important; } #dashboard-screen { display: flex !important; }</style>');
+    }
+  </script>
+</head>
+<body>
+
+  <!-- 1. Authentication View -->
+  <div id="auth-screen">
+    <div class="auth-card">
+      <div class="seal-disc">●</div>
+      <h1 class="auth-title">FocusDNS Operator</h1>
+      <p class="auth-subtitle">Zero-Bloat DNS Core & Threat Control</p>
+
+      <div id="auth-error-box" class="auth-error"></div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="auth-input-group">
+          <label for="master-key-input">Master Administration Key</label>
+          <input type="password" id="master-key-input" class="input-box" placeholder="••••••••••••••••" autofocus required>
+        </div>
+        <button type="submit" id="login-btn" class="btn btn-primary btn-block">Authenticate System</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Main Dashboard View -->
+  <div id="dashboard-screen">
+    <div id="emergency-banner">
+      🚨 GLOBAL EMERGENCY SAFE BYPASS ACTIVE — ALL DOMAINS PASS-THROUGH (NO FILTERS)
+    </div>
+
+    <header>
+      <div class="brand-section">
+        <div class="mini-seal">●</div>
+        <div class="brand-text">
+          FocusDNS
+          <span class="badge-op">OPERATOR</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="status-indicator">
+          <div id="status-dot" class="status-dot pulse"></div>
+          <span id="status-text">RESOLVER ONLINE</span>
+        </div>
+        <div class="badge badge-allowed" id="header-qps">0.0 QPS</div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-subtle btn-sm" onclick="toggleBypassQuick()" id="quick-bypass-btn">Emergency Bypass</button>
+        <button class="btn btn-subtle btn-sm" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </header>
+
+    <!-- Module Tabs -->
+    <nav class="nav-tabs">
+      <div class="tab-btn active" onclick="switchTab('mission-control')">📡 Mission Control</div>
+      <div class="tab-btn" onclick="switchTab('feeds')">🛡️ Threat Feeds</div>
+      <div class="tab-btn" onclick="switchTab('upstream')">🔀 Upstream Engine</div>
+      <div class="tab-btn" onclick="switchTab('emergency')">🚨 Emergency & Overrides</div>
+      <div class="tab-btn" onclick="switchTab('fleet')">👥 Fleet & Profiles</div>
+      <div class="tab-btn" onclick="switchTab('telescope')">🔭 Live Telescope</div>
+      <div class="tab-btn" onclick="switchTab('maintenance')">💾 Maintenance</div>
+    </nav>
+
+    <main>
+      <!-- Module 1: Mission Control (Server Vitals) -->
+      <section id="pane-mission-control" class="module-pane active">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Mission Control</h2>
+            <p class="pane-desc">Live engine vitals, query throughput, and in-memory cache efficiency.</p>
+          </div>
+          <button class="btn btn-subtle btn-sm" onclick="refreshMetrics()">↻ Refresh Vitals</button>
+        </div>
+
+        <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-label">Live Load</div>
+            <div class="metric-value mono" id="metric-qps">0.0 <span style="font-size:16px;">QPS</span></div>
+            <div class="metric-sub" id="metric-active-conn">Active threads: 1</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Queries Today</div>
+            <div class="metric-value mono" id="metric-total-today">0</div>
+            <div class="metric-sub" id="metric-blocked-sub">0 blocked (0.0%)</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">RAM Cache Hit Ratio</div>
+            <div class="metric-value mono" id="metric-cache-ratio">0.0%</div>
+            <div class="metric-sub" id="metric-cache-sub">0 hits (0ms latency)</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Memory & Uptime</div>
+            <div class="metric-value mono" id="metric-memory">0 MB</div>
+            <div class="metric-sub" id="metric-uptime">Uptime: 0m 0s</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <div class="metric-label">Engine Configuration Snapshot</div>
+          <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-top: 10px; font-size: 13.5px;">
+            <div><strong>Active Signatures:</strong> <span class="mono" id="metric-sigs">191,700</span> domains</div>
+            <div><strong>Primary Upstream:</strong> <span class="mono" id="metric-upstream-primary">1.1.1.1</span></div>
+            <div><strong>Secondary Upstream:</strong> <span class="mono" id="metric-upstream-secondary">8.8.8.8</span></div>
+            <div><strong>ECS Subnet Stripping:</strong> <span class="mono" id="metric-ecs">Enabled</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 2: Blocklist & Threat Intel Feed Manager -->
+      <section id="pane-feeds" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Threat Intel Feeds</h2>
+            <p class="pane-desc">Automated community blocklists compiled into server in-memory Trie.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="syncFeedsNow()" id="sync-feeds-btn">⚡ Sync Feeds Now</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Feed Name</th>
+                <th>Category & Target</th>
+                <th>Domains Loaded</th>
+                <th>Last Synced</th>
+                <th>Enabled</th>
+              </tr>
+            </thead>
+            <tbody id="feeds-table-body">
+              <tr><td colspan="5" style="text-align:center; color:var(--muted)">Loading threat feeds...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Module 3: Upstream DNS & Routing Engine -->
+      <section id="pane-upstream" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Upstream DNS & Routing</h2>
+            <p class="pane-desc">Configure primary nameservers, zero-restart failover, and ECS privacy.</p>
+          </div>
+          <button class="btn btn-subtle btn-sm" onclick="runBenchmark()" id="benchmark-btn">⚡ Run Latency Benchmark</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 16px;">Resolvers Configuration</h3>
+            <div style="margin-bottom: 14px;">
+              <label style="font-size: 12px; color: var(--muted); font-weight:600;">PRIMARY UPSTREAM (IP OR DOH)</label>
+              <input type="text" id="upstream-primary-input" class="input-box mono" style="margin-top:6px;" value="1.1.1.1">
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="font-size: 12px; color: var(--muted); font-weight:600;">SECONDARY FALLBACK (IP)</label>
+              <input type="text" id="upstream-secondary-input" class="input-box mono" style="margin-top:6px;" value="8.8.8.8">
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px;">
+              <div>
+                <div style="font-size:13.5px; font-weight:600;">EDNS Client Subnet (ECS) Strip</div>
+                <div style="font-size:12px; color:var(--muted);">Strip client IP subnet from outgoing upstream queries</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="ecs-strip-toggle" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <button class="btn btn-primary" onclick="saveUpstreamConfig()">Apply Routing Changes</button>
+          </div>
+
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 16px;">Upstream Latency Benchmark</h3>
+            <div id="benchmark-results">
+              <p style="color:var(--muted); font-size:13px;">Click "Run Latency Benchmark" above to test round-trip times.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 4: Global Emergency Controls & Fail-Safe -->
+      <section id="pane-emergency" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Emergency Controls & Overrides</h2>
+            <p class="pane-desc">Zero-restart safe failover and global allow/deny rules across all profiles.</p>
+          </div>
+        </div>
+
+        <div class="card" style="border-color: var(--vermilion-border); background: rgba(225,29,72,0.04); margin-bottom: 24px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="font-size:16px; font-weight:700; color: #fff;">Global Safe Bypass Switch</div>
+              <div style="font-size:13px; color:var(--muted); max-width: 600px; margin-top: 4px;">
+                Immediately switches all resolution to 100% pass-through `NOERROR` without restarting the daemon. Use this if a broken feed blocks critical infrastructure.
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="emergency-bypass-toggle" onchange="handleEmergencyBypassChange(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px;">
+          <!-- Global Allowlist -->
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 6px;">Global Allowlist (Never Block)</h3>
+            <p style="font-size:12.5px; color:var(--muted); margin-bottom: 14px;">Domains here will bypass all filters, threat feeds, and Deep Focus rules.</p>
+            <div style="display:flex; gap: 8px;">
+              <input type="text" id="add-global-allow-input" class="input-box mono" placeholder="google.com">
+              <button class="btn btn-subtle" onclick="addGlobalRule('allow')">Add</button>
+            </div>
+            <div class="chips-wrap" id="global-allow-chips"></div>
+          </div>
+
+          <!-- Global Denylist -->
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 6px;">Global Denylist (Block Universally)</h3>
+            <p style="font-size:12.5px; color:var(--muted); margin-bottom: 14px;">Domains here will be blocked for every profile across the server.</p>
+            <div style="display:flex; gap: 8px;">
+              <input type="text" id="add-global-deny-input" class="input-box mono" placeholder="malicious-site.net">
+              <button class="btn btn-danger" onclick="addGlobalRule('deny')">Block</button>
+            </div>
+            <div class="chips-wrap" id="global-deny-chips"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 5: Fleet & Profile Manager -->
+      <section id="pane-fleet" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Fleet & Profile Manager</h2>
+            <p class="pane-desc">Provision client profiles, inspect Strict Mode status, and revoke tokens.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openNewProfileModal()">+ Provision Profile</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Profile ID</th>
+                <th>Profile Name</th>
+                <th>Status & Mode</th>
+                <th>Queries Today</th>
+                <th>Linked IP</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="profiles-table-body">
+              <tr><td colspan="6" style="text-align:center; color:var(--muted)">Loading fleet inventory...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Module 6: Live Telescope (Real-Time Query Stream) -->
+      <section id="pane-telescope" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Live Telescope</h2>
+            <p class="pane-desc">Real-time Server-Sent Event stream of DNS resolution events.</p>
+          </div>
+          <div style="display:flex; align-items:center; gap: 12px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer;">
+              <input type="checkbox" id="mask-ip-toggle" onchange="toggleMaskIp()"> Anonymize Client IPs
+            </label>
+            <button class="btn btn-subtle btn-sm" onclick="toggleStreamPause()" id="pause-stream-btn">Pause Stream</button>
+            <button class="btn btn-subtle btn-sm" onclick="clearTelescope()">Clear</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Query Domain</th>
+                <th>Type</th>
+                <th>Verdict</th>
+                <th>Reason</th>
+                <th>Client IP</th>
+              </tr>
+            </thead>
+            <tbody id="telescope-table-body">
+              <tr><td colspan="6" style="text-align:center; color:var(--muted)">Waiting for live queries...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Module 7: Database & Storage Maintenance -->
+      <section id="pane-maintenance" class="module-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Storage & Database Maintenance</h2>
+            <p class="pane-desc">Database disk footprint, log retention pruning, defragmentation, and snapshots.</p>
+          </div>
+          <a href="/api/admin/backup" class="btn btn-primary btn-sm" download>⬇ Download .db Backup</a>
+        </div>
+
+        <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-label">Disk Footprint</div>
+            <div class="metric-value mono" id="maint-db-size">0.0 MB</div>
+            <div class="metric-sub">SQLite Database (focus_dns.db)</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Logged Queries</div>
+            <div class="metric-value mono" id="maint-total-logs">0</div>
+            <div class="metric-sub">Historical queries in database</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Active Profiles</div>
+            <div class="metric-value mono" id="maint-total-profiles">1</div>
+            <div class="metric-sub">Client profiles provisioned</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 10px;">
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 8px;">Log Retention Cleaner</h3>
+            <p style="font-size:12.5px; color:var(--muted); margin-bottom: 16px;">Prune historical telemetry logs older than specified days to reclaim disk space.</p>
+            <div style="display:flex; gap: 8px;">
+              <button class="btn btn-subtle" onclick="pruneLogs(7)">Prune &gt; 7 Days</button>
+              <button class="btn btn-subtle" onclick="pruneLogs(30)">Prune &gt; 30 Days</button>
+              <button class="btn btn-subtle" onclick="pruneLogs(90)">Prune &gt; 90 Days</button>
+            </div>
+            <div id="prune-result" style="margin-top: 12px; font-size: 13px; color: var(--emerald); display: none;"></div>
+          </div>
+
+          <div class="card">
+            <h3 style="font-size: 15px; margin-bottom: 8px;">Database Defragmentation (VACUUM)</h3>
+            <p style="font-size:12.5px; color:var(--muted); margin-bottom: 16px;">Executes SQLite `VACUUM` to rebuild the database, clean free pages, and shrink file size.</p>
+            <button class="btn btn-primary" onclick="vacuumDatabase()" id="vacuum-btn">⚡ Run Database VACUUM</button>
+            <div id="vacuum-result" style="margin-top: 12px; font-size: 13px; color: var(--emerald); display: none;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Provision New Profile -->
+  <div id="new-profile-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <h3 class="modal-title">Provision Client Profile</h3>
+      <p style="font-size:13px; color:var(--muted); margin-bottom: 16px;">Create a new client profile with dedicated DoH and DoT endpoints.</p>
+      <div style="margin-bottom: 18px;">
+        <label style="font-size:12px; color:var(--muted); font-weight:600;">PROFILE NAME</label>
+        <input type="text" id="new-profile-name" class="input-box" placeholder="e.g. Work Phone or Living Room TV" style="margin-top:6px;">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-subtle" onclick="closeNewProfileModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewProfile()">Provision Now</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let adminToken = '';
+    let metricsTimer = null;
+    let telescopeSource = null;
+    let isStreamPaused = false;
+    let anonymizeIps = false;
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', async () => {
+      await checkAuthStatus();
+    });
+
+    async function checkAuthStatus() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('preview') === '1') {
+          showDashboard();
+          const tab = urlParams.get('tab');
+          if (tab) switchTab(tab);
+          return;
+        }
+        const urlKey = urlParams.get('key');
+        if (urlKey) {
+          document.getElementById('master-key-input').value = urlKey;
+          await handleLogin(new Event('submit'));
+          return;
+        }
+
+        const res = await fetch('/api/admin/auth/check');
+        const data = await res.json();
+        if (data.authenticated) {
+          showDashboard();
+        } else {
+          showAuth();
+        }
+      } catch (e) {
+        showAuth();
+      }
+    }
+
+    function showAuth() {
+      document.getElementById('auth-screen').style.display = 'flex';
+      document.getElementById('dashboard-screen').style.display = 'none';
+      if (metricsTimer) clearInterval(metricsTimer);
+      if (telescopeSource) telescopeSource.close();
+    }
+
+    function showDashboard() {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('dashboard-screen').style.display = 'flex';
+      refreshMetrics();
+      loadFeeds();
+      loadUpstreams();
+      loadGlobalRules();
+      loadProfiles();
+      loadMaintenance();
+      startTelescope();
+      if (!metricsTimer) {
+        metricsTimer = setInterval(refreshMetrics, 3000);
+      }
+    }
+
+    // Auth
+    async function handleLogin(e) {
+      e.preventDefault();
+      const input = document.getElementById('master-key-input');
+      const errBox = document.getElementById('auth-error-box');
+      const btn = document.getElementById('login-btn');
+      errBox.style.display = 'none';
+      btn.disabled = true;
+      btn.innerText = 'Authenticating...';
+
+      try {
+        const res = await fetch('/api/admin/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ master_key: input.value.trim() })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          adminToken = data.token;
+          showDashboard();
+        } else {
+          errBox.innerText = data.error || 'Authentication failed';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error connecting to daemon';
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Authenticate System';
+      }
+    }
+
+    async function handleLogout() {
+      try {
+        await fetch('/api/admin/auth/logout', { method: 'POST' });
+      } catch (e) {}
+      showAuth();
+    }
+
+    // Tabs
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.module-pane').forEach(p => p.classList.remove('active'));
+
+      const targetPane = document.getElementById(`pane-${name}`);
+      if (targetPane) targetPane.classList.add('active');
+
+      const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+      const activeBtn = tabs.find(b => b.innerText.toLowerCase().includes(name.toLowerCase()));
+      if (activeBtn) activeBtn.classList.add('active');
+    }
+
+    // Module 1: Metrics
+    async function refreshMetrics() {
+      try {
+        const res = await fetch('/api/admin/metrics');
+        if (!res.ok) {
+          if (res.status === 401) showAuth();
+          return;
+        }
+        const m = await res.json();
+        document.getElementById('metric-qps').innerHTML = `${m.qps} <span style="font-size:16px;">QPS</span>`;
+        document.getElementById('header-qps').innerText = `${m.qps} QPS`;
+        document.getElementById('metric-active-conn').innerText = `Active threads: ${m.active_threads} | DoH: ${m.active_doh_connections}`;
+        document.getElementById('metric-total-today').innerText = m.total_queries_today.toLocaleString();
+        document.getElementById('metric-blocked-sub').innerText = `${m.total_blocked_today.toLocaleString()} blocked (${m.block_percentage}%)`;
+        document.getElementById('metric-cache-ratio').innerText = `${m.cache_hit_ratio}%`;
+        document.getElementById('metric-cache-sub').innerText = `${m.cache_hits} hits (0ms latency)`;
+        document.getElementById('metric-memory').innerText = `${m.memory_mb} MB`;
+        document.getElementById('metric-uptime').innerText = `Uptime: ${m.uptime_formatted}`;
+        document.getElementById('metric-sigs').innerText = m.signatures_count.toLocaleString();
+        document.getElementById('metric-upstream-primary').innerText = m.upstream_primary;
+        document.getElementById('metric-upstream-secondary').innerText = m.upstream_secondary;
+        document.getElementById('metric-ecs').innerText = m.ecs_strip ? 'Enabled' : 'Disabled';
+
+        // Emergency banner & dot
+        const banner = document.getElementById('emergency-banner');
+        const dot = document.getElementById('status-dot');
+        const stText = document.getElementById('status-text');
+        const bypassToggle = document.getElementById('emergency-bypass-toggle');
+        const quickBtn = document.getElementById('quick-bypass-btn');
+
+        if (m.emergency_bypass) {
+          banner.style.display = 'block';
+          dot.classList.add('bypass');
+          stText.innerText = 'SAFE BYPASS ACTIVE';
+          stText.style.color = 'var(--vermilion)';
+          if (bypassToggle) bypassToggle.checked = true;
+          if (quickBtn) {
+            quickBtn.innerText = 'Disable Safe Bypass';
+            quickBtn.className = 'btn btn-danger btn-sm';
+          }
+        } else {
+          banner.style.display = 'none';
+          dot.classList.remove('bypass');
+          stText.innerText = 'RESOLVER ONLINE';
+          stText.style.color = 'var(--ink)';
+          if (bypassToggle) bypassToggle.checked = false;
+          if (quickBtn) {
+            quickBtn.innerText = 'Emergency Bypass';
+            quickBtn.className = 'btn btn-subtle btn-sm';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Module 2: Feeds
+    async function loadFeeds() {
+      try {
+        const res = await fetch('/api/admin/feeds');
+        const data = await res.json();
+        const tbody = document.getElementById('feeds-table-body');
+        tbody.innerHTML = '';
+        data.feeds.forEach(f => {
+          const tr = document.createElement('tr');
+          const timeStr = f.last_synced > 0 ? new Date(f.last_synced * 1000).toLocaleString() : 'Never';
+          tr.innerHTML = `
+            <td><strong>${f.name}</strong><br><span style="font-size:11.5px;color:var(--muted)">${f.url}</span></td>
+            <td>${f.description}</td>
+            <td class="mono">${f.domain_count.toLocaleString()}</td>
+            <td style="font-size:12px;color:var(--muted)">${timeStr}</td>
+            <td>
+              <label class="switch">
+                <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleFeed('${f.id}', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {}
+    }
+
+    async function toggleFeed(feedId, enabled) {
+      await fetch('/api/admin/feeds/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feed_id: feedId, enabled })
+      });
+      loadFeeds();
+      refreshMetrics();
+    }
+
+    async function syncFeedsNow() {
+      const btn = document.getElementById('sync-feeds-btn');
+      btn.disabled = true;
+      btn.innerText = 'Syncing remote lists...';
+      try {
+        await fetch('/api/admin/feeds/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        setTimeout(() => {
+          loadFeeds();
+          refreshMetrics();
+          btn.disabled = false;
+          btn.innerText = '⚡ Sync Feeds Now';
+        }, 1500);
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerText = '⚡ Sync Feeds Now';
+      }
+    }
+
+    // Module 3: Upstream
+    async function loadUpstreams() {
+      try {
+        const res = await fetch('/api/admin/upstream');
+        const d = await res.json();
+        document.getElementById('upstream-primary-input').value = d.primary;
+        document.getElementById('upstream-secondary-input').value = d.secondary;
+        document.getElementById('ecs-strip-toggle').checked = d.ecs_strip;
+      } catch (e) {}
+    }
+
+    async function saveUpstreamConfig() {
+      const primary = document.getElementById('upstream-primary-input').value.trim();
+      const secondary = document.getElementById('upstream-secondary-input').value.trim();
+      const ecs_strip = document.getElementById('ecs-strip-toggle').checked;
+      await fetch('/api/admin/upstream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primary, secondary, ecs_strip })
+      });
+      alert('Upstream DNS configuration applied with zero restart!');
+      refreshMetrics();
+    }
+
+    async function runBenchmark() {
+      const btn = document.getElementById('benchmark-btn');
+      const box = document.getElementById('benchmark-results');
+      btn.disabled = true;
+      btn.innerText = 'Benchmarking...';
+      box.innerHTML = '<p style="color:var(--muted); font-size:13px;">Probing upstream resolvers via UDP 53...</p>';
+
+      try {
+        const res = await fetch('/api/admin/upstream/benchmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const d = await res.json();
+        let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+        d.results.forEach(r => {
+          const isTimeout = r.latency_ms < 0;
+          const badgeClass = isTimeout ? 'badge-blocked' : (r.latency_ms < 25 ? 'badge-allowed' : 'badge-warning');
+          const timeText = isTimeout ? 'TIMEOUT' : `${r.latency_ms} ms`;
+          html += `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm);">
+              <div>
+                <strong style="font-size:13.5px;">${r.name}</strong>
+                <div class="mono" style="font-size:12px; color:var(--muted);">${r.host}</div>
+              </div>
+              <span class="badge ${badgeClass}">${timeText}</span>
+            </div>
+          `;
+        });
+        html += '</div>';
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = '<p style="color:var(--vermilion);">Benchmark probe failed.</p>';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '⚡ Run Latency Benchmark';
+      }
+    }
+
+    // Module 4: Emergency & Overrides
+    async function toggleBypassQuick() {
+      const cur = document.getElementById('emergency-banner').style.display === 'block';
+      await handleEmergencyBypassChange(!cur);
+    }
+
+    async function handleEmergencyBypassChange(enabled) {
+      await fetch('/api/admin/emergency-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      refreshMetrics();
+    }
+
+    async function loadGlobalRules() {
+      try {
+        const res = await fetch('/api/admin/global-rules');
+        const d = await res.json();
+        const allowBox = document.getElementById('global-allow-chips');
+        const denyBox = document.getElementById('global-deny-chips');
+        allowBox.innerHTML = '';
+        denyBox.innerHTML = '';
+
+        d.rules.allowlist.forEach(domain => {
+          const chip = document.createElement('div');
+          chip.className = 'chip-item mono';
+          chip.innerHTML = `${domain} <span class="chip-del" onclick="deleteGlobalRule('allow', '${domain}')">✕</span>`;
+          allowBox.appendChild(chip);
+        });
+
+        d.rules.denylist.forEach(domain => {
+          const chip = document.createElement('div');
+          chip.className = 'chip-item mono';
+          chip.innerHTML = `${domain} <span class="chip-del" onclick="deleteGlobalRule('deny', '${domain}')">✕</span>`;
+          denyBox.appendChild(chip);
+        });
+      } catch (e) {}
+    }
+
+    async function addGlobalRule(listType) {
+      const input = document.getElementById(listType === 'allow' ? 'add-global-allow-input' : 'add-global-deny-input');
+      const domain = input.value.trim();
+      if (!domain) return;
+      await fetch('/api/admin/global-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ list_type: listType, domain })
+      });
+      input.value = '';
+      loadGlobalRules();
+    }
+
+    async function deleteGlobalRule(listType, domain) {
+      await fetch(`/api/admin/global-rules/${listType}/${encodeURIComponent(domain)}`, {
+        method: 'DELETE'
+      });
+      loadGlobalRules();
+    }
+
+    // Module 5: Fleet
+    async function loadProfiles() {
+      try {
+        const res = await fetch('/api/admin/profiles');
+        const d = await res.json();
+        const tbody = document.getElementById('profiles-table-body');
+        tbody.innerHTML = '';
+        d.profiles.forEach(p => {
+          const tr = document.createElement('tr');
+          const isStrict = p.is_strict_mode;
+          const modeBadge = isStrict ? `<span class="badge badge-blocked">🔒 STRICT (${p.strict_remaining_seconds}s)</span>` : `<span class="badge badge-allowed">🟢 NORMAL</span>`;
+          tr.innerHTML = `
+            <td class="mono"><strong>${p.profile_id}</strong></td>
+            <td><strong>${p.name}</strong></td>
+            <td>${modeBadge}</td>
+            <td class="mono">${p.queries_today.toLocaleString()}</td>
+            <td class="mono" style="font-size:12px; color:var(--muted)">${p.linked_ip}</td>
+            <td>
+              ${p.profile_id !== 'a1b2c3' ? `<button class="btn btn-danger btn-sm" onclick="revokeProfile('${p.profile_id}', '${p.name}')">Revoke</button>` : `<span style="font-size:11px;color:var(--dimmed)">DEFAULT</span>`}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {}
+    }
+
+    function openNewProfileModal() {
+      document.getElementById('new-profile-name').value = '';
+      document.getElementById('new-profile-modal').style.display = 'flex';
+    }
+
+    function closeNewProfileModal() {
+      document.getElementById('new-profile-modal').style.display = 'none';
+    }
+
+    async function submitNewProfile() {
+      const name = document.getElementById('new-profile-name').value.trim();
+      await fetch('/api/admin/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name || 'New Profile' })
+      });
+      closeNewProfileModal();
+      loadProfiles();
+      loadMaintenance();
+    }
+
+    async function revokeProfile(pid, name) {
+      if (!confirm(`Are you sure you want to revoke and delete profile "${name}" (${pid})?`)) return;
+      await fetch(`/api/admin/profiles/${pid}`, { method: 'DELETE' });
+      loadProfiles();
+      loadMaintenance();
+    }
+
+    // Module 6: Live Telescope
+    function startTelescope() {
+      if (telescopeSource) telescopeSource.close();
+      const url = `/api/admin/stream?anonymize=${anonymizeIps}`;
+      telescopeSource = new EventSource(url);
+
+      const tbody = document.getElementById('telescope-table-body');
+
+      telescopeSource.onmessage = (event) => {
+        if (isStreamPaused) return;
+        try {
+          const ev = JSON.parse(event.data);
+          if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Waiting')) {
+            tbody.innerHTML = '';
+          }
+          const tr = document.createElement('tr');
+          const timeStr = new Date().toLocaleTimeString();
+          let badge = '<span class="badge badge-allowed">ALLOWED</span>';
+          if (ev.status === 'blocked') badge = '<span class="badge badge-blocked">BLOCKED</span>';
+          else if (ev.reason && ev.reason.includes('RAM Cache')) badge = '<span class="badge badge-cache">CACHE 0ms</span>';
+          else if (ev.status === 'error') badge = '<span class="badge badge-warning">ERROR</span>';
+
+          tr.innerHTML = `
+            <td style="font-size:11.5px;color:var(--muted);">${timeStr}</td>
+            <td class="mono"><strong>${ev.domain || '-'}</strong></td>
+            <td class="mono">${ev.qtype || 'A'}</td>
+            <td>${badge}</td>
+            <td style="font-size:12px;color:var(--muted);">${ev.reason || '-'}</td>
+            <td class="mono" style="font-size:11.5px;">${ev.client_ip || '127.0.0.1'}</td>
+          `;
+          tbody.insertBefore(tr, tbody.firstChild);
+
+          // Keep table under 60 items
+          while (tbody.children.length > 60) {
+            tbody.removeChild(tbody.lastChild);
+          }
+        } catch (e) {}
+      };
+    }
+
+    function toggleStreamPause() {
+      isStreamPaused = !isStreamPaused;
+      const btn = document.getElementById('pause-stream-btn');
+      btn.innerText = isStreamPaused ? 'Resume Stream' : 'Pause Stream';
+    }
+
+    function clearTelescope() {
+      document.getElementById('telescope-table-body').innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted)">Waiting for live queries...</td></tr>';
+    }
+
+    function toggleMaskIp() {
+      anonymizeIps = document.getElementById('mask-ip-toggle').checked;
+      startTelescope();
+    }
+
+    // Module 7: Maintenance
+    async function loadMaintenance() {
+      try {
+        const res = await fetch('/api/admin/maintenance');
+        const d = await res.json();
+        document.getElementById('maint-db-size').innerText = `${d.stats.db_size_mb} MB`;
+        document.getElementById('maint-total-logs').innerText = d.stats.total_logs.toLocaleString();
+        document.getElementById('maint-total-profiles').innerText = d.stats.total_profiles;
+      } catch (e) {}
+    }
+
+    async function pruneLogs(days) {
+      const box = document.getElementById('prune-result');
+      box.style.display = 'none';
+      const res = await fetch('/api/admin/maintenance/prune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days })
+      });
+      const d = await res.json();
+      box.innerText = `✓ Successfully pruned ${d.deleted_logs.toLocaleString()} records older than ${days} days.`;
+      box.style.display = 'block';
+      loadMaintenance();
+    }
+
+    async function vacuumDatabase() {
+      const btn = document.getElementById('vacuum-btn');
+      const box = document.getElementById('vacuum-result');
+      btn.disabled = true;
+      btn.innerText = 'Vacuuming SQLite database...';
+      box.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/maintenance/vacuum', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const d = await res.json();
+        box.innerText = `✓ SQLite VACUUM complete. Current database size: ${d.stats.db_size_mb} MB.`;
+        box.style.display = 'block';
+        loadMaintenance();
+      } catch (e) {
+        box.innerText = 'VACUUM command failed.';
+        box.style.color = 'var(--vermilion)';
+        box.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '⚡ Run Database VACUUM';
+      }
+    }
+  </script>
+</body>
+</html>

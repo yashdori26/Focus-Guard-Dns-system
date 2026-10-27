@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FocusDNS</string>
+    <string name="accessibility_service_name">FocusDNS App Blocker</string>
+    <string name="accessibility_description">Used by FocusDNS to detect foreground app launches, enforce distraction blocking, and prevent evasion of Deep Focus rules.</string>
+</resources>

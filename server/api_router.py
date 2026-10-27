@@ -1,0 +1,902 @@
+"""
+FocusDNS Page-Wise REST API Router & DoH Service - Hardened
+Includes:
+- Mandatory API token authentication (Authorization: Bearer <token> or X-Api-Key)
+- Strict Mode enforcement across ALL mutating routes (timer-only; no PIN)
+- Rejection of non-JSON content types (415 Unsupported Media Type for simple requests)
+- Strict type checking on boolean configuration toggles
+- Settings log_retention barrier under Strict Mode
+- Real DoH (RFC 8484) wire-format service with 4KB cap and Cache-Control TTLs
+- Restricted CORS origin validation protecting local daemon from browser attacks
+"""
+
+import base64
+import json
+import os
+import threading
+import time
+import urllib.parse
+from http.cookies import SimpleCookie
+from http.server import BaseHTTPRequestHandler
+from typing import Dict, Any, Optional, Tuple
+
+from dnslib import DNSRecord
+
+from . import db
+from . import resolver
+
+class FocusDNSApiHandler(BaseHTTPRequestHandler):
+
+    def _set_cors_headers(self, status: int = 200, content_type: str = "application/json"):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        origin = self.headers.get("Origin", "")
+        # Protect local API: Only allow localhost, loopback, or app schemes
+        allowed_origin = None
+        if origin:
+            if (origin.startswith("http://localhost:") or
+                origin.startswith("http://127.0.0.1:") or
+                origin in ("http://localhost", "http://127.0.0.1", "tauri://localhost", "capacitor://localhost")):
+                allowed_origin = origin
+        else:
+            # Native desktop/mobile apps, curl, etc.
+            allowed_origin = "*"
+
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Admin-Key, X-Requested-With")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        self.send_header("Cache-Control", "no-cache")
+
+    def do_OPTIONS(self):
+        self._set_cors_headers(204)
+        self.end_headers()
+
+    def _verify_auth(self) -> bool:
+        """Validates API token strictly from X-Api-Key or Authorization header."""
+        token = self.headers.get("X-Api-Key", "").strip()
+        if not token:
+            auth_header = self.headers.get("Authorization", "").strip()
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+            elif auth_header:
+                token = auth_header.strip()
+        if not token:
+            return False
+        return db.verify_api_token(token)
+
+    def _verify_admin_auth(self) -> bool:
+        """
+        Validates admin access via:
+        1. Cookie: admin_session=<token>
+        2. Header: X-Admin-Key: <token_or_master_key>
+        3. Header: Authorization: Bearer <token_or_master_key>
+        """
+        cookie_header = self.headers.get("Cookie", "")
+        if cookie_header:
+            c = SimpleCookie()
+            try:
+                c.load(cookie_header)
+                if "admin_session" in c:
+                    token = c["admin_session"].value.strip()
+                    if db.verify_admin_session(token):
+                        return True
+            except Exception:
+                pass
+
+        admin_key = self.headers.get("X-Admin-Key", "").strip()
+        if admin_key:
+            if db.verify_admin_session(admin_key) or db.verify_admin_master_key(admin_key):
+                return True
+
+        auth = self.headers.get("Authorization", "").strip()
+        if auth:
+            token = auth[7:].strip() if auth.startswith("Bearer ") else auth
+            if db.verify_admin_session(token) or db.verify_admin_master_key(token):
+                return True
+
+        return False
+
+    def _read_json_body(self, max_bytes: int = 1048576) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Reads and validates JSON body up to 1MB."""
+        try:
+            content_len = int(self.headers.get('Content-Length', 0))
+        except ValueError:
+            return None, "Invalid Content-Length"
+
+        if content_len > max_bytes:
+            return None, "Payload too large (Max 1MB)"
+        if content_len == 0:
+            return {}, None
+
+        raw = self.rfile.read(content_len)
+        try:
+            return json.loads(raw.decode('utf-8')), None
+        except Exception:
+            return None, "Malformed JSON syntax"
+
+    def _send_json(self, data: Any, status: int = 200):
+        self._set_cors_headers(status)
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode('utf-8'))
+
+    def _send_error(self, message: str, status: int = 400):
+        self._send_json({"error": message, "success": False}, status)
+
+    def _check_strict_mode_barrier(self, profile_id: str) -> Tuple[bool, str]:
+        """Returns (is_allowed, error_message). Uses cache for fast lookup.
+
+        Timer-only strict mode: locked while strict_until is in the future.
+        Once expired (or if strict is on with no end time, a legacy/invalid
+        state) strict mode is cleared and the action is allowed.
+        """
+        cache = db.get_cached_rules(profile_id)
+        profile = cache.get('profile', {})
+        if not profile.get('is_strict_mode'):
+            return True, "OK"
+        until = profile.get('strict_until')
+        now = time.time()
+        if until and now < until:
+            rem = max(1, int(until - now))
+            return False, f"Strict Mode is locked until timer expires ({rem} seconds remaining)."
+        db._check_strict_expiration(profile_id)
+        return True, "OK"
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        params = urllib.parse.parse_qs(parsed.query)
+        profile_id = params.get('profile_id', ['a1b2c3'])[0]
+
+        # 0. Healthcheck (Unauthenticated)
+        if path in ("/health", "/api/health"):
+            return self._send_json({
+                "status": "healthy",
+                "service": "FocusDNS Hardened Backend",
+                "doh_rfc8484": True,
+                "timestamp": time.time()
+            })
+
+        # 0b. Public/Client IP Echo Discovery (Unauthenticated)
+        if path in ("/api/ip", "/api/setup/my-ip"):
+            client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] or "127.0.0.1").split(',')[0].strip()
+            return self._send_json({
+                "ip": client_ip,
+                "success": True,
+                "timestamp": time.time()
+            })
+
+        # RFC 8484 DoH GET: /dns-query?dns=<base64url> or /dns-query/<profile_id>?dns=...
+        if (path == "/dns-query" or path.startswith("/dns-query/")) and "dns" in params:
+            doh_profile = profile_id
+            if path.startswith("/dns-query/") and len(path) > len("/dns-query/"):
+                doh_profile = path[len("/dns-query/"):].strip('/')
+            if not self._verify_auth():
+                return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+            return self._handle_doh_query(params["dns"][0], is_base64=True, profile_id=doh_profile)
+
+        # Local bootstrap endpoint: only accessible from loopback without hostile Origin
+        if path == "/api/auth/token":
+            origin = self.headers.get("Origin", "")
+            if origin and not (origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") or origin in ("http://localhost", "http://127.0.0.1")):
+                return self._send_error("Forbidden: Hostile cross-origin token request", 403)
+            if self.client_address[0] not in ("127.0.0.1", "::1", "localhost"):
+                return self._send_error("Forbidden: Local access only", 403)
+            return self._send_json({"token": db.get_or_create_api_token(), "success": True})
+
+        # Admin Portal UI (Single-file Zero-Bloat Delivery)
+        if path in ("/admin", "/admin/"):
+            admin_html_path = os.path.join(os.path.dirname(__file__), "admin.html")
+            if not os.path.exists(admin_html_path):
+                return self._send_error("Admin portal UI file not found", 404)
+            with open(admin_html_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
+        # Admin Auth Status Check
+        if path == "/api/admin/auth/check":
+            return self._send_json({"authenticated": self._verify_admin_auth(), "success": True})
+
+        # Protected Administrative GET Routes
+        if path.startswith("/api/admin/"):
+            if not self._verify_admin_auth():
+                return self._send_error("Unauthorized: Admin credentials or master key required", 401)
+
+            if path == "/api/admin/metrics":
+                return self._send_json(resolver.get_server_metrics())
+
+            if path == "/api/admin/feeds":
+                return self._send_json({
+                    "feeds": db.get_threat_feeds(),
+                    "total_signatures": db.get_total_threat_signatures(),
+                    "success": True
+                })
+
+            if path == "/api/admin/upstream":
+                return self._send_json({
+                    "primary": resolver._upstream_primary,
+                    "secondary": resolver._upstream_secondary,
+                    "ecs_strip": resolver._ecs_strip,
+                    "success": True
+                })
+
+            if path == "/api/admin/global-rules":
+                return self._send_json({"rules": db.get_global_rules('all'), "success": True})
+
+            if path == "/api/admin/profiles":
+                return self._send_json({"profiles": db.get_all_profiles_admin(), "success": True})
+
+            if path == "/api/admin/maintenance":
+                return self._send_json({"stats": db.get_db_stats(), "success": True})
+
+            if path == "/api/admin/backup":
+                if not os.path.exists(db.DB_PATH):
+                    return self._send_error("Database file not found", 404)
+                with open(db.DB_PATH, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", 'attachment; filename="focus_dns_backup.db"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+
+            if path == "/api/admin/stream":
+                anonymize = params.get('anonymize', ['false'])[0].lower() == 'true'
+                return self._handle_admin_sse_stream(anonymize=anonymize)
+
+            return self._send_error(f"Endpoint GET {path} not found", 404)
+
+        # All other GET endpoints require API token authentication
+        if not self._verify_auth():
+            return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+
+        # 1. Page 1: Home Dashboard & Profile
+        if path == "/api/profile":
+            p = db.get_profile(profile_id)
+            if not p:
+                return self._send_error("Profile not found", 404)
+            return self._send_json({"profile": p, "success": True})
+
+        if path == "/api/analytics/summary":
+            analytics = db.get_analytics(profile_id, '7d')
+            return self._send_json(analytics)
+
+        # 2. Page 2: Setup Tab
+        if path == "/api/setup":
+            p = db.get_profile(profile_id)
+            if not p:
+                return self._send_error("Profile not found", 404)
+            client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] or "127.0.0.1").split(',')[0].strip()
+            linked_ip = p.get('linked_ip', 'No IP linked')
+            return self._send_json({
+                "profile_id": profile_id,
+                "name": p['name'],
+                "linked_ip": linked_ip,
+                "client_ip": client_ip,
+                "is_matched": (linked_ip == client_ip and linked_ip != 'No IP linked'),
+                "ipv4_endpoints": ['45.90.28.140', '45.90.30.140'],
+                "ipv6_endpoints": [f'2a07:a8c0::{profile_id}', f'2a07:a8c1::{profile_id}'],
+                "doh_endpoint": f"http://127.0.0.1:8080/dns-query?profile_id={profile_id}",
+                "dot_endpoint": f"{profile_id}.dns.local",
+                "success": True
+            })
+
+        # 3. Page 3: Security Tab
+        if path == "/api/security":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            sec = db.get_security_settings(profile_id)
+            return self._send_json({"security": sec, "success": True})
+
+        # 4. Page 4: Privacy Tab
+        if path == "/api/privacy":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            priv = db.get_privacy_settings(profile_id)
+            return self._send_json({"privacy": priv, "success": True})
+
+        # 5. Page 5: Deep Focus Tab
+        if path == "/api/deep-focus":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            items = db.get_deep_focus_items(profile_id)
+            for app in items.get('apps', []):
+                app_id = app.get('id') or app.get('name', '').lower()
+                app['packages'] = sorted(list(resolver.APP_PACKAGES.get(app_id, [])))
+            return self._send_json(items)
+
+        # Android package mapping for Accessibility App Blocker
+        if path == "/api/app-packages":
+            return self._send_json({
+                "packages": {k: sorted(list(v)) for k, v in resolver.APP_PACKAGES.items()},
+                "success": True
+            })
+
+        # 6. Page 6: Denylist Tab
+        if path == "/api/denylist":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            rules = db.get_custom_rules(profile_id, 'deny')
+            return self._send_json({"denylist": rules, "count": len(rules)})
+
+        # 7. Page 7: Allowlist Tab
+        if path == "/api/allowlist":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            rules = db.get_custom_rules(profile_id, 'allow')
+            return self._send_json({"allowlist": rules, "count": len(rules)})
+
+        # 8. Page 8: Analytics Tab
+        if path == "/api/analytics":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            period = params.get('period', ['7d'])[0]
+            if period not in ('24h', '7d', '30d'):
+                period = '7d'
+            data = db.get_analytics(profile_id, period)
+            return self._send_json(data)
+
+        # 9. Page 9: Query Logs Tab
+        if path == "/api/logs":
+            if not db.get_profile(profile_id):
+                return self._send_error("Profile not found", 404)
+            search_query = params.get('q', [''])[0]
+            try:
+                limit = min(max(int(params.get('limit', [50])[0]), 1), 500)
+            except ValueError:
+                limit = 50
+            logs = db.get_query_logs(profile_id, search_query, limit)
+            return self._send_json({"logs": logs, "count": len(logs)})
+
+        # 9b. Live SSE Stream of Logs
+        if path == "/api/logs/stream":
+            return self._handle_sse_stream()
+
+        # 10. Page 10: Settings Tab
+        if path == "/api/settings":
+            p = db.get_profile(profile_id)
+            if not p:
+                return self._send_error("Profile not found", 404)
+            w3 = db.get_web3_settings(profile_id)
+            return self._send_json({
+                "profile_name": p['name'],
+                "log_retention": p['log_retention'],
+                "is_strict_mode": bool(p['is_strict_mode']),
+                "strict_until": p.get('strict_until'),
+                "remaining_seconds": p.get('remaining_seconds', 0),
+                "web3": w3
+            })
+
+        self._send_error(f"Endpoint GET {path} not found", 404)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        # RFC 8484 DoH POST: application/dns-message
+        content_type = self.headers.get('Content-Type', '')
+        if (path == "/dns-query" or path.startswith("/dns-query/")) and "application/dns-message" in content_type:
+            try:
+                content_len = int(self.headers.get('Content-Length', 0))
+            except ValueError:
+                return self._send_error("Invalid Content-Length", 400)
+            if content_len > 4096:
+                return self._send_error("Payload too large (Max 4KB for DoH)", 413)
+            raw_dns = self.rfile.read(content_len)
+            params = urllib.parse.parse_qs(parsed.query)
+            doh_profile = params.get('profile_id', ['a1b2c3'])[0]
+            if path.startswith("/dns-query/") and len(path) > len("/dns-query/"):
+                doh_profile = path[len("/dns-query/"):].strip('/')
+            if not self._verify_auth():
+                return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+            return self._handle_doh_query(raw_dns, is_base64=False, profile_id=doh_profile)
+
+        # Admin Login & Logout Authentication Endpoints
+        if path == "/api/admin/auth/login":
+            ct = self.headers.get('Content-Type', '').lower().split(';')[0].strip()
+            if ct != 'application/json':
+                return self._send_error("Expected application/json", 415)
+            client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] or "127.0.0.1").split(',')[0].strip()
+            allowed, retry_after = db.check_admin_rate_limit(client_ip)
+            if not allowed:
+                return self._send_json({
+                    "error": f"Too many failed login attempts. IP temporarily locked out for {retry_after} more seconds.",
+                    "retry_after": retry_after,
+                    "success": False
+                }, 429)
+
+            body, err = self._read_json_body()
+            if err:
+                return self._send_error(err, 400)
+            master_key = body.get("master_key", "").strip()
+            if not db.verify_admin_master_key(master_key):
+                db.record_admin_failed_login(client_ip)
+                return self._send_error("Invalid Master Admin Key", 401)
+
+            db.clear_admin_failed_logins(client_ip)
+            session_token = db.create_admin_session()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Set-Cookie", f"admin_session={session_token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "success": True,
+                "token": session_token,
+                "message": "Authenticated as FocusDNS Operator"
+            }).encode('utf-8'))
+            return
+
+        if path == "/api/admin/auth/logout":
+            cookie_header = self.headers.get("Cookie", "")
+            if cookie_header:
+                c = SimpleCookie()
+                try:
+                    c.load(cookie_header)
+                    if "admin_session" in c:
+                        db.delete_admin_session(c["admin_session"].value.strip())
+                except Exception:
+                    pass
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Set-Cookie", "admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True, "message": "Logged out"}).encode('utf-8'))
+            return
+
+        # Protected Administrative POST Routes
+        if path.startswith("/api/admin/"):
+            if not self._verify_admin_auth():
+                return self._send_error("Unauthorized: Admin credentials or master key required", 401)
+
+            ct = self.headers.get('Content-Type', '').lower().split(';')[0].strip()
+            if ct != 'application/json':
+                return self._send_error("Expected application/json", 415)
+
+            body, err = self._read_json_body()
+            if err:
+                return self._send_error(err, 400)
+
+            if path == "/api/admin/feeds/sync":
+                resolver.sync_threat_feeds_background()
+                return self._send_json({"success": True, "message": "Threat feed sync initiated in background"})
+
+            if path == "/api/admin/feeds/toggle":
+                feed_id = body.get("feed_id", "")
+                enabled = bool(body.get("enabled", True))
+                if not feed_id:
+                    return self._send_error("feed_id is required", 400)
+                db.toggle_threat_feed(feed_id, enabled)
+                resolver.reload_global_rules()
+                return self._send_json({"success": True, "feed_id": feed_id, "enabled": enabled})
+
+            if path == "/api/admin/upstream":
+                primary = body.get("primary", "")
+                secondary = body.get("secondary", "")
+                ecs_strip = body.get("ecs_strip", True)
+                resolver.set_upstreams(primary, secondary, ecs_strip)
+                return self._send_json({
+                    "success": True,
+                    "primary": resolver._upstream_primary,
+                    "secondary": resolver._upstream_secondary,
+                    "ecs_strip": resolver._ecs_strip
+                })
+
+            if path == "/api/admin/upstream/benchmark":
+                results = resolver.benchmark_upstreams()
+                return self._send_json({"results": results, "success": True})
+
+            if path == "/api/admin/emergency-bypass":
+                enabled = body.get("enabled")
+                if enabled is None:
+                    enabled = not resolver._global_emergency_bypass
+                resolver.set_emergency_bypass(enabled)
+                return self._send_json({
+                    "success": True,
+                    "emergency_bypass": resolver._global_emergency_bypass,
+                    "message": "Global Emergency Safe Bypass toggled"
+                })
+
+            if path == "/api/admin/global-rules":
+                list_type = body.get("list_type", "allow")
+                domain = body.get("domain", "").strip()
+                if not domain:
+                    return self._send_error("domain is required", 400)
+                db.add_global_rule(list_type, domain)
+                resolver.reload_global_rules()
+                return self._send_json({"success": True, "list_type": list_type, "domain": domain})
+
+            if path == "/api/admin/profiles":
+                name = body.get("name", "New Profile").strip()
+                pid = db.create_profile(name)
+                return self._send_json({"success": True, "profile_id": pid, "name": name})
+
+            if path == "/api/admin/maintenance/prune":
+                try:
+                    days = int(body.get("days", 30))
+                except (ValueError, TypeError):
+                    days = 30
+                deleted = db.prune_query_logs(days)
+                return self._send_json({"success": True, "deleted_logs": deleted, "pruned_days": days})
+
+            if path == "/api/admin/maintenance/vacuum":
+                db.vacuum_database()
+                return self._send_json({"success": True, "stats": db.get_db_stats()})
+
+            return self._send_error(f"Endpoint POST {path} not found", 404)
+
+        # All other POST endpoints require API token authentication
+        if not self._verify_auth():
+            return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+
+        # Reject simple cross-site requests (Content-Type must be application/json)
+        ct = self.headers.get('Content-Type', '').lower().split(';')[0].strip()
+        if ct != 'application/json':
+            return self._send_error(f"Unsupported Media Type: Expected application/json, got '{self.headers.get('Content-Type', '')}'", 415)
+
+        body, err = self._read_json_body()
+        if err:
+            return self._send_error(err, 400)
+        profile_id = body.get('profile_id', 'a1b2c3')
+
+        # Toggle Protection
+        if path == "/api/profile/toggle-protection":
+            is_on = body.get('is_on')
+            if not isinstance(is_on, bool):
+                return self._send_error("is_on must be a boolean", 400)
+            success, msg = db.update_protection(profile_id, is_on)
+            if not success:
+                return self._send_error(msg, 403)
+            return self._send_json({"success": True, "is_protection_on": is_on})
+
+        # Strict Mode
+        if path == "/api/profile/strict-mode":
+            is_strict = body.get('is_strict')
+            if not isinstance(is_strict, bool):
+                return self._send_error("is_strict must be a boolean", 400)
+            duration_minutes = body.get('duration_minutes', body.get('durationMinutes'))
+            if duration_minutes is not None:
+                try:
+                    duration_minutes = int(duration_minutes)
+                except ValueError:
+                    duration_minutes = None
+            success, msg = db.set_strict_mode(profile_id, is_strict, duration_minutes=duration_minutes)
+            if not success:
+                return self._send_error(msg, 403)
+            p = db.get_profile(profile_id)
+            return self._send_json({
+                "success": True,
+                "is_strict_mode": is_strict,
+                "strict_until": p.get('strict_until') if p else None,
+                "remaining_seconds": p.get('remaining_seconds', 0) if p else 0
+            })
+
+        # Setup - Link IP
+        if path == "/api/setup/link-ip":
+            ip = body.get('ip')
+            if not ip or not str(ip).strip():
+                ip = self.headers.get("X-Forwarded-For", self.client_address[0] or "127.0.0.1").split(',')[0].strip()
+            else:
+                ip = str(ip).strip()
+            try:
+                db.update_linked_ip(profile_id, ip)
+            except ValueError as e:
+                return self._send_error(str(e), 400)
+            return self._send_json({"success": True, "linked_ip": ip, "profile_id": profile_id})
+
+        # Deep Focus - Add Item
+        if path == "/api/deep-focus":
+            item_type = body.get('type', 'website')
+            item_id = body.get('id', body.get('name', '').lower())
+            name = body.get('name', '').strip()
+            if not name:
+                return self._send_error("Name required", 400)
+            db.add_deep_focus_item(profile_id, item_type, item_id, name,
+                                   body.get('icon', ''), body.get('color', '#007AFF'),
+                                   body.get('description', ''))
+            return self._send_json({"success": True, "added": name})
+
+        # Denylist - Add Domain
+        if path == "/api/denylist":
+            domain = body.get('domain', '').strip()
+            if not domain:
+                return self._send_error("Domain required", 400)
+            try:
+                db.add_custom_rule(profile_id, 'deny', domain)
+            except ValueError as e:
+                return self._send_error(str(e), 400)
+            return self._send_json({"success": True, "domain": domain})
+
+        # Allowlist - Add Domain (Must check Strict Mode barrier if active)
+        if path == "/api/allowlist":
+            allowed, msg = self._check_strict_mode_barrier(profile_id)
+            if not allowed:
+                return self._send_error(f"Strict Mode active: Cannot modify allowlist while Strict Mode timer is active ({msg})", 403)
+            domain = body.get('domain', '').strip()
+            if not domain:
+                return self._send_error("Domain required", 400)
+            try:
+                db.add_custom_rule(profile_id, 'allow', domain)
+            except ValueError as e:
+                return self._send_error(str(e), 400)
+            return self._send_json({"success": True, "domain": domain})
+
+        # Real-Time Query Simulator
+        if path in ("/api/query/resolve", "/dns-query"):
+            domain = body.get('domain', body.get('name', ''))
+            qtype = body.get('type', 'A')
+            if not domain:
+                return self._send_error("Domain parameter required", 400)
+            result = resolver.resolve_domain(domain, profile_id, qtype, self.client_address[0])
+            return self._send_json(result)
+
+        self._send_error(f"Endpoint POST {path} not found", 404)
+
+    def do_PATCH(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        # All PATCH endpoints require API token authentication
+        if not self._verify_auth():
+            return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+
+        # Reject simple cross-site requests (Content-Type must be application/json)
+        ct = self.headers.get('Content-Type', '').lower().split(';')[0].strip()
+        if ct != 'application/json':
+            return self._send_error(f"Unsupported Media Type: Expected application/json, got '{self.headers.get('Content-Type', '')}'", 415)
+
+        body, err = self._read_json_body()
+        if err:
+            return self._send_error(err, 400)
+        profile_id = body.get('profile_id', 'a1b2c3')
+
+        # Security setting patch
+        if path == "/api/security":
+            feature = body.get('feature')
+            value = body.get('value')
+            if feature is None or value is None:
+                return self._send_error("Missing feature or value", 400)
+            if not isinstance(value, bool):
+                return self._send_error("Value must be a strict boolean (true/false)", 400)
+            if value is False:
+                allowed, msg = self._check_strict_mode_barrier(profile_id)
+                if not allowed:
+                    return self._send_error(f"Strict Mode active: Cannot disable security features while Strict Mode timer is active ({msg})", 403)
+            try:
+                db.update_security_setting(profile_id, feature, value)
+            except ValueError as e:
+                return self._send_error(str(e), 400)
+            return self._send_json({"success": True, "feature": feature, "value": value})
+
+        # Privacy setting patch
+        if path == "/api/privacy":
+            feature = body.get('feature')
+            value = body.get('value')
+            if feature is None or value is None:
+                return self._send_error("Missing feature or value", 400)
+            if not isinstance(value, bool):
+                return self._send_error("Value must be a strict boolean (true/false)", 400)
+            if value is False:
+                allowed, msg = self._check_strict_mode_barrier(profile_id)
+                if not allowed:
+                    return self._send_error(f"Strict Mode active: Cannot disable privacy features while Strict Mode timer is active ({msg})", 403)
+            try:
+                db.update_privacy_setting(profile_id, feature, value)
+            except ValueError as e:
+                return self._send_error(str(e), 400)
+            return self._send_json({"success": True, "feature": feature, "value": value})
+
+        # Settings tab patch
+        if path == "/api/settings":
+            if 'profile_name' in body:
+                db.update_profile_name(profile_id, str(body['profile_name']).strip())
+            if 'log_retention' in body:
+                success, msg = db.update_log_retention(profile_id, str(body['log_retention']))
+                if not success:
+                    return self._send_error(msg, 403)
+            if 'web3_feature' in body and 'web3_value' in body:
+                w3_val = body['web3_value']
+                if not isinstance(w3_val, bool):
+                    return self._send_error("web3_value must be a strict boolean", 400)
+                if w3_val is False:
+                    allowed, msg = self._check_strict_mode_barrier(profile_id)
+                    if not allowed:
+                        return self._send_error(f"Strict Mode active: Cannot disable Web3 features while Strict Mode timer is active ({msg})", 403)
+                try:
+                    db.update_web3_setting(profile_id, body['web3_feature'], w3_val)
+                except ValueError as e:
+                    return self._send_error(str(e), 400)
+            return self._send_json({"success": True})
+
+        self._send_error(f"Endpoint PATCH {path} not found", 404)
+
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        params = urllib.parse.parse_qs(parsed.query)
+        profile_id = params.get('profile_id', ['a1b2c3'])[0]
+
+        # Protected Administrative DELETE Routes
+        if path.startswith("/api/admin/"):
+            if not self._verify_admin_auth():
+                return self._send_error("Unauthorized: Admin credentials or master key required", 401)
+
+            if path.startswith("/api/admin/global-rules/"):
+                parts = path[len("/api/admin/global-rules/"):].split('/', 1)
+                if len(parts) != 2:
+                    return self._send_error("Invalid route format: expected /api/admin/global-rules/{list_type}/{domain}", 400)
+                list_type = parts[0]
+                domain = urllib.parse.unquote(parts[1])
+                db.remove_global_rule(list_type, domain)
+                resolver.reload_global_rules()
+                return self._send_json({"success": True, "removed": domain, "list_type": list_type})
+
+            if path.startswith("/api/admin/profiles/"):
+                pid = path[len("/api/admin/profiles/"):].strip('/')
+                if not pid:
+                    return self._send_error("profile_id is required", 400)
+                db.revoke_profile(pid)
+                return self._send_json({"success": True, "revoked": pid})
+
+            return self._send_error(f"Endpoint DELETE {path} not found", 404)
+
+        # All other DELETE endpoints require API token authentication
+        if not self._verify_auth():
+            return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
+
+        # Deep Focus delete: /api/deep-focus/{id}
+        if path.startswith("/api/deep-focus/"):
+            allowed, msg = self._check_strict_mode_barrier(profile_id)
+            if not allowed:
+                return self._send_error(f"Strict Mode active: Cannot remove blocked items while Strict Mode timer is active ({msg})", 403)
+            item_id = urllib.parse.unquote(path[len("/api/deep-focus/"):])
+            db.remove_deep_focus_item(profile_id, item_id)
+            return self._send_json({"success": True, "removed": item_id})
+
+        # Denylist delete: /api/denylist/{domain}
+        if path.startswith("/api/denylist/"):
+            allowed, msg = self._check_strict_mode_barrier(profile_id)
+            if not allowed:
+                return self._send_error(f"Strict Mode active: Cannot remove denylist entries while Strict Mode timer is active ({msg})", 403)
+            domain = urllib.parse.unquote(path[len("/api/denylist/"):])
+            db.remove_custom_rule(profile_id, 'deny', domain)
+            return self._send_json({"success": True, "removed": domain})
+
+        # Allowlist delete: /api/allowlist/{domain}
+        if path.startswith("/api/allowlist/"):
+            domain = urllib.parse.unquote(path[len("/api/allowlist/"):])
+            db.remove_custom_rule(profile_id, 'allow', domain)
+            return self._send_json({"success": True, "removed": domain})
+
+        self._send_error(f"Endpoint DELETE {path} not found", 404)
+
+    def _handle_doh_query(self, raw_input, is_base64: bool = False, profile_id: str = 'a1b2c3'):
+        """RFC 8484 DNS-over-HTTPS wire-format handler."""
+        try:
+            if is_base64:
+                padded = raw_input + '=' * (-len(raw_input) % 4)
+                query_bytes = base64.urlsafe_b64decode(padded)
+            else:
+                query_bytes = raw_input
+
+            if len(query_bytes) > 4096:
+                return self._send_error("DNS message payload too large (Max 4KB)", 413)
+
+            reply_bytes, meta = resolver.resolve_wire_packet(query_bytes, profile_id, self.client_address[0])
+
+            # Calculate min TTL for Cache-Control
+            ttl = 60
+            try:
+                rec = DNSRecord.parse(reply_bytes)
+                ttls = [rr.ttl for rr in rec.rr if rr.ttl > 0]
+                if ttls:
+                    ttl = max(5, min(ttls))
+            except Exception:
+                pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/dns-message")
+            self.send_header("Cache-Control", f"max-age={ttl}")
+            origin = self.headers.get("Origin", "")
+            if origin:
+                self.send_header("Access-Control-Allow-Origin", origin)
+            else:
+                self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(reply_bytes)
+        except Exception as e:
+            self._send_error(f"DoH processing failed: {e}", 400)
+
+    def _handle_sse_stream(self):
+        """Server-Sent Events endpoint for real-time query log streaming."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        event_queue = []
+        cond = threading.Condition()
+
+        def on_event(ev):
+            with cond:
+                event_queue.append(ev)
+                cond.notify()
+
+        resolver.subscribe_logs(on_event)
+        try:
+            while True:
+                with cond:
+                    while not event_queue:
+                        cond.wait(timeout=15.0)
+                        if not event_queue:
+                            self.wfile.write(b": keep-alive\n\n")
+                            self.wfile.flush()
+                    batch = list(event_queue)
+                    event_queue.clear()
+
+                for ev in batch:
+                    msg = f"data: {json.dumps(ev)}\n\n"
+                    self.wfile.write(msg.encode('utf-8'))
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            resolver.unsubscribe_logs(on_event)
+
+    def _handle_admin_sse_stream(self, anonymize: bool = False):
+        """Server-Sent Events endpoint for real-time live telescope query log streaming with optional IP anonymization."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+
+        event_queue = []
+        cond = threading.Condition()
+
+        def on_event(ev):
+            with cond:
+                copied = dict(ev)
+                if anonymize and 'client_ip' in copied:
+                    ip = copied['client_ip']
+                    if '.' in ip:
+                        parts = ip.split('.')
+                        copied['client_ip'] = f"{parts[0]}.{parts[1]}.{parts[2]}.***" if len(parts) == 4 else ip
+                    elif ':' in ip:
+                        copied['client_ip'] = ip.split(':')[0] + '::***'
+                event_queue.append(copied)
+                cond.notify()
+
+        resolver.subscribe_logs(on_event)
+        try:
+            while True:
+                with cond:
+                    while not event_queue:
+                        cond.wait(timeout=15.0)
+                        if not event_queue:
+                            self.wfile.write(b": keep-alive\n\n")
+                            self.wfile.flush()
+                    batch = list(event_queue)
+                    event_queue.clear()
+
+                for ev in batch:
+                    msg = f"data: {json.dumps(ev)}\n\n"
+                    self.wfile.write(msg.encode('utf-8'))
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            resolver.unsubscribe_logs(on_event)
