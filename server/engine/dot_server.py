@@ -173,14 +173,25 @@ class DotServer:
     def stop(self):
         """Signals server to stop and closes listening sockets."""
         self._is_running = False
-        if self._server:
-            self._server.close()
         if self._loop and self._loop.is_running():
             def _cleanup():
+                if self._server:
+                    try:
+                        self._server.close()
+                    except Exception:
+                        pass
                 for task in asyncio.all_tasks(self._loop):
                     task.cancel()
                 self._loop.stop()
-            self._loop.call_soon_threadsafe(_cleanup)
+            try:
+                self._loop.call_soon_threadsafe(_cleanup)
+            except Exception:
+                pass
+        elif self._server:
+            try:
+                self._server.close()
+            except Exception:
+                pass
 
 
 

@@ -29,7 +29,21 @@ from .radix_trie import (
 )
 from .stale_cache import StaleCacheEngine, CacheState, CacheEntry
 from .dnssec import DNSSECValidator, DNSSECSignatureState
+from .edns0 import (
+    EDNSProcessor,
+    EDNSMessage,
+    EDE_BLOCKED,
+    EDE_FILTERED,
+    EDE_STALE_ANSWER,
+    EDE_DNSSEC_BOGUS,
+)
+from .threat_analytics import ThreatAnalyticsEngine, ThreatVerdict
+from .rate_limiter import DNSRateLimiter, RateLimitAction
+from .upstream_pool import UpstreamPool, UpstreamNode, UpstreamRoutingStrategy
+from .zone_authority import ZoneAuthorityEngine, AuthoritativeZone, AuthoritativeRecord, SplitHorizonView
+from .cluster_sync import ClusterSyncEngine, ThreatIntelMessage
 from .. import db
+
 
 # SafeSearch VIP IP Constants
 GOOGLE_SAFESEARCH_IPV4 = "216.239.38.120"
@@ -58,12 +72,14 @@ class DNSPipeline:
         upstream_timeout: float = 2.0,
         enable_dnssec: bool = True,
         cache_max_entries: int = 100000,
+        strip_ecs: bool = True,
     ):
         self.upstream_primary = upstream_primary
         self.upstream_secondary = upstream_secondary
         self.upstream_port = upstream_port
         self.upstream_timeout = upstream_timeout
         self.enable_dnssec = enable_dnssec
+        self.strip_ecs = strip_ecs
 
         # High-performance engines
         self.trie = RadixTrieMatcher()
@@ -72,6 +88,12 @@ class DNSPipeline:
             revalidation_fetcher=self._revalidate_fetcher,
         )
         self.dnssec = DNSSECValidator()
+        self.edns_processor = EDNSProcessor()
+        self.threat_analytics = ThreatAnalyticsEngine()
+        self.rate_limiter = DNSRateLimiter()
+        self.upstream_pool = UpstreamPool(query_timeout=upstream_timeout)
+        self.zone_authority = ZoneAuthorityEngine()
+        self.cluster_sync = ClusterSyncEngine()
 
         # Telemetry & Operational Metrics
         self._total_queries = 0
@@ -83,6 +105,10 @@ class DNSPipeline:
     def set_upstreams(self, primary: str, secondary: str):
         self.upstream_primary = primary.strip() if primary else "1.1.1.1"
         self.upstream_secondary = secondary.strip() if secondary else "8.8.8.8"
+        self.upstream_pool.remove_node(self.upstream_primary)
+        self.upstream_pool.add_node(UpstreamNode("Primary Upstream", self.upstream_primary, self.upstream_port, "UDP", weight=100))
+        if self.upstream_secondary:
+            self.upstream_pool.add_node(UpstreamNode("Secondary Upstream", self.upstream_secondary, self.upstream_port, "UDP", weight=50, is_backup=True))
 
     def _revalidate_fetcher(self, qname: str, qtype: int) -> Optional[bytes]:
         """Background callback invoked by StaleCacheEngine when refreshing stale entries."""
@@ -95,44 +121,13 @@ class DNSPipeline:
 
     def forward_upstream(self, query_bytes: bytes) -> Tuple[Optional[bytes], str]:
         """
-        Forwards DNS query packet to primary upstream with fallback to secondary upstream.
-        Falls back to TCP if truncated (TC=1).
+        Routes query through resilient UpstreamPool with circuit breakers and failover.
         """
-        reply = None
-        # 1. Primary UDP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(self.upstream_timeout)
-        try:
-            s.sendto(query_bytes, (self.upstream_primary, self.upstream_port))
-            reply, _ = s.recvfrom(4096)
-        except Exception:
-            pass
-        finally:
-            s.close()
-
-        # 2. Secondary UDP
-        if not reply and self.upstream_secondary:
-            s_fb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s_fb.settimeout(self.upstream_timeout)
-            try:
-                s_fb.sendto(query_bytes, (self.upstream_secondary, self.upstream_port))
-                reply, _ = s_fb.recvfrom(4096)
-            except Exception:
-                return None, "SERVFAIL"
-            finally:
-                s_fb.close()
-
+        reply, status = self.upstream_pool.resolve_wire(query_bytes)
         if reply:
-            # Check TC (Truncation) bit (RFC 1035 section 4.1.1)
-            if len(reply) >= 4 and (reply[2] & 0x02):
-                tcp_reply = self._forward_tcp(query_bytes, self.upstream_primary)
-                if not tcp_reply and self.upstream_secondary:
-                    tcp_reply = self._forward_tcp(query_bytes, self.upstream_secondary)
-                if tcp_reply:
-                    return tcp_reply, "NOERROR"
-            return reply, "NOERROR"
-
+            return reply, status
         return None, "SERVFAIL"
+
 
     def _forward_tcp(self, query_bytes: bytes, host: str) -> Optional[bytes]:
         """RFC 1035 §4.2.2 TCP relay fallback."""
@@ -168,8 +163,10 @@ class DNSPipeline:
         profile_id: str,
         client_ip: str,
         protocol: str = "UDP",
+        ede_code: int = EDE_BLOCKED,
+        edns_msg: Optional[EDNSMessage] = None,
     ) -> Tuple[bytes, Dict[str, Any]]:
-        """Constructs RFC 2308 compliant NXDOMAIN negative response."""
+        """Constructs RFC 2308 compliant NXDOMAIN negative response with RFC 8914 EDE diagnostics."""
         with self._lock:
             self._total_blocked += 1
 
@@ -183,6 +180,9 @@ class DNSPipeline:
             ttl=30,
             rdata=SOA("ns1.focusdns.local.", "admin.focusdns.local.", (1, 30, 30, 30, 30))
         ))
+        # Attach RFC 8914 Extended DNS Error diagnostic
+        self.edns_processor.attach_error_diagnostics(reply, edns_msg, ede_code, reason)
+
         telemetry = {
             "profile_id": profile_id,
             "domain": qname,
@@ -194,9 +194,11 @@ class DNSPipeline:
             "rcode": "NXDOMAIN",
             "client_ip": client_ip,
             "protocol": protocol,
+            "ede_code": ede_code,
         }
         db.log_query_async(profile_id, qname, "", "blocked", reason, client_ip)
         return reply.pack(), telemetry
+
 
     def build_safesearch_response(
         self,
@@ -286,6 +288,56 @@ class DNSPipeline:
         qtype_int = req.q.qtype
         qtype_str = QTYPE.get(qtype_int, "A")
 
+        # -1. Response Rate Limiting (RRL) & Anti-Amplification Check
+        rl_action = self.rate_limiter.check_query_rate(client_ip)
+        if rl_action == RateLimitAction.DROP:
+            return b"", {"status": "dropped", "reason": "Rate Limit Exceeded (Dropped)", "client_ip": client_ip, "protocol": protocol}
+        elif rl_action == RateLimitAction.SLIP_TC:
+            reply = req.reply()
+            reply.header.tc = 1
+            return reply.pack(), {"status": "slipped_tc", "reason": "Rate Limit Exceeded (SLIP TC=1)", "client_ip": client_ip, "protocol": protocol}
+
+        # -0.8 Distributed Cluster Threat Intelligence Check
+        is_ip_banned, ban_reason = self.cluster_sync.is_ip_blocked(client_ip)
+        if is_ip_banned:
+            return self.build_blocked_response(
+                req, qname, f"Cluster Defense: {ban_reason}",
+                profile_id, client_ip, protocol, ede_code=EDE_BLOCKED
+            )
+
+        is_dom_banned, dom_reason = self.cluster_sync.is_domain_blocked(qname)
+        if is_dom_banned:
+            return self.build_blocked_response(
+                req, qname, f"Cluster Defense: {dom_reason}",
+                profile_id, client_ip, protocol, ede_code=EDE_BLOCKED
+            )
+
+        # -0.5 EDNS(0) Input Processing (ECS Stripping & Cookie Handling)
+        edns_msg, edns_info = self.edns_processor.process_incoming_query(req, client_ip, strip_ecs=self.strip_ecs)
+
+        # -0.25 Threat Analytics & Anomaly Detection (DGA & DNS Tunneling)
+        threat_verdict = self.threat_analytics.analyze_domain(qname, qtype_str, client_ip)
+        if threat_verdict.verdict == ThreatVerdict.BLOCK:
+            return self.build_blocked_response(
+                req, qname, f"Security Threat: {', '.join(threat_verdict.reasons)}",
+                profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg
+            )
+
+        # -0.1 Split-Horizon & Authoritative Local Zone Fast-Path
+        auth_res = self.zone_authority.resolve_authoritative(req, client_ip)
+        if auth_res:
+            auth_wire, auth_telem = auth_res
+            auth_telem.update({
+                "profile_id": profile_id,
+                "domain": qname,
+                "subdomain": "",
+                "qtype": qtype_str,
+                "client_ip": client_ip,
+                "protocol": protocol,
+            })
+            db.log_query_async(profile_id, qname, "", auth_telem["status"], auth_telem["reason"], client_ip)
+            return auth_wire, auth_telem
+
         # 0. Global Safe Bypass Check
         is_bypass = (db.get_system_config("emergency_bypass", "0") == "1")
         if is_bypass:
@@ -293,7 +345,7 @@ class DNSPipeline:
 
         # 0b. Firefox Canary Domain Check (Mozilla DoH opt-out standard)
         if qname == FIREFOX_CANARY_DOMAIN:
-            return self.build_blocked_response(req, qname, "Bypass Prevention: Firefox Canary Domain", profile_id, client_ip, protocol)
+            return self.build_blocked_response(req, qname, "Bypass Prevention: Firefox Canary Domain", profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg)
 
         # 1. Trie Matcher Fast-Path
         match_flags, match_rule, match_metadata = self.trie.match(qname)
@@ -304,7 +356,7 @@ class DNSPipeline:
 
         # Blocked domains
         if match_flags & FLAG_BLOCKED:
-            return self.build_blocked_response(req, qname, f"Denylist: {match_rule or qname}", profile_id, client_ip, protocol)
+            return self.build_blocked_response(req, qname, f"Denylist: {match_rule or qname}", profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg)
 
         # Threat signatures
         if match_flags & (FLAG_THREAT_MALWARE | FLAG_THREAT_MINER | FLAG_THREAT_FEED):
@@ -313,13 +365,14 @@ class DNSPipeline:
                 threat_type = "Cryptojacking"
             elif match_flags & FLAG_THREAT_MALWARE:
                 threat_type = "Malware"
-            return self.build_blocked_response(req, qname, f"Security: {threat_type} Signature", profile_id, client_ip, protocol)
+            return self.build_blocked_response(req, qname, f"Security: {threat_type} Signature", profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg)
 
         # Deep Focus
         if match_flags & FLAG_DEEP_FOCUS:
             meta = match_metadata or {}
             category = meta.get("category", "Distraction")
-            return self.build_blocked_response(req, qname, f"Deep Focus: {category}", profile_id, client_ip, protocol)
+            return self.build_blocked_response(req, qname, f"Deep Focus: {category}", profile_id, client_ip, protocol, ede_code=EDE_FILTERED, edns_msg=edns_msg)
+
 
         # SafeSearch VIP
         if match_flags & FLAG_SAFESEARCH:
@@ -440,12 +493,16 @@ class DNSPipeline:
             ttl = min(ttls) if ttls else 60
             self.cache.put(qname, qtype_int, upstream_bytes, ttl)
 
-        # Extract first IP for logging
-        resolved_ip = ""
+        # Extract IPs for fast-flux detection & logging
+        resolved_ips = []
         for rr in upstream_reply.rr:
             if rr.rtype in (QTYPE.A, QTYPE.AAAA):
-                resolved_ip = str(rr.rdata)
-                break
+                resolved_ips.append(str(rr.rdata))
+        if resolved_ips:
+            resolved_ip = resolved_ips[0]
+            self.threat_analytics.record_resolution(qname, resolved_ips, ttl=ttl if 'ttl' in locals() else 60)
+        else:
+            resolved_ip = ""
 
         telemetry = {
             "profile_id": profile_id,
@@ -468,6 +525,12 @@ class DNSPipeline:
             trie_stats = self.trie.get_stats()
             cache_stats = self.cache.get_stats()
             dnssec_stats = self.dnssec.get_stats()
+            threat_stats = self.threat_analytics.get_stats()
+            rate_limiter_stats = self.rate_limiter.get_stats()
+            upstream_pool_stats = self.upstream_pool.get_stats()
+
+            zone_stats = self.zone_authority.get_stats()
+            cluster_stats = self.cluster_sync.get_stats()
 
             return {
                 "total_queries": self._total_queries,
@@ -484,6 +547,21 @@ class DNSPipeline:
                 "dnssec_verified": self._dnssec_verified,
                 "dnssec_bogus_blocked": self._dnssec_bogus,
                 "dnssec_trust_anchors": dnssec_stats["trust_anchor_count"],
+                "threat_queries_analyzed": threat_stats["total_analyzed"],
+                "threat_dga_detected": threat_stats["dga_detected"],
+                "threat_tunneling_detected": threat_stats["tunneling_detected"],
+                "threat_fast_flux_detected": threat_stats["fast_flux_detected"],
+                "threat_high_risk_blocked": threat_stats["high_risk_blocked"],
+                "rate_limiter_tracked_ips": rate_limiter_stats["tracked_ips"],
+                "rate_limiter_dropped": rate_limiter_stats["total_dropped"],
+                "rate_limiter_slipped_tc": rate_limiter_stats["total_slipped"],
+                "upstream_total_queries": upstream_pool_stats["total_queries"],
+                "upstream_failovers": upstream_pool_stats["failover_count"],
+                "upstream_active_nodes": upstream_pool_stats["active_nodes"],
+                "zone_authority_hits": zone_stats["authoritative_hits"],
+                "zone_authority_zones": zone_stats["total_zones"],
+                "cluster_size": cluster_stats["cluster_size"],
+                "cluster_distributed_blocked_ips": cluster_stats["distributed_blocked_ips"],
             }
 
 

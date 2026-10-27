@@ -17,7 +17,7 @@ from socketserver import ThreadingMixIn
 from . import db
 from . import resolver
 from .api_router import FocusDNSApiHandler
-from .engine import DotServerThread, DoqServerThread
+from .engine import DotServerThread, DoqServerThread, Doh3ServerThread
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
@@ -68,6 +68,7 @@ def main():
     udp_port = int(os.environ.get('DNS_PORT', os.environ.get('FOCUS_DNS_UDP_PORT', '5354')))
     dot_port = int(os.environ.get('DOT_PORT', os.environ.get('FOCUS_DNS_DOT_PORT', '8853')))
     doq_port = int(os.environ.get('DOQ_PORT', os.environ.get('FOCUS_DNS_DOQ_PORT', '8854')))
+    doh3_port = int(os.environ.get('DOH3_PORT', os.environ.get('FOCUS_DNS_DOH3_PORT', '8443')))
 
     print("=" * 60)
     print("      FOCUS-DNS HARDENED MULTI-PROTOCOL SERVER      ")
@@ -103,13 +104,22 @@ def main():
     )
     doq_thread.start()
 
-    # 6. Launch HTTP REST API & DoH Server
+    # 6. Launch RFC 9114 / RFC 8484 DNS-over-HTTP/3 (DoH3) Server
+    doh3_thread = Doh3ServerThread(
+        host=host,
+        port=doh3_port,
+        handler=lambda data, client_ip: resolver.resolve_wire_packet(data, 'a1b2c3', client_ip)
+    )
+    doh3_thread.start()
+
+    # 7. Launch HTTP REST API & DoH Server
     try:
         start_http_api_server(host=host, port=http_port)
     except KeyboardInterrupt:
         print("\n🛑 Shutting down FocusDNS server gracefully...")
         dot_thread.stop()
         doq_thread.stop()
+        doh3_thread.stop()
 
 
 if __name__ == '__main__':
