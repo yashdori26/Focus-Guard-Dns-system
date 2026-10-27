@@ -52,6 +52,12 @@ server/focus_dns.db-*
 *.db
 *.sqlite3
 
+# Certificates & Keys
+server/certs/*.key
+server/certs/*.crt
+server/certs/*.pem
+!server/certs/.gitkeep
+
 # Android & Local Configuration
 .gradle/
 local.properties
@@ -59,3 +65,4 @@ android/local.properties
 app/build/
 *.apk
 *.aab
+

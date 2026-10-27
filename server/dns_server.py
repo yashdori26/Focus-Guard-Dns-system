@@ -17,9 +17,11 @@ from socketserver import ThreadingMixIn
 from . import db
 from . import resolver
 from .api_router import FocusDNSApiHandler
+from .engine import DotServerThread, DoqServerThread
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+
 
 def start_udp_dns_server(host: str = '127.0.0.1', port: int = 5354, max_workers: int = 20):
     """
@@ -64,9 +66,11 @@ def main():
     host = os.environ.get('DNS_HOST', os.environ.get('FOCUS_DNS_HOST', '127.0.0.1'))
     http_port = int(os.environ.get('HTTP_PORT', os.environ.get('FOCUS_DNS_HTTP_PORT', '8080')))
     udp_port = int(os.environ.get('DNS_PORT', os.environ.get('FOCUS_DNS_UDP_PORT', '5354')))
+    dot_port = int(os.environ.get('DOT_PORT', os.environ.get('FOCUS_DNS_DOT_PORT', '8853')))
+    doq_port = int(os.environ.get('DOQ_PORT', os.environ.get('FOCUS_DNS_DOQ_PORT', '8854')))
 
     print("=" * 60)
-    print("      FOCUS-DNS HARDENED BACKEND & DOH SERVER      ")
+    print("      FOCUS-DNS HARDENED MULTI-PROTOCOL SERVER      ")
     print("=" * 60)
 
     # 1. Initialize SQLite Database & System Settings
@@ -79,15 +83,34 @@ def main():
     db.start_scheduled_purge(interval_seconds=3600)
     print("🧹 Background Log Retention Purge Scheduler started (Interval: 1h)")
 
-    # 3. Launch Multi-Threaded UDP DNS Server
+    # 3. Launch Multi-Threaded UDP DNS Server (RFC 1035)
     udp_thread = threading.Thread(target=start_udp_dns_server, args=(host, udp_port), daemon=True)
     udp_thread.start()
 
-    # 4. Launch HTTP REST API & DoH Server
+    # 4. Launch RFC 7858 DNS-over-TLS (DoT) Server
+    dot_thread = DotServerThread(
+        host=host,
+        port=dot_port,
+        handler=lambda data, client_ip: resolver.resolve_wire_packet(data, 'a1b2c3', client_ip)
+    )
+    dot_thread.start()
+
+    # 5. Launch RFC 9250 DNS-over-QUIC (DoQ) Server
+    doq_thread = DoqServerThread(
+        host=host,
+        port=doq_port,
+        handler=lambda data, client_ip: resolver.resolve_wire_packet(data, 'a1b2c3', client_ip)
+    )
+    doq_thread.start()
+
+    # 6. Launch HTTP REST API & DoH Server
     try:
         start_http_api_server(host=host, port=http_port)
     except KeyboardInterrupt:
         print("\n🛑 Shutting down FocusDNS server gracefully...")
+        dot_thread.stop()
+        doq_thread.stop()
+
 
 if __name__ == '__main__':
     main()

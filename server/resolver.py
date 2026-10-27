@@ -22,6 +22,22 @@ from typing import Dict, Any, Tuple, Optional, Callable, List, Set
 
 from dnslib import DNSRecord, DNSHeader, RR, QTYPE, RCODE, A, AAAA, SOA
 
+from .engine import (
+    RadixTrieMatcher,
+    StaleCacheEngine,
+    CacheState,
+    DNSSECValidator,
+    DNSSECSignatureState,
+    FLAG_ALLOWED,
+    FLAG_BLOCKED,
+    FLAG_WILDCARD,
+    FLAG_THREAT_MALWARE,
+    FLAG_THREAT_MINER,
+    FLAG_THREAT_FEED,
+    FLAG_DEEP_FOCUS,
+    FLAG_SAFESEARCH,
+)
+
 try:
     import publicsuffix2
     HAS_PUBLICSUFFIX = True
@@ -30,19 +46,25 @@ except ImportError:
 
 from . import db
 
+
 # Upstream DNS server configuration & Dynamic Controls
 UPSTREAM_DNS_HOST = '1.1.1.1'
 FALLBACK_DNS_HOST = '8.8.8.8'
 UPSTREAM_DNS_PORT = 53
 UPSTREAM_TIMEOUT = 2.0
 
-# In-Memory Admin Operational State (Module 1 to 7)
+# In-Memory Admin Operational State (Module 1 to 7) & High-Performance Engines
 _global_emergency_bypass: bool = False
 _global_allowlist: Set[str] = set()
 _global_denylist: Set[str] = set()
 _threat_feed_domains: Set[str] = set()
 _ram_dns_cache: Dict[Tuple[str, int], Tuple[bytes, float]] = {}
 _ram_cache_lock = threading.Lock()
+
+# Multi-Protocol High Performance Engines
+_radix_trie = RadixTrieMatcher()
+_stale_cache = StaleCacheEngine(max_entries=100000)
+_dnssec_validator = DNSSECValidator()
 
 _server_start_time: float = time.time()
 _total_queries_counter: int = 0
@@ -73,8 +95,16 @@ def reload_global_rules():
         _global_allowlist.update(rules['allowlist'])
         _global_denylist.clear()
         _global_denylist.update(rules['denylist'])
+        
+        _radix_trie.clear()
+        for d in _global_allowlist:
+            _radix_trie.insert(d, flags=FLAG_ALLOWED | FLAG_WILDCARD)
+        for d in _global_denylist:
+            _radix_trie.insert(d, flags=FLAG_BLOCKED | FLAG_WILDCARD)
+        
         with _ram_cache_lock:
             _ram_dns_cache.clear()
+        _stale_cache.clear()
     except Exception as e:
         sys.stderr.write(f"[Resolver Reload Warning] {e}\n")
 
@@ -87,6 +117,8 @@ def set_emergency_bypass(enabled: bool):
     db.set_system_config('emergency_bypass', '1' if enabled else '0')
     with _ram_cache_lock:
         _ram_dns_cache.clear()
+    _stale_cache.clear()
+
 
 def set_upstreams(primary: str, secondary: str, ecs_strip: bool):
     global _upstream_primary, _upstream_secondary, _ecs_strip, UPSTREAM_DNS_HOST, FALLBACK_DNS_HOST
@@ -212,6 +244,10 @@ def get_server_metrics() -> Dict[str, Any]:
 
     sig_count = len(_threat_feed_domains) or db.get_total_threat_signatures()
 
+    trie_stats = _radix_trie.get_stats()
+    stale_stats = _stale_cache.get_stats()
+    dnssec_stats = _dnssec_validator.get_stats()
+
     return {
         'qps': qps,
         'uptime_seconds': uptime,
@@ -229,8 +265,15 @@ def get_server_metrics() -> Dict[str, Any]:
         'emergency_bypass': _global_emergency_bypass,
         'upstream_primary': _upstream_primary,
         'upstream_secondary': _upstream_secondary,
-        'ecs_strip': _ecs_strip
+        'ecs_strip': _ecs_strip,
+        'trie_node_count': trie_stats['node_count'],
+        'trie_rules': trie_stats['exact_rules'] + trie_stats['wildcard_rules'],
+        'stale_cache_entries': stale_stats['entry_count'],
+        'stale_hits': stale_stats['hits_stale'],
+        'stale_revalidations': stale_stats['revalidations_queued'],
+        'dnssec_trust_anchors': dnssec_stats['trust_anchor_count'],
     }
+
 
 # Firefox Canary domain (RFC / Mozilla standard): returning NXDOMAIN signals Firefox to disable built-in DoH
 FIREFOX_CANARY_DOMAIN = 'use-application-dns.net'
@@ -762,14 +805,18 @@ def _forward_and_process_allowed(req: DNSRecord, query_bytes: bytes, profile_id:
     """Forwards query upstream, inspects for DNS rebinding, logs telemetry, and returns wire reply."""
     qname = str(req.q.qname).rstrip('.').lower()
 
-    # Check RAM DNS Cache (0ms response)
+    # Check High-Performance Stale-While-Revalidate Engine (RFC 8767) & RAM Cache (0ms response)
     cache_key = (qname, req.q.qtype)
     now = time.time()
-    cached_wire = None
-    with _ram_cache_lock:
-        entry = _ram_dns_cache.get(cache_key)
-        if entry and entry[1] > now:
-            cached_wire = entry[0]
+    cached_wire, cache_state, ttl_rem = _stale_cache.get(qname, req.q.qtype)
+    
+    # Fallback to legacy RAM dict if StaleCache misses
+    if not cached_wire:
+        with _ram_cache_lock:
+            entry = _ram_dns_cache.get(cache_key)
+            if entry and entry[1] > now:
+                cached_wire = entry[0]
+                cache_state = CacheState.FRESH
 
     if cached_wire:
         global _cache_hits_counter
@@ -778,20 +825,22 @@ def _forward_and_process_allowed(req: DNSRecord, query_bytes: bytes, profile_id:
         req_id = req.header.id
         hit_wire[0] = (req_id >> 8) & 0xFF
         hit_wire[1] = req_id & 0xFF
+        reason_label = 'RAM Cache Hit (0ms)' if cache_state == CacheState.FRESH else 'RFC 8767 Stale Cache Hit (0ms, Revalidating)'
         res = {
             'profile_id': profile_id,
             'domain': base_domain,
             'subdomain': subdomain,
             'qtype': qtype_str,
             'status': 'allowed',
-            'reason': 'RAM Cache Hit (0ms)',
+            'reason': reason_label,
             'ip': '',
             'rcode': 'NOERROR',
             'client_ip': client_ip
         }
-        db.log_query_async(profile_id, base_domain, subdomain, 'allowed', 'RAM Cache Hit (0ms)', client_ip)
+        db.log_query_async(profile_id, base_domain, subdomain, 'allowed', reason_label, client_ip)
         broadcast_log(res)
         return bytes(hit_wire), res
+
 
     global _cache_misses_counter
     _cache_misses_counter += 1
@@ -900,15 +949,17 @@ def _forward_and_process_allowed(req: DNSRecord, query_bytes: bytes, profile_id:
     db.log_query_async(profile_id, base_domain, subdomain, status_label, reason, client_ip)
     broadcast_log(res)
 
-    # Cache positive response in RAM cache
+    # Cache positive response in StaleCache & RAM cache
     if upstream_rcode_str == 'NOERROR' and upstream_reply.rr:
         ttls = [rr.ttl for rr in upstream_reply.rr if rr.ttl > 0]
         min_ttl = min(ttls) if ttls else 60
         cache_ttl = max(10, min(min_ttl, 1800))
         with _ram_cache_lock:
             _ram_dns_cache[cache_key] = (upstream_bytes, now + cache_ttl)
+        _stale_cache.put(qname, req.q.qtype, upstream_bytes, cache_ttl)
 
     return upstream_bytes, res
+
 
 def resolve_domain(fqdn: str, profile_id: str = 'a1b2c3', qtype: str = 'A', client_ip: str = '127.0.0.1') -> Dict[str, Any]:
     """Simulator helper used by REST API (POST /api/query/resolve)."""
