@@ -58,6 +58,11 @@ object UninstallProtectionManager {
             return Pair(false, "OUR_APP")
         }
 
+        // Never intercept emergency telecom services
+        if (EmergencyCallExemptionManager.isEmergencyPackage(packageName)) {
+            return Pair(false, "EMERGENCY_EXEMPT")
+        }
+
         // If uninstallation is allowed, NEVER intercept!
         if (canUninstall) {
             return Pair(false, "UNINSTALL_ALLOWED")
@@ -148,6 +153,18 @@ object UninstallProtectionManager {
             if (isDeviceAdminScreen && hasFocusName) {
                 return Pair(true, "SETTINGS_DEVICE_ADMIN_DEACTIVATION_ATTEMPT")
             }
+        }
+
+        // 4. Delegate to MultiOemSettingsSandbox for deep multi-vendor inspection
+        val (oemIntercept, oemReason) = MultiOemSettingsSandbox.evaluateWindow(
+            packageName = packageName,
+            className = className,
+            nodeTexts = nodeTexts,
+            canUninstall = canUninstall,
+            isOurApp = isOurApp
+        )
+        if (oemIntercept) {
+            return Pair(true, oemReason.name)
         }
 
         return Pair(false, "SAFE_WINDOW")

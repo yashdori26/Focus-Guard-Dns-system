@@ -261,6 +261,48 @@ class MainActivity: FlutterActivity() {
                     "getMdmCapabilities" -> {
                         result.success(MdmPolicyEngine.getMdmCapabilities(this@MainActivity))
                     }
+                    "getHardwareAttestation" -> {
+                        val att = HardwareKeyStoreAttestation.inspectAttestation()
+                        result.success(mapOf(
+                            "alias" to att.alias,
+                            "securityLevel" to att.securityLevel.name,
+                            "publicKeyBase64" to att.publicKeyBase64,
+                            "certificateChainLength" to att.certificateChainLength,
+                            "isHardwareBacked" to att.isHardwareBacked
+                        ))
+                    }
+                    "signAttestationPayload" -> {
+                        val payload = call.argument<String>("payload") ?: ""
+                        val nonce = call.argument<String>("nonce") ?: SecureNonceManager.generateNonce()
+                        val assertion = HardwareKeyStoreAttestation.signPayload(payload, nonce)
+                        result.success(mapOf(
+                            "payload" to assertion.payload,
+                            "nonce" to assertion.nonce,
+                            "signatureBase64" to assertion.signatureBase64,
+                            "timestampMs" to assertion.timestampMs,
+                            "keyAlias" to assertion.keyAlias
+                        ))
+                    }
+                    "getPrivateDnsStatus" -> {
+                        val status = PrivateDnsProtectionGuard.getStatus(this@MainActivity)
+                        result.success(mapOf(
+                            "mode" to status.mode.rawValue,
+                            "hostnameSpecifier" to status.hostnameSpecifier,
+                            "isCompliant" to status.isCompliant,
+                            "reason" to status.reason
+                        ))
+                    }
+                    "canDrawOverlays" -> {
+                        result.success(OverlayPermissionHelper.canDrawOverlays(this@MainActivity))
+                    }
+                    "requestOverlayPermission" -> {
+                        result.success(OverlayPermissionHelper.requestOverlayPermission(this@MainActivity))
+                    }
+                    "triggerEmergencyCall" -> {
+                        val number = call.argument<String>("number") ?: "112"
+                        EmergencyCallExemptionManager.launchEmergencyDialer(this@MainActivity, number)
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }

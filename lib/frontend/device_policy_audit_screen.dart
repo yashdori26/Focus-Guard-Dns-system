@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../backend/mdm_service.dart';
+import 'hardware_attestation_screen.dart';
+import 'private_dns_guard_card.dart';
+import 'multi_oem_shield_card.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -189,6 +192,42 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                       _buildMetricRow('Block System Clock Manipulation', isLocked ? 'ENFORCED' : 'OFF'),
                       _buildMetricRow('App Quarantine Status', isLocked ? 'ACTIVE' : 'IDLE'),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 6. Private DNS (DoT) Defense Card
+                const PrivateDnsGuardCard(),
+                const SizedBox(height: 16),
+
+                // 7. Multi-OEM Anti-Evasion Matrix Card
+                const MultiOemShieldCard(),
+                const SizedBox(height: 16),
+
+                // 8. Hardware Keystore Attestation Entry Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.fingerprint, color: Color(0xFFCE93D8), size: 26),
+                    title: const Text(
+                      'Hardware KeyStore Attestation',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Verify StrongBox/TEE certificate chain and sign tamper proofs',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const HardwareAttestationScreen()),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 24),

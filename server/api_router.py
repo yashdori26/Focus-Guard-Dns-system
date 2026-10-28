@@ -31,6 +31,13 @@ from .engine.mdm_server import (
     SplitTunnelPolicyMode,
     MdmPolicyProfile,
 )
+from .engine.attestation_validator import AttestationValidator
+from .engine.private_dns_server import PrivateDnsServerManager
+from .engine.oem_telemetry_collector import OemTelemetryCollector
+
+_attestation_validator = AttestationValidator()
+_private_dns_server = PrivateDnsServerManager()
+_oem_telemetry = OemTelemetryCollector()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -455,6 +462,31 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 limit = 50
             return self._send_json({"audit_log": fm.get_audit_log(limit)})
 
+        if path in ("/api/v1/mdm/attestation/device", "/api/mdm/attestation/device"):
+            dev_id = params.get("device_id", [""])[0]
+            if not dev_id:
+                return self._send_error("device_id parameter required", 400)
+            data = _attestation_validator.get_device_attestation(dev_id)
+            if not data:
+                return self._send_error("Device attestation not found", 404)
+            return self._send_json(data)
+
+        if path in ("/api/v1/mdm/private-dns/history", "/api/mdm/private-dns/history"):
+            dev_id = params.get("device_id", [None])[0]
+            return self._send_json({
+                "history": _private_dns_server.get_audit_history(dev_id),
+                "summary": _private_dns_server.get_fleet_compliance_summary(),
+            })
+
+        if path in ("/api/v1/mdm/telemetry/device-risk", "/api/mdm/telemetry/device-risk"):
+            dev_id = params.get("device_id", [""])[0]
+            if not dev_id:
+                return self._send_error("device_id parameter required", 400)
+            return self._send_json(_oem_telemetry.calculate_device_risk_score(dev_id))
+
+        if path in ("/api/v1/mdm/telemetry/fleet-summary", "/api/mdm/telemetry/fleet-summary"):
+            return self._send_json(_oem_telemetry.get_fleet_security_summary())
+
         self._send_error(f"Endpoint GET {path} not found", 404)
 
     def do_POST(self):
@@ -796,6 +828,59 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             )
             fm.set_policy(pol)
             return self._send_json({"success": True, "policy": pol.to_dict()})
+
+        # MDM Attestation Nonce Request
+        if path in ("/api/v1/mdm/attestation/nonce", "/api/mdm/attestation/nonce"):
+            device_id = body.get("device_id", "").strip()
+            purpose = body.get("purpose", "attestation").strip()
+            if not device_id:
+                return self._send_error("device_id required in request body", 400)
+            nonce = _attestation_validator.generate_nonce(device_id, purpose=purpose)
+            return self._send_json({"device_id": device_id, "nonce": nonce, "ttl_seconds": 300, "success": True})
+
+        # MDM Hardware Attestation Signature Verification
+        if path in ("/api/v1/mdm/attestation/verify", "/api/mdm/attestation/verify"):
+            device_id = body.get("device_id", "").strip()
+            payload = body.get("payload", "").strip()
+            nonce = body.get("nonce", "").strip()
+            sig = body.get("signature_base64", "").strip()
+            ts = int(body.get("timestamp_ms", 0))
+            if not (device_id and payload and nonce and sig and ts):
+                return self._send_error("device_id, payload, nonce, signature_base64, and timestamp_ms required", 400)
+            res = _attestation_validator.verify_assertion(device_id, payload, nonce, sig, ts)
+            return self._send_json(res.to_dict(), status=200 if res.is_valid else 403)
+
+        # MDM Private DNS Evaluation
+        if path in ("/api/v1/mdm/private-dns/evaluate", "/api/mdm/private-dns/evaluate"):
+            device_id = body.get("device_id", "").strip()
+            mode = body.get("mode", "off").strip()
+            specifier = body.get("hostname_specifier", "").strip()
+            if not device_id:
+                return self._send_error("device_id required", 400)
+            eval_res = _private_dns_server.evaluate_device_dns(device_id, mode, specifier)
+            return self._send_json(eval_res)
+
+        # MDM Multi-OEM Telemetry Event Ingestion
+        if path in ("/api/v1/mdm/telemetry/oem-event", "/api/mdm/telemetry/oem-event"):
+            ev_id = body.get("event_id", f"ev_{int(time.time()*1000)}")
+            device_id = body.get("device_id", "").strip()
+            oem = body.get("oem_vendor", "UNKNOWN").strip()
+            ev_type = body.get("event_type", "UNKNOWN").strip()
+            pkg = body.get("package_name", "").strip()
+            wtitle = body.get("window_title", "").strip()
+            details = body.get("details", {})
+            if not device_id:
+                return self._send_error("device_id required", 400)
+            recorded = _oem_telemetry.record_event(
+                event_id=ev_id,
+                device_id=device_id,
+                oem_vendor=oem,
+                event_type=ev_type,
+                package_name=pkg,
+                window_title=wtitle,
+                details=details,
+            )
+            return self._send_json({"success": True, "event": recorded})
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 

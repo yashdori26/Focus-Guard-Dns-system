@@ -1,6 +1,7 @@
 package com.focusdns.app
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -25,6 +26,16 @@ import android.widget.TextView
  * that uninstallation unlocks automatically when the timer reaches zero.
  */
 class ProtectionLockWarningActivity : Activity() {
+
+    companion object {
+        fun launch(context: Context, reason: String = "FOCUS_ACTIVE") {
+            val intent = Intent(context, ProtectionLockWarningActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("EXTRA_REASON", reason)
+            }
+            context.startActivity(intent)
+        }
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private var timerTextView: TextView? = null

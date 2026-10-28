@@ -11,6 +11,7 @@ Commands:
 """
 
 import argparse
+import base64
 import json
 import sys
 import time
@@ -38,6 +39,16 @@ from .mdm_server import (
     SplitTunnelPolicyMode,
     MdmPolicyProfile,
     DeviceStatus,
+)
+from .attestation_validator import AttestationValidator
+from .private_dns_server import PrivateDnsServerManager
+from .oem_telemetry_collector import (
+    OemTelemetryCollector,
+    EVASION_CLEAR_STORAGE,
+    EVASION_FORCE_STOP,
+    EVASION_ADMIN_DISABLE,
+    EVASION_PRIVATE_DNS,
+    EXEMPTION_EMERGENCY_CALL,
 )
 
 
@@ -544,6 +555,73 @@ def cmd_mdm_policy(args):
         print(f"Policy '{pid}' not found.")
 
 
+def cmd_mdm_attest(args):
+    """Issues challenge nonce and checks hardware attestation."""
+    validator = AttestationValidator()
+    device_id = args.device_id
+    nonce = validator.generate_nonce(device_id)
+    print("=" * 60)
+    print(f"  KEYSTORE HARDWARE ATTESTATION: {device_id}")
+    print("=" * 60)
+    print(f"Challenge Nonce (CSPRNG): {nonce}")
+    print("Simulating EC P-256 Keymaster Signature...")
+    mock_sig = base64.b64encode(b"\x30\x45\x02\x20mock_ecdsa_r_component_bytes_12345\x02\x21\x00mock_ecdsa_s_component_bytes_12345").decode("utf-8")
+    res = validator.verify_assertion(
+        device_id=device_id,
+        payload=f"FOCUS_MDM_ASSERTION:{device_id}",
+        nonce=nonce,
+        signature_base64=mock_sig,
+        timestamp_ms=int(time.time() * 1000),
+    )
+    print(f"Valid:              {res.is_valid}")
+    print(f"Security Level:     {res.security_level}")
+    print(f"Hardware Backed:    {res.is_hardware_backed}")
+    print(f"Keymaster Alias:    {res.key_alias}")
+    print("=" * 60)
+
+
+def cmd_mdm_private_dns(args):
+    """Evaluates Private DNS (DoT) compliance."""
+    mgr = PrivateDnsServerManager()
+    device_id = args.device_id
+    mode = args.mode or "opportunistic"
+    specifier = args.specifier or ""
+    res = mgr.evaluate_device_dns(device_id, mode, specifier)
+    print("=" * 60)
+    print(f"  PRIVATE DNS (DoT) COMPLIANCE: {device_id}")
+    print("=" * 60)
+    print(f"Reported Mode:       {res['reported_mode']}")
+    print(f"Reported Specifier:  {res['reported_specifier'] or '(None - Local VPN tunnel active)'}")
+    print(f"Compliant:           {res['compliant']}")
+    print(f"Reason:              {res['reason']}")
+    print(f"Recommended Action:  {res['recommended_action']}")
+    print("Life Safety Notice:  Emergency calls (911/112) remain 100% exempt from DNS policy.")
+    print("=" * 60)
+
+
+def cmd_mdm_oem_risk(args):
+    """Calculates OEM evasion risk score and breakdown."""
+    collector = OemTelemetryCollector()
+    device_id = args.device_id
+    collector.record_event(
+        event_id="ev_001",
+        device_id=device_id,
+        oem_vendor=args.vendor or "Samsung OneUI",
+        event_type=EVASION_ADMIN_DISABLE if args.simulate_tamper else EXEMPTION_EMERGENCY_CALL,
+        package_name="com.android.settings",
+        window_title="Device Admin Apps",
+    )
+    risk = collector.calculate_device_risk_score(device_id)
+    print("=" * 60)
+    print(f"  OEM EVASION RISK AUDIT: {device_id} ({risk['oem_vendor']})")
+    print("=" * 60)
+    print(f"Risk Score:          {risk['risk_score']} / 100")
+    print(f"Risk Level:          {risk['risk_level']}")
+    print(f"Recent Events:       {risk['recent_event_count']}")
+    print(f"Breakdown:           {risk['event_breakdown']}")
+    print("=" * 60)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -644,6 +722,22 @@ def main():
     p_mpol.add_argument("--profile-id", default="default", help="Policy profile ID")
     p_mpol.add_argument("--set-lock-mode", choices=["always_allowed", "conditional_on_protection", "always_locked"], help="Update uninstallation lock mode")
 
+    # mdm-attest
+    p_matt = subparsers.add_parser("mdm-attest", help="Issue challenge nonce and verify KeyStore hardware attestation")
+    p_matt.add_argument("device_id", help="Device identifier to attest")
+
+    # mdm-private-dns
+    p_mpdns = subparsers.add_parser("mdm-private-dns", help="Evaluate Android 9+ Private DNS compliance")
+    p_mpdns.add_argument("device_id", help="Device identifier")
+    p_mpdns.add_argument("--mode", default="opportunistic", choices=["off", "opportunistic", "strict"], help="Reported Private DNS mode")
+    p_mpdns.add_argument("--specifier", default="", help="Custom DoT hostname specifier")
+
+    # mdm-oem-risk
+    p_mrisk = subparsers.add_parser("mdm-oem-risk", help="Evaluate Multi-OEM evasion risk score")
+    p_mrisk.add_argument("device_id", help="Device identifier")
+    p_mrisk.add_argument("--vendor", default="Samsung OneUI", help="OEM vendor name")
+    p_mrisk.add_argument("--simulate-tamper", action="store_true", help="Simulate active settings evasion attempt")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -690,6 +784,12 @@ def main():
         cmd_mdm_check_uninstall(args)
     elif args.command == "mdm-policy":
         cmd_mdm_policy(args)
+    elif args.command == "mdm-attest":
+        cmd_mdm_attest(args)
+    elif args.command == "mdm-private-dns":
+        cmd_mdm_private_dns(args)
+    elif args.command == "mdm-oem-risk":
+        cmd_mdm_oem_risk(args)
 
 
 if __name__ == "__main__":
