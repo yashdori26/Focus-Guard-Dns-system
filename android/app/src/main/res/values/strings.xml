@@ -3,4 +3,20 @@
     <string name="app_name">FocusDNS</string>
     <string name="accessibility_service_name">FocusDNS App Blocker</string>
     <string name="accessibility_description">Used by FocusDNS to detect foreground app launches, enforce distraction blocking, and prevent evasion of Deep Focus rules.</string>
+
+    <!-- Android Enterprise Managed Configurations -->
+    <string name="res_server_url_title">FocusDNS Central Server URL</string>
+    <string name="res_server_url_desc">Base URL for MDM policy synchronization and DNS-over-HTTPS endpoint.</string>
+    <string name="res_tenant_id_title">Enterprise Tenant ID</string>
+    <string name="res_tenant_id_desc">Organizational fleet partition identifier.</string>
+    <string name="res_enrollment_token_title">Zero-Touch Enrollment Token</string>
+    <string name="res_enrollment_token_desc">Cryptographic authentication token for automated DPC provisioning.</string>
+    <string name="res_strict_uninstall_title">Strict Uninstallation Lock</string>
+    <string name="res_strict_uninstall_desc">When enabled, uninstallation and Device Administrator revocation are permanently locked.</string>
+    <string name="res_whitelisted_pkgs_title">Bypass Tunnel App Whitelist</string>
+    <string name="res_whitelisted_pkgs_desc">List of enterprise package names exempt from DNS filtering.</string>
+    <string name="res_kiosk_title">LockTask Dedicated Kiosk Mode</string>
+    <string name="res_kiosk_desc">Pins device to FocusDNS UI and emergency phone dialer during active focus sessions.</string>
+    <string name="res_dot_host_title">Approved Private DNS Hostname</string>
+    <string name="res_dot_host_desc">Enterprise DoT hostname authorized under Private DNS policy.</string>
 </resources>

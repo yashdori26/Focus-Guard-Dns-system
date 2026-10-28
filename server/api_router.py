@@ -34,10 +34,16 @@ from .engine.mdm_server import (
 from .engine.attestation_validator import AttestationValidator
 from .engine.private_dns_server import PrivateDnsServerManager
 from .engine.oem_telemetry_collector import OemTelemetryCollector
+from .engine.dpc_provisioning_server import DpcProvisioningServer
+from .engine.kiosk_policy_manager import KioskPolicyManager, KioskProfile
+from .engine.managed_config_distributor import ManagedConfigDistributor, TenantAppConfig
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
 _oem_telemetry = OemTelemetryCollector()
+_dpc_server = DpcProvisioningServer()
+_kiosk_manager = KioskPolicyManager()
+_appconfig_distributor = ManagedConfigDistributor()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -487,6 +493,40 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
         if path in ("/api/v1/mdm/telemetry/fleet-summary", "/api/mdm/telemetry/fleet-summary"):
             return self._send_json(_oem_telemetry.get_fleet_security_summary())
 
+        # Phase 3: Android Enterprise Zero-Touch QR Payload
+        if path in ("/api/v1/mdm/dpc/qr-payload", "/api/mdm/dpc/qr-payload"):
+            tok_id = params.get("token_id", ["tok_default_enterprise_provisioning"])[0]
+            strict = params.get("strict", ["false"])[0].lower() == "true"
+            qr_bundle = _dpc_server.generate_zero_touch_qr_payload(tok_id, enforce_strict_uninstall_lock=strict)
+            return self._send_json({"token_id": tok_id, "provisioning_bundle": qr_bundle, "success": True})
+
+        # Phase 3: LockTask Kiosk Profiles
+        if path in ("/api/v1/mdm/kiosk/profiles", "/api/mdm/kiosk/profiles"):
+            return self._send_json({
+                "profiles": _kiosk_manager.list_profiles(),
+                "summary": _kiosk_manager.get_fleet_kiosk_summary(),
+            })
+
+        # Phase 3: LockTask Kiosk Directive Evaluation
+        if path in ("/api/v1/mdm/kiosk/evaluate", "/api/mdm/kiosk/evaluate"):
+            dev_id = params.get("device_id", [""])[0]
+            focus = params.get("focus_active", ["false"])[0].lower() == "true"
+            if not dev_id:
+                return self._send_error("device_id required", 400)
+            return self._send_json(_kiosk_manager.evaluate_kiosk_directive(dev_id, focus))
+
+        # Phase 3: Managed Configurations (AppConfig)
+        if path in ("/api/v1/mdm/appconfig", "/api/mdm/appconfig"):
+            tenant = params.get("tenant_id", ["default_enterprise"])[0]
+            bundle = _appconfig_distributor.get_appconfig_bundle(tenant)
+            intune = _appconfig_distributor.generate_intune_sync_payload(tenant)
+            return self._send_json({
+                "tenant_id": tenant,
+                "appconfig": bundle,
+                "intune_payload": intune,
+                "success": True,
+            })
+
         self._send_error(f"Endpoint GET {path} not found", 404)
 
     def do_POST(self):
@@ -881,6 +921,84 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 details=details,
             )
             return self._send_json({"success": True, "event": recorded})
+
+        # DPC Enrollment Token Generation
+        if path in ("/api/v1/mdm/dpc/token", "/api/mdm/dpc/token"):
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            name = body.get("name", "Provisioning Token").strip()
+            max_uses = int(body.get("max_uses", 1))
+            ttl = int(body.get("ttl_seconds", 86400))
+            pol_id = body.get("policy_id", "default").strip()
+            hw_id = body.get("bound_hardware_id")
+            token = _dpc_server.create_enrollment_token(
+                tenant_id=tenant,
+                name=name,
+                max_uses=max_uses,
+                ttl_seconds=ttl,
+                policy_id=pol_id,
+                bound_hardware_id=hw_id,
+            )
+            return self._send_json({"success": True, "token": token.to_dict()})
+
+        # DPC Device Enrollment
+        if path in ("/api/v1/mdm/dpc/enroll", "/api/mdm/dpc/enroll"):
+            device_id = body.get("device_id", "").strip()
+            token_id = body.get("token_id", "").strip()
+            hardware_id = body.get("hardware_id")
+            device_model = body.get("device_model", "Android Device").strip()
+            os_version = body.get("os_version", "Android 14").strip()
+            if not device_id or not token_id:
+                return self._send_error("device_id and token_id are required", 400)
+            res = _dpc_server.process_enrollment(
+                device_id=device_id,
+                token_id=token_id,
+                hardware_id=hardware_id,
+                device_model=device_model,
+                os_version=os_version,
+            )
+            return self._send_json(res, status=200 if res.get("success") else 400)
+
+        # Kiosk Profile Management
+        if path in ("/api/v1/mdm/kiosk/profile", "/api/mdm/kiosk/profile"):
+            prof_id = body.get("profile_id", f"prof_{int(time.time()*1000)}").strip()
+            p_name = body.get("name", "Focus Kiosk").strip()
+            primary = body.get("primary_app", "com.focusdns.app").strip()
+            allowed = body.get("allowed_packages")
+            k_prof = KioskProfile(
+                profile_id=prof_id,
+                name=p_name,
+                primary_app=primary,
+                allowed_packages=allowed,
+                allow_system_info=body.get("allow_system_info", True),
+                allow_keyguard=body.get("allow_keyguard", True),
+                allow_notifications=body.get("allow_notifications", False),
+                enforce_on_focus=body.get("enforce_on_focus", True),
+            )
+            saved = _kiosk_manager.save_profile(k_prof)
+            return self._send_json({"success": True, "profile": saved.to_dict()})
+
+        # Managed Configurations AppConfig
+        if path in ("/api/v1/mdm/appconfig", "/api/mdm/appconfig"):
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            name = body.get("name", "Enterprise Profile").strip()
+            s_url = body.get("server_url", "https://dns.focusguard.internal").strip()
+            e_tok = body.get("enrollment_token", "").strip()
+            strict = body.get("enforce_strict_uninstall_lock", False)
+            wl_pkgs = body.get("whitelisted_packages", [])
+            kiosk_en = body.get("kiosk_enabled", False)
+            dot_h = body.get("approved_dot_host", "dns.focusguard.internal").strip()
+            app_cfg = TenantAppConfig(
+                tenant_id=tenant,
+                name=name,
+                server_url=s_url,
+                enrollment_token=e_tok,
+                enforce_strict_uninstall_lock=strict,
+                whitelisted_packages=wl_pkgs,
+                kiosk_enabled=kiosk_en,
+                approved_dot_host=dot_h,
+            )
+            saved_cfg = _appconfig_distributor.set_tenant_config(app_cfg)
+            return self._send_json({"success": True, "appconfig": saved_cfg.to_dict()})
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 

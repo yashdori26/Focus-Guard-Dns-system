@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <restriction
+        android:key="server_url"
+        android:title="@string/res_server_url_title"
+        android:restrictionType="string"
+        android:description="@string/res_server_url_desc"
+        android:defaultValue="https://dns.focusguard.internal" />
+
+    <restriction
+        android:key="tenant_id"
+        android:title="@string/res_tenant_id_title"
+        android:restrictionType="string"
+        android:description="@string/res_tenant_id_desc"
+        android:defaultValue="default_enterprise" />
+
+    <restriction
+        android:key="enrollment_token"
+        android:title="@string/res_enrollment_token_title"
+        android:restrictionType="string"
+        android:description="@string/res_enrollment_token_desc"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="enforce_strict_uninstall_lock"
+        android:title="@string/res_strict_uninstall_title"
+        android:restrictionType="bool"
+        android:description="@string/res_strict_uninstall_desc"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="whitelisted_split_tunnel_pkgs"
+        android:title="@string/res_whitelisted_pkgs_title"
+        android:restrictionType="string"
+        android:description="@string/res_whitelisted_pkgs_desc"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="lock_task_kiosk_enabled"
+        android:title="@string/res_kiosk_title"
+        android:restrictionType="bool"
+        android:description="@string/res_kiosk_desc"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="approved_dot_host"
+        android:title="@string/res_dot_host_title"
+        android:restrictionType="string"
+        android:description="@string/res_dot_host_desc"
+        android:defaultValue="dns.focusguard.internal" />
+
+</restrictions>

@@ -126,23 +126,32 @@ object EmergencyCallExemptionManager {
         val lower = packageName.lowercase()
         return lower.contains("emergency") ||
             lower.contains("telecom") ||
+            lower.contains("telephony") ||
+            lower.contains("dialer") ||
             lower.contains("incallui") ||
             lower.contains("safetyhub")
     }
 
     /**
+     * Alias for isEmergencyPackage for enterprise telecom filtering.
+     */
+    fun isTelecomPackage(packageName: String?): Boolean = isEmergencyPackage(packageName)
+
+    /**
      * Launches the native emergency dialer activity with 112 pre-filled, bypassing all locks.
      */
-    fun launchEmergencyDialer(context: Context, emergencyNumber: String = "112") {
-        try {
+    fun launchEmergencyDialer(context: Context, emergencyNumber: String = "112"): Boolean {
+        return try {
             val intent = Intent(Intent.ACTION_DIAL).apply {
                 data = Uri.parse("tel:$emergencyNumber")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             context.startActivity(intent)
             Log.i(TAG, "Emergency dialer launched successfully for number: $emergencyNumber")
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch emergency dialer: ${e.message}")
+            false
         }
     }
 }

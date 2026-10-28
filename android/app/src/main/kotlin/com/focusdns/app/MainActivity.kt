@@ -303,6 +303,40 @@ class MainActivity: FlutterActivity() {
                         EmergencyCallExemptionManager.launchEmergencyDialer(this@MainActivity, number)
                         result.success(true)
                     }
+                    "isDeviceOwner" -> {
+                        result.success(DpcPolicyManager(this@MainActivity).isDeviceOwner())
+                    }
+                    "isProfileOwner" -> {
+                        result.success(DpcPolicyManager(this@MainActivity).isProfileOwner())
+                    }
+                    "getDpcDiagnostics" -> {
+                        result.success(DpcPolicyManager(this@MainActivity).getDpcDiagnosticReport())
+                    }
+                    "applyConditionalFocusPolicy" -> {
+                        val isProtected = call.argument<Boolean>("isProtected") ?: false
+                        result.success(DpcPolicyManager(this@MainActivity).applyConditionalFocusPolicy(isProtected))
+                    }
+                    "setUsbDebuggingDisabled" -> {
+                        val disabled = call.argument<Boolean>("disabled") ?: false
+                        result.success(DpcPolicyManager(this@MainActivity).setUsbDebuggingDisabled(disabled))
+                    }
+                    "startKioskMode" -> {
+                        val pkgs = call.argument<List<String>>("packages") ?: emptyList()
+                        val orchestrator = LockTaskKioskOrchestrator(this@MainActivity)
+                        result.success(orchestrator.startKioskMode(this@MainActivity, pkgs))
+                    }
+                    "stopKioskMode" -> {
+                        val orchestrator = LockTaskKioskOrchestrator(this@MainActivity)
+                        result.success(orchestrator.stopKioskMode(this@MainActivity))
+                    }
+                    "isKioskModeActive" -> {
+                        val orchestrator = LockTaskKioskOrchestrator(this@MainActivity)
+                        result.success(orchestrator.isKioskModeActive())
+                    }
+                    "getManagedConfiguration" -> {
+                        val mg = ManagedConfigManager(this@MainActivity)
+                        result.success(mg.getConfiguration().toMap())
+                    }
                     else -> result.notImplemented()
                 }
             }

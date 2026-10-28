@@ -50,6 +50,9 @@ from .oem_telemetry_collector import (
     EVASION_PRIVATE_DNS,
     EXEMPTION_EMERGENCY_CALL,
 )
+from .dpc_provisioning_server import DpcProvisioningServer
+from .kiosk_policy_manager import KioskPolicyManager, KioskProfile
+from .managed_config_distributor import ManagedConfigDistributor, TenantAppConfig
 
 
 def cmd_status(args):
@@ -622,6 +625,87 @@ def cmd_mdm_oem_risk(args):
     print("=" * 60)
 
 
+def cmd_mdm_provision(args):
+    """Generates an Android Enterprise Zero-Touch enrollment token and QR payload."""
+    server = DpcProvisioningServer()
+    tenant = args.tenant or "default_enterprise"
+    name = args.name or "CLI Enrollment Token"
+    strict = args.strict_uninstall
+    tok = server.create_enrollment_token(
+        tenant_id=tenant,
+        name=name,
+        max_uses=args.max_uses or 10,
+        ttl_seconds=args.ttl or 86400 * 7,
+    )
+    qr_payload = server.generate_zero_touch_qr_payload(
+        token_id=tok.token_id,
+        server_url=args.server_url,
+        wifi_ssid=args.wifi_ssid,
+        wifi_password=args.wifi_pass,
+        enforce_strict_uninstall_lock=strict,
+    )
+    print("=" * 65)
+    print(f"  ANDROID ENTERPRISE ZERO-TOUCH PROVISIONING: {tenant}")
+    print("=" * 65)
+    print(f"Token ID:           {tok.token_id}")
+    print(f"Max Uses:           {tok.max_uses}")
+    print(f"Strict Lock Mode:   {strict} (Clean uninstall permitted when False)")
+    print(f"APK Package:        {server.package_name}")
+    print(f"DPC Component:      {server.component_name}")
+    print(f"APK Checksum:       {server.apk_signature_sha256}")
+    print("-" * 65)
+    print("QR Code JSON Payload:")
+    print(json.dumps(qr_payload, indent=2))
+    print("=" * 65)
+
+
+def cmd_mdm_kiosk(args):
+    """Evaluates or lists LockTask dedicated kiosk policies."""
+    mgr = KioskPolicyManager()
+    profile_id = args.profile or "default"
+    prof = mgr.get_profile(profile_id)
+    if not prof:
+        print(f"Kiosk profile '{profile_id}' not found.")
+        return
+    p = prof.to_dict()
+    print("=" * 65)
+    print(f"  LOCKTASK DEDICATED KIOSK PROFILE: {p['name']} ({p['profile_id']})")
+    print("=" * 65)
+    print(f"Primary App:          {p['primary_app']}")
+    print(f"System Info:          {p['allow_system_info']}")
+    print(f"Keyguard:             {p['allow_keyguard']}")
+    print(f"Enforce on Focus:     {p['enforce_on_focus']}")
+    print(f"Whitelisted Packages ({len(p['allowed_packages'])}):")
+    for pkg in p['allowed_packages']:
+        is_emer = pkg in ("com.android.phone", "com.google.android.dialer", "com.samsung.incallui", "com.android.server.telecom")
+        tag = " [MANDATORY EMERGENCY CALL EXEMPTION]" if is_emer else ""
+        print(f"  - {pkg}{tag}")
+    print("-" * 65)
+    print("Notice: Normal mode removes kiosk bounds allowing clean uninstallation.")
+    print("=" * 65)
+
+
+def cmd_mdm_appconfig(args):
+    """Generates Managed Configurations (AppConfig) XML/JSON bundle."""
+    distributor = ManagedConfigDistributor()
+    tenant = args.tenant or "default_enterprise"
+    cfg = distributor.get_tenant_config(tenant)
+    if not cfg:
+        print(f"AppConfig for tenant '{tenant}' not found.")
+        return
+    print("=" * 65)
+    print(f"  MANAGED CONFIGURATIONS (APPCONFIG): {tenant}")
+    print("=" * 65)
+    print(f"Server URL:         {cfg.server_url}")
+    print(f"Strict Uninstall:   {cfg.enforce_strict_uninstall_lock}")
+    print(f"Kiosk Enabled:      {cfg.kiosk_enabled}")
+    print(f"Approved DoT Host:  {cfg.approved_dot_host}")
+    print("-" * 65)
+    print("AppConfig Restrictions Bundle JSON:")
+    print(json.dumps(cfg.to_appconfig_bundle(), indent=2))
+    print("=" * 65)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -738,6 +822,25 @@ def main():
     p_mrisk.add_argument("--vendor", default="Samsung OneUI", help="OEM vendor name")
     p_mrisk.add_argument("--simulate-tamper", action="store_true", help="Simulate active settings evasion attempt")
 
+    # mdm-provision
+    p_mprov = subparsers.add_parser("mdm-provision", help="Generate Android Enterprise Zero-Touch enrollment token and QR payload")
+    p_mprov.add_argument("--tenant", default="default_enterprise", help="Enterprise tenant ID")
+    p_mprov.add_argument("--name", default="Corporate Provisioning Token", help="Token label")
+    p_mprov.add_argument("--max-uses", type=int, default=10, help="Max enrollment uses")
+    p_mprov.add_argument("--ttl", type=int, default=604800, help="Token validity TTL in seconds")
+    p_mprov.add_argument("--server-url", default=None, help="Override MDM server URL")
+    p_mprov.add_argument("--wifi-ssid", default=None, help="Provisioning Wi-Fi SSID")
+    p_mprov.add_argument("--wifi-pass", default=None, help="Provisioning Wi-Fi password")
+    p_mprov.add_argument("--strict-uninstall", action="store_true", help="Enforce uninstallation lock immediately on provision")
+
+    # mdm-kiosk
+    p_mkiosk = subparsers.add_parser("mdm-kiosk", help="Inspect LockTask dedicated kiosk profiles")
+    p_mkiosk.add_argument("--profile", default="default", help="Kiosk profile ID")
+
+    # mdm-appconfig
+    p_mappcfg = subparsers.add_parser("mdm-appconfig", help="Export Managed Configurations AppConfig payload")
+    p_mappcfg.add_argument("--tenant", default="default_enterprise", help="Tenant ID")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -790,6 +893,12 @@ def main():
         cmd_mdm_private_dns(args)
     elif args.command == "mdm-oem-risk":
         cmd_mdm_oem_risk(args)
+    elif args.command == "mdm-provision":
+        cmd_mdm_provision(args)
+    elif args.command == "mdm-kiosk":
+        cmd_mdm_kiosk(args)
+    elif args.command == "mdm-appconfig":
+        cmd_mdm_appconfig(args)
 
 
 if __name__ == "__main__":
