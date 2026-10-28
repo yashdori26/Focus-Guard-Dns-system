@@ -32,6 +32,13 @@ from .secure_forwarder import (
     PrivacyProfile,
     SelectionStrategy,
 )
+from .mdm_server import (
+    get_fleet_manager,
+    PolicyLockMode,
+    SplitTunnelPolicyMode,
+    MdmPolicyProfile,
+    DeviceStatus,
+)
 
 
 def cmd_status(args):
@@ -435,6 +442,108 @@ def cmd_forwarder_status(args):
     print("=" * 65)
 
 
+def cmd_mdm_fleet(args):
+    """Displays enterprise MDM fleet status and conditional uninstallation posture."""
+    fm = get_fleet_manager()
+    telemetry = fm.get_fleet_telemetry()
+    print("=" * 70)
+    print("         FOCUS-DNS ENTERPRISE MDM & DEVICE FLEET TELEMETRY       ")
+    print("=" * 70)
+    print(f"Total Enrolled Endpoints:      {telemetry['total_devices']}")
+    print(f"Uninstallation Locked Count:   {telemetry['uninstallation_locked_devices']}")
+    print(f"Device Admin Active:           {telemetry['device_admin_active_devices']}")
+    print(f"Tampered Security Alerts:      {telemetry['tampered_devices']}")
+    print(f"Active MDM Policy Profiles:    {telemetry['policies_count']}")
+    print("-" * 70)
+    print(f"{'DEVICE ID':<16} {'NAME':<18} {'PLATFORM':<10} {'LOCK STATE':<12} {'INTEGRITY':<10}")
+    print("-" * 70)
+    for dev in telemetry['devices']:
+        lock_str = "LOCKED" if not dev['can_uninstall'] else "UNLOCKED"
+        print(f"{dev['device_id']:<16} {dev['device_name'][:17]:<18} {dev['platform']:<10} {lock_str:<12} {dev['integrity_score']}/100")
+    if not telemetry['devices']:
+        print("  (No devices currently enrolled)")
+    print("=" * 70)
+
+
+def cmd_mdm_device(args):
+    """Displays detailed diagnostics for an enrolled device."""
+    fm = get_fleet_manager()
+    dev = fm.get_device(args.device_id)
+    if not dev:
+        print(f"Error: Device '{args.device_id}' is not enrolled.")
+        sys.exit(1)
+    d = dev.to_dict()
+    print("=" * 60)
+    print(f"  DEVICE DETAILS: {d['device_name']} ({d['device_id']})")
+    print("=" * 60)
+    print(f"Platform / OS:        {d['platform']} (OS: {d['os_version']})")
+    print(f"Policy Profile:       {d['profile_id']}")
+    print(f"Status:               {d['status'].upper()}")
+    print(f"Device Owner:         {'YES' if d['device_owner_enrolled'] else 'NO'}")
+    print(f"Device Admin:         {'ACTIVE' if d['device_admin_active'] else 'INACTIVE'}")
+    print(f"Protection Active:    {'YES' if d['is_protection_active'] else 'NO'}")
+    print(f"Timer Active:         {'YES' if d['is_timer_active'] else 'NO'} ({d['remaining_timer_sec']}s remaining)")
+    print(f"Can Uninstall:        {'YES (Clean)' if d['can_uninstall'] else 'NO (STRICTLY LOCKED)'}")
+    print(f"Integrity Score:      {d['integrity_score']} / 100")
+    print(f"Quarantined Apps:     {d['quarantined_apps_count']}")
+    print(f"Split Tunnel Exempt:  {d['split_tunnel_exempt_count']}")
+    print(f"Last Seen:            {d['last_seen_sec_ago']}s ago")
+    print("=" * 60)
+
+
+def cmd_mdm_check_uninstall(args):
+    """Evaluates whether an endpoint is permitted to uninstall FocusDNS."""
+    fm = get_fleet_manager()
+    allowed, reason = fm.evaluate_uninstall_permission(args.device_id)
+    print("-" * 60)
+    print(f"UNINSTALLATION PERMISSION CHECK FOR: {args.device_id}")
+    print(f"Allowed: {allowed}")
+    print(f"Reason:  {reason}")
+    if allowed:
+        print(">> Status: UNINSTALL PERMITTED (Normal Mode, no active restrictions)")
+    else:
+        print(">> Status: UNINSTALLATION BLOCKED (Active Focus/Timer Protection)")
+    print("-" * 60)
+
+
+def cmd_mdm_policy(args):
+    """Views or configures enterprise MDM policy profile."""
+    fm = get_fleet_manager()
+    pid = args.profile_id or "default"
+    pol = fm.get_policy(pid)
+    if args.set_lock_mode:
+        try:
+            mode = PolicyLockMode(args.set_lock_mode)
+        except ValueError:
+            print(f"Invalid lock mode: {args.set_lock_mode}. Options: always_allowed, conditional_on_protection, always_locked")
+            sys.exit(1)
+        if not pol:
+            pol = MdmPolicyProfile(pid, f"Policy-{pid}", lock_mode=mode)
+        else:
+            pol.lock_mode = mode
+            pol.version += 1
+            pol.updated_at = time.time()
+        fm.set_policy(pol)
+        print(f"Policy '{pid}' lock mode updated to: {mode.value}")
+    elif pol:
+        p = pol.to_dict()
+        print("=" * 60)
+        print(f"  MDM POLICY PROFILE: {p['name']} ({p['profile_id']})")
+        print("=" * 60)
+        print(f"Lock Mode:            {p['lock_mode']}")
+        print(f"Split Tunnel Mode:    {p['split_tunnel_mode']}")
+        print(f"Disallow Safe Boot:   {p['disallow_safe_boot']}")
+        print(f"Disallow VPN Config:  {p['disallow_vpn_config']}")
+        print(f"Camera Disabled:      {p['camera_disabled']}")
+        print(f"Exempt Packages ({len(p['exempt_packages'])}):")
+        for pkg in p['exempt_packages']:
+            print(f"  - {pkg}")
+        print(f"Version:              v{p['version']}")
+        print("=" * 60)
+    else:
+        print(f"Policy '{pid}' not found.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -519,6 +628,22 @@ def main():
     # forwarder-status
     subparsers.add_parser("forwarder-status", help="Show RFC 8310/9103 Secure Upstream Forwarder pool status")
 
+    # mdm-fleet
+    subparsers.add_parser("mdm-fleet", help="Show enterprise MDM fleet status and uninstallation lock posture")
+
+    # mdm-device
+    p_mdev = subparsers.add_parser("mdm-device", help="Show detailed telemetry for an enrolled device")
+    p_mdev.add_argument("device_id", help="Device identifier (e.g., android-12345)")
+
+    # mdm-check-uninstall
+    p_mchk = subparsers.add_parser("mdm-check-uninstall", help="Evaluate if endpoint is permitted to uninstall FocusDNS")
+    p_mchk.add_argument("device_id", help="Device identifier to evaluate")
+
+    # mdm-policy
+    p_mpol = subparsers.add_parser("mdm-policy", help="Inspect or configure MDM uninstallation & split-tunnel policy")
+    p_mpol.add_argument("--profile-id", default="default", help="Policy profile ID")
+    p_mpol.add_argument("--set-lock-mode", choices=["always_allowed", "conditional_on_protection", "always_locked"], help="Update uninstallation lock mode")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -557,6 +682,14 @@ def main():
         cmd_cookie_validate(args)
     elif args.command == "forwarder-status":
         cmd_forwarder_status(args)
+    elif args.command == "mdm-fleet":
+        cmd_mdm_fleet(args)
+    elif args.command == "mdm-device":
+        cmd_mdm_device(args)
+    elif args.command == "mdm-check-uninstall":
+        cmd_mdm_check_uninstall(args)
+    elif args.command == "mdm-policy":
+        cmd_mdm_policy(args)
 
 
 if __name__ == "__main__":

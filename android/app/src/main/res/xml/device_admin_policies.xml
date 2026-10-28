@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FocusDNS Enterprise Device Administrator Policies
+    Standard: Android Enterprise Device Administration API (android.app.admin.DevicePolicyManager)
+    Purpose: Provides system-level protection against premature uninstallation, task killing,
+             and settings tampering during active focus sessions.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- Allows FocusDNS to force lock screen during emergency digital detox -->
+        <force-lock />
+
+        <!-- Monitors failed unlock attempts to guard against unauthorized bypass -->
+        <watch-login />
+
+        <!-- Limits password quality and screen timeout during strict focus modes -->
+        <limit-password />
+
+        <!-- Disables camera during high-security work sessions if configured -->
+        <disable-camera />
+
+        <!-- Resets password / keyguard features if enterprise device owner -->
+        <reset-password />
+
+        <!-- Guarded wipe data policy used strictly in enterprise MDM fleet mode -->
+        <wipe-data />
+
+        <!-- Prevents keyguard unsecure features during strict mode -->
+        <disable-keyguard-features />
+    </uses-policies>
+</device-admin>

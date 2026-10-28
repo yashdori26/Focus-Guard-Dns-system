@@ -195,6 +195,9 @@ class FocusDnsVpnService : VpnService() {
 
             builder.setBlocking(true)
 
+            // Apply per-app split tunneling configuration
+            SplitTunnelManager.applyToVpnBuilder(this, builder)
+
             vpnInterface = builder.establish()
             if (vpnInterface == null) {
                 Log.e(TAG, "Failed to establish VPN interface")
@@ -207,6 +210,8 @@ class FocusDnsVpnService : VpnService() {
             isRunning = true
             isStarting = false
             isBackendReachable = true
+            ProtectionStateCoordinator.setProtectionActive(this, true)
+            MdmPolicyEngine.syncUninstallLock(this)
             notifyStateChange()
 
             readThread = Thread(TunReadRunnable(vpnInterface!!), "FocusDnsTunReader").apply {
@@ -237,6 +242,8 @@ class FocusDnsVpnService : VpnService() {
 
         stopForeground(true)
         stopSelf()
+        ProtectionStateCoordinator.setProtectionActive(this, false)
+        MdmPolicyEngine.syncUninstallLock(this)
         notifyStateChange()
         Log.i(TAG, "FocusDNS Local DNS VPN stopped.")
     }

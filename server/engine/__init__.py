@@ -231,6 +231,15 @@ from .secure_forwarder import (
     DoTConnectionPool,
     SecureUpstreamForwarder,
 )
+from .mdm_server import (
+    PolicyLockMode,
+    SplitTunnelPolicyMode,
+    DeviceStatus,
+    DeviceRecord,
+    MdmPolicyProfile,
+    DeviceFleetManager,
+    get_fleet_manager,
+)
 
 __all__ = [
     "RadixTrieMatcher",
@@ -415,4 +424,11 @@ __all__ = [
     "TLSSessionCache",
     "DoTConnectionPool",
     "SecureUpstreamForwarder",
+    "PolicyLockMode",
+    "SplitTunnelPolicyMode",
+    "DeviceStatus",
+    "DeviceRecord",
+    "MdmPolicyProfile",
+    "DeviceFleetManager",
+    "get_fleet_manager",
 ]

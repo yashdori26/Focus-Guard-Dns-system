@@ -81,13 +81,20 @@ class FocusAccessibilityService : AccessibilityService() {
         if (pkg == packageName) return
 
         // 2. Strict Mode Protection for VPN Dialogs, Installer, & Settings
-        if (RulesStore.isStrictMode(this)) {
+        if (RulesStore.isStrictMode(this) || !ProtectionStateCoordinator.canUninstall(this)) {
             val isGuardedTarget = pkg == "com.android.vpndialogs" ||
                 RulesStore.KNOWN_SETTINGS_PACKAGES.contains(pkg) ||
-                RulesStore.KNOWN_INSTALLER_PACKAGES.contains(pkg)
+                RulesStore.KNOWN_INSTALLER_PACKAGES.contains(pkg) ||
+                UninstallProtectionManager.KNOWN_PACKAGE_INSTALLERS.contains(pkg) ||
+                UninstallProtectionManager.KNOWN_SETTINGS_PACKAGES.contains(pkg)
 
             if (isGuardedTarget) {
                 val texts = extractWindowTexts(event)
+
+                // 2a. Enforce conditional uninstallation & device admin protection
+                if (UninstallProtectionManager.handleWindowInspection(this, pkg, className, texts)) {
+                    return
+                }
 
                 // Intercept VPN approval / connection dialogs (whitelist FocusDNS consent, block 3rd-party)
                 if (pkg == "com.android.vpndialogs") {

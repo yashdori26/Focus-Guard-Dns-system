@@ -22,13 +22,16 @@ class MainActivity: FlutterActivity() {
     companion object {
         private const val VPN_CHANNEL = "focus_dns/vpn"
         private const val BLOCKER_CHANNEL = "focus_dns/blocker"
+        private const val MDM_CHANNEL = "focus_dns/mdm"
         private const val VPN_REQUEST_CODE = 24601
         private const val NOTIFICATION_PERMISSION_CODE = 24602
+        private const val DEVICE_ADMIN_REQUEST_CODE = 24603
     }
 
     private var pendingVpnResult: MethodChannel.Result? = null
     private var vpnMethodChannel: MethodChannel? = null
     private var blockerMethodChannel: MethodChannel? = null
+    private var mdmMethodChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -198,6 +201,83 @@ class MainActivity: FlutterActivity() {
                 ))
             }
         }
+
+        // --- MDM & Device Administrator Channel ---
+        mdmMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MDM_CHANNEL).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isDeviceAdminActive" -> {
+                        result.success(FocusDeviceAdminReceiver.isDeviceAdminActive(this@MainActivity))
+                    }
+                    "requestDeviceAdmin" -> {
+                        val intent = FocusDeviceAdminReceiver.createAddDeviceAdminIntent(this@MainActivity)
+                        startActivity(intent)
+                        result.success(true)
+                    }
+                    "deactivateDeviceAdmin" -> {
+                        val deactivated = FocusDeviceAdminReceiver.requestDeactivate(this@MainActivity)
+                        result.success(deactivated)
+                    }
+                    "canUninstall" -> {
+                        result.success(ProtectionStateCoordinator.canUninstall(this@MainActivity))
+                    }
+                    "getLockStatus" -> {
+                        result.success(ProtectionStateCoordinator.getTelemetry(this@MainActivity))
+                    }
+                    "setStrictLockTimer" -> {
+                        val durationSeconds = call.argument<Int>("durationSeconds") ?: 0
+                        ProtectionStateCoordinator.setStrictTimer(this@MainActivity, durationSeconds.toLong())
+                        result.success(true)
+                    }
+                    "getSplitTunnelApps" -> {
+                        thread {
+                            val apps = SplitTunnelManager.getInstalledApps(this@MainActivity).map { app ->
+                                mapOf(
+                                    "packageName" to app.packageName,
+                                    "appName" to app.appName,
+                                    "isSystemApp" to app.isSystemApp,
+                                    "isSelected" to app.isSelected
+                                )
+                            }
+                            runOnUiThread {
+                                result.success(apps)
+                            }
+                        }
+                    }
+                    "setSplitTunnelPackages" -> {
+                        val packages = call.argument<List<String>>("packages") ?: emptyList()
+                        SplitTunnelManager.setSelectedPackages(this@MainActivity, packages.toSet())
+                        result.success(true)
+                    }
+                    "setSplitTunnelMode" -> {
+                        val modeStr = call.argument<String>("mode") ?: "disallow_list"
+                        val mode = if (modeStr == "allow_list") SplitTunnelManager.TunnelMode.ALLOW_LIST else SplitTunnelManager.TunnelMode.DISALLOW_LIST
+                        SplitTunnelManager.setTunnelMode(this@MainActivity, mode)
+                        result.success(true)
+                    }
+                    "getSplitTunnelTelemetry" -> {
+                        result.success(SplitTunnelManager.getTelemetry(this@MainActivity))
+                    }
+                    "getMdmCapabilities" -> {
+                        result.success(MdmPolicyEngine.getMdmCapabilities(this@MainActivity))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+
+        ProtectionStateCoordinator.registerListener(object : ProtectionStateCoordinator.StateChangeListener {
+            override fun onProtectionStateChanged(sessionState: ProtectionStateCoordinator.SessionState, canUninstall: Boolean, remainingSeconds: Long) {
+                runOnUiThread {
+                    mdmMethodChannel?.invokeMethod("onLockStatusChanged", mapOf(
+                        "sessionState" to sessionState.name,
+                        "canUninstall" to canUninstall,
+                        "remainingSeconds" to remainingSeconds,
+                        "formattedRemainingTime" to ProtectionStateCoordinator.formatRemainingTime(remainingSeconds)
+                    ))
+                }
+            }
+        })
     }
 
     private fun checkAccessibilityEnabled(): Boolean {

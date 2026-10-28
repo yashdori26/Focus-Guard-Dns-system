@@ -4,6 +4,7 @@ import '../../models/enums.dart';
 import '../../state_management/providers.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../ui_helpers.dart';
+import '../mdm_shield_card.dart';
 
 class SettingsTab extends ConsumerStatefulWidget {
   const SettingsTab({super.key});
@@ -38,6 +39,10 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // DEVICE ADMINISTRATOR & ANTI-UNINSTALL SHIELD
+        const MdmShieldCard(),
+        const SizedBox(height: 16),
+
         // THEME MODE SWITCHER
         secCard(
           'Appearance',

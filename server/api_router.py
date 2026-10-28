@@ -25,6 +25,12 @@ from dnslib import DNSRecord
 
 from . import db
 from . import resolver
+from .engine.mdm_server import (
+    get_fleet_manager,
+    PolicyLockMode,
+    SplitTunnelPolicyMode,
+    MdmPolicyProfile,
+)
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -410,6 +416,45 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 "web3": w3
             })
 
+        # 11. MDM & Anti-Bypass Device Administration Endpoints
+        if path in ("/api/v1/mdm/devices", "/api/mdm/devices"):
+            fm = get_fleet_manager()
+            devices = [d.to_dict() for d in fm.list_devices()]
+            return self._send_json({"devices": devices, "total": len(devices)})
+
+        if path in ("/api/v1/mdm/telemetry", "/api/mdm/telemetry"):
+            fm = get_fleet_manager()
+            return self._send_json(fm.get_fleet_telemetry())
+
+        if path in ("/api/v1/mdm/policy", "/api/mdm/policy"):
+            fm = get_fleet_manager()
+            pid = params.get("profile_id", ["default"])[0]
+            pol = fm.get_policy(pid)
+            if not pol:
+                return self._send_error("MDM Policy profile not found", 404)
+            return self._send_json(pol.to_dict())
+
+        if path in ("/api/v1/mdm/check-uninstall", "/api/mdm/check-uninstall"):
+            fm = get_fleet_manager()
+            dev_id = params.get("device_id", [""])[0]
+            if not dev_id:
+                return self._send_error("device_id query parameter required", 400)
+            can_uninstall, reason = fm.evaluate_uninstall_permission(dev_id)
+            return self._send_json({
+                "device_id": dev_id,
+                "can_uninstall": can_uninstall,
+                "reason": reason,
+                "timestamp": time.time(),
+            })
+
+        if path in ("/api/v1/mdm/audit", "/api/mdm/audit"):
+            fm = get_fleet_manager()
+            try:
+                limit = min(max(int(params.get("limit", [50])[0]), 1), 500)
+            except ValueError:
+                limit = 50
+            return self._send_json({"audit_log": fm.get_audit_log(limit)})
+
         self._send_error(f"Endpoint GET {path} not found", 404)
 
     def do_POST(self):
@@ -681,6 +726,76 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 return self._send_error("Domain parameter required", 400)
             result = resolver.resolve_domain(domain, profile_id, qtype, self.client_address[0])
             return self._send_json(result)
+
+        # MDM Device Enrollment
+        if path in ("/api/v1/mdm/enroll", "/api/mdm/enroll"):
+            dev_id = body.get("device_id", "").strip()
+            if not dev_id:
+                return self._send_error("device_id required", 400)
+            dev_name = body.get("device_name", f"Device-{dev_id[:6]}").strip()
+            platform = body.get("platform", "Android").strip()
+            os_version = body.get("os_version", "14").strip()
+            pid = body.get("profile_id", "default").strip()
+            device_owner = bool(body.get("device_owner", False))
+            admin_active = bool(body.get("admin_active", False))
+            fm = get_fleet_manager()
+            rec = fm.enroll_device(
+                device_id=dev_id,
+                device_name=dev_name,
+                platform=platform,
+                os_version=os_version,
+                profile_id=pid,
+                device_owner=device_owner,
+                admin_active=admin_active,
+            )
+            return self._send_json({"enrolled": True, "device": rec.to_dict()})
+
+        # MDM Device Telemetry Ingestion
+        if path in ("/api/v1/mdm/telemetry", "/api/mdm/telemetry"):
+            dev_id = body.get("device_id", "").strip()
+            if not dev_id:
+                return self._send_error("device_id required", 400)
+            telemetry = body.get("telemetry", body)
+            fm = get_fleet_manager()
+            fm.process_telemetry(dev_id, telemetry)
+            dev = fm.get_device(dev_id)
+            return self._send_json({
+                "success": True,
+                "device_id": dev_id,
+                "can_uninstall": dev.can_uninstall if dev else True,
+            })
+
+        # MDM Policy Update
+        if path in ("/api/v1/mdm/policy", "/api/mdm/policy"):
+            pid = body.get("profile_id", "default").strip()
+            name = body.get("name", "Standard Protection Policy").strip()
+            raw_mode = body.get("lock_mode", PolicyLockMode.CONDITIONAL_ON_PROTECTION.value)
+            try:
+                lock_mode = PolicyLockMode(raw_mode)
+            except ValueError:
+                lock_mode = PolicyLockMode.CONDITIONAL_ON_PROTECTION
+            raw_st_mode = body.get("split_tunnel_mode", SplitTunnelPolicyMode.DISALLOW_LIST.value)
+            try:
+                st_mode = SplitTunnelPolicyMode(raw_st_mode)
+            except ValueError:
+                st_mode = SplitTunnelPolicyMode.DISALLOW_LIST
+            exempt_packages = body.get("exempt_packages", [])
+            disallow_safe_boot = bool(body.get("disallow_safe_boot", True))
+            disallow_vpn_config = bool(body.get("disallow_vpn_config", True))
+            camera_disabled = bool(body.get("camera_disabled", False))
+            fm = get_fleet_manager()
+            pol = MdmPolicyProfile(
+                profile_id=pid,
+                name=name,
+                lock_mode=lock_mode,
+                split_tunnel_mode=st_mode,
+                exempt_packages=exempt_packages,
+                disallow_safe_boot=disallow_safe_boot,
+                disallow_vpn_config=disallow_vpn_config,
+                camera_disabled=camera_disabled,
+            )
+            fm.set_policy(pol)
+            return self._send_json({"success": True, "policy": pol.to_dict()})
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 
