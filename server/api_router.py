@@ -177,6 +177,18 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 return self._send_error("Unauthorized: Valid API token required (Authorization: Bearer <token> or X-Api-Key)", 401)
             return self._handle_doh_query(params["dns"][0], is_base64=True, profile_id=doh_profile)
 
+        # Standard Prometheus Metrics Exposition Endpoint (/metrics)
+        if path == "/metrics":
+            from .engine import get_prometheus_exporter
+            metrics_payload = get_prometheus_exporter().export_metrics_text().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(metrics_payload)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(metrics_payload)
+            return
+
         # Local bootstrap endpoint: only accessible from loopback without hostile Origin
         if path == "/api/auth/token":
             origin = self.headers.get("Origin", "")

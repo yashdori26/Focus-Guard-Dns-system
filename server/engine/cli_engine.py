@@ -23,8 +23,15 @@ from .threat_analytics import ThreatAnalyticsEngine, calculate_shannon_entropy
 from .dnssec_signer import DNSSECSignerEngine
 from .zone_authority import AuthoritativeZone, AuthoritativeRecord
 from .cluster_sync import AnycastHealthProbe
-from .dns64 import embed_ipv4_in_ipv6
 from .xdp_filter import XDP_DROP
+from .cookie_manager import DNSCookieManager
+from .secure_forwarder import (
+    SecureUpstreamForwarder,
+    UpstreamConfig,
+    UpstreamProtocol,
+    PrivacyProfile,
+    SelectionStrategy,
+)
 
 
 def cmd_status(args):
@@ -90,6 +97,13 @@ def cmd_status(args):
     print("RFC 9432 Catalog Zones & Zone Transfers:")
     print(f"  Catalog Members:             {metrics.get('catalog_members', 0):,}")
     print(f"  AXFR/IXFR Transfers Served:  {metrics.get('zone_transfers_served', 0):,}")
+    print("-" * 65)
+    print("RFC 8806 Local Root & Advanced Defenses:")
+    print(f"  Hyperlocal Root Queries:     {metrics.get('local_root_queries', 0):,}")
+    print(f"  PMTU TC=1 Truncations:       {metrics.get('pmtu_truncations', 0):,}")
+    print(f"  Aggressive NSEC Cache Hits:  {metrics.get('aggressive_nsec_hits', 0):,}")
+    print(f"  Compact DNSSEC Proofs:       {metrics.get('compact_dnssec_proofs', 0):,}")
+    print(f"  RFC 8482 ANY Intercepts:     {metrics.get('rfc8482_any_intercepts', 0):,}")
     print("=" * 65)
 
 
@@ -270,6 +284,157 @@ def cmd_transfer_zone(args):
     print("=" * 60)
 
 
+def cmd_svcb_parse(args):
+    """Parses and inspects RFC 9460 SVCB/HTTPS presentation record."""
+    from .svcb_https import SVCBRecord
+    try:
+        rec = SVCBRecord.parse_presentation(args.presentation)
+        print("=" * 60)
+        print("       FOCUS-DNS RFC 9460 SVCB/HTTPS RECORD INSPECTOR   ")
+        print("=" * 60)
+        print(f"Priority:        {rec.priority} ({'AliasMode' if rec.is_alias_mode else 'ServiceMode'})")
+        print(f"Target Name:     {rec.target_name}")
+        print(f"SvcParams Total: {len(rec.list_params())}")
+        for p in rec.list_params():
+            print(f"  • {p.key_name} (Key {p.key}): {p.value}")
+        print(f"Wire Size:       {len(rec.to_wire())} octets")
+        print("=" * 60)
+    except Exception as ex:
+        print(f"Error parsing SVCB presentation format: {ex}")
+
+
+def cmd_root_status(args):
+    """Displays RFC 8806 Hyperlocal Root Zone telemetry and hint database."""
+    pipeline = get_pipeline()
+    st = pipeline.local_root.get_stats()
+    print("=" * 60)
+    print("       FOCUS-DNS RFC 8806 HYPERLOCAL ROOT ZONE STATUS   ")
+    print("=" * 60)
+    print(f"Specification:            {st['rfc']}")
+    print(f"Root Apex Serial:         {st['serial']}")
+    print(f"Root Servers Online:      {st['root_servers_available']} (A.ROOT through M.ROOT)")
+    print(f"Registered TLDs:          {st['registered_tlds']}")
+    print(f"Total Queries Served:     {st['total_queries_served']:,}")
+    print(f"Apex Answers (SOA/NS):    {st['apex_queries_served']:,}")
+    print(f"Delegation Referrals:     {st['referrals_served']:,}")
+    print(f"Authoritative NXDOMAIN:   {st['nxdomain_served']:,}")
+    print("=" * 60)
+
+
+def cmd_pmtu_status(args):
+    """Displays PMTU buffer limits and TCP fallback manager status."""
+    pipeline = get_pipeline()
+    pmtu_st = pipeline.pmtu.get_stats()
+    tcp_st = pipeline.tcp_fallback.get_stats()
+    print("=" * 60)
+    print("      FOCUS-DNS RFC 8900 PMTU & TRUNCATION MANAGER      ")
+    print("=" * 60)
+    print(f"Configured UDP Payload:   {pmtu_st['max_udp_payload_configured']} bytes (Flag Day)")
+    print(f"Flag Day Clamping:        {'ENFORCED' if pmtu_st['enforce_flag_day_limit'] else 'DISABLED'}")
+    print(f"UDP Packets Evaluated:    {pmtu_st['udp_packets_evaluated']:,}")
+    print(f"TC=1 Truncation Events:   {pmtu_st['truncation_events']:,} ({pmtu_st['truncation_rate_percent']}%)")
+    print("-" * 60)
+    print(f"Active TCP Connections:   {tcp_st['active_tcp_connections']:,}")
+    print(f"Total TCP Handled:        {tcp_st['total_tcp_connections']:,}")
+    print(f"Rejected Connections:     {tcp_st['rejected_connections']:,}")
+    print("=" * 60)
+
+
+def cmd_metrics_dump(args):
+    """Dumps live Prometheus exposition format metrics."""
+    pipeline = get_pipeline()
+    print(pipeline.prometheus.export_metrics_text())
+
+
+def cmd_fuzz_run(args):
+    """Runs automated DNS wire mutation fuzzing cycle."""
+    from .dns_fuzzer import DNSFuzzHarness, LoopVulnerabilityDetector
+    from dnslib import DNSQuestion
+    base = DNSRecord(q=DNSQuestion("fuzz.local", QTYPE.A)).pack()
+
+    def safe_parser(data):
+        is_loop, _ = LoopVulnerabilityDetector.inspect_pointer_loops(data)
+        if is_loop:
+            raise ValueError("Loop rejected")
+        return DNSRecord.parse(data)
+
+    harness = DNSFuzzHarness(target_parser=safe_parser)
+    print(f"🚀 Running {args.iterations} hostile wire fuzzing iterations...")
+    st = harness.run_fuzz_cycle(base, iterations=args.iterations)
+    print("=" * 60)
+    print("        FOCUS-DNS WIRE PROTOCOL FUZZING RESULTS         ")
+    print("=" * 60)
+    print(f"Total Mutations Tested:   {st['total_fuzz_iterations']:,}")
+    print(f"Cyclic Loops Neutralized: {st['loops_neutralized']:,}")
+    print(f"Safe Exceptions Handled:  {st['safe_exceptions_handled']:,}")
+    print(f"Fatal Crashes Detected:   {st['fatal_crashes']}")
+    print(f"Zero Crash Guarantee:     {'PASS' if st['zero_crash_guarantee_met'] else 'FAIL'}")
+    print("=" * 60)
+
+
+def cmd_cookie_gen(args):
+    """Generates an RFC 9018 Version 1 DNS Server Cookie."""
+    mgr = DNSCookieManager()
+    client_cookie = args.client_cookie.encode("utf-8") if len(args.client_cookie) == 8 else bytes.fromhex(args.client_cookie)
+    if len(client_cookie) != 8:
+        print("Error: Client cookie must be 8 octets (ASCII or 16-hex characters)")
+        return
+    server_cookie = mgr.generate_server_cookie(client_cookie, args.client_ip)
+    print("=" * 60)
+    print("      RFC 9018 INTEROPERABLE DNS SERVER COOKIE        ")
+    print("=" * 60)
+    print(f"Client IP:         {args.client_ip}")
+    print(f"Client Cookie:     {client_cookie.hex()}")
+    print(f"Server Cookie:     {server_cookie.hex()}")
+    print(f"  Version:         0x{server_cookie[0]:02x} (RFC 9018 v1)")
+    print(f"  Reserved:        {server_cookie[1:4].hex()}")
+    ts = int.from_bytes(server_cookie[4:8], byteorder="big")
+    print(f"  Timestamp:       {ts} ({time.ctime(ts)})")
+    print(f"  HMAC-SHA256:     {server_cookie[8:16].hex()} (truncated 64-bit)")
+    print("=" * 60)
+
+
+def cmd_cookie_validate(args):
+    """Validates an RFC 9018 DNS Server Cookie."""
+    mgr = DNSCookieManager()
+    client_cookie = bytes.fromhex(args.client_cookie) if len(args.client_cookie) == 16 else args.client_cookie.encode("utf-8")
+    server_cookie = bytes.fromhex(args.server_cookie)
+    valid, reason = mgr.validate_cookie(client_cookie, server_cookie, args.client_ip)
+    print("=" * 60)
+    print("       RFC 9018 SERVER COOKIE VALIDATION RESULT       ")
+    print("=" * 60)
+    print(f"Client IP:     {args.client_ip}")
+    print(f"Client Cookie: {client_cookie.hex()}")
+    print(f"Server Cookie: {server_cookie.hex()}")
+    print(f"Validation:    {'VALID' if valid else 'INVALID'}")
+    print(f"Status Reason: {reason}")
+    print("=" * 60)
+
+
+def cmd_forwarder_status(args):
+    """Inspects RFC 8310 / RFC 9103 Secure Upstream Forwarder pool status."""
+    fwd = SecureUpstreamForwarder(strategy=SelectionStrategy.FASTEST)
+    fwd.add_upstream(UpstreamConfig("1.1.1.1", 853, UpstreamProtocol.DOT, "cloudflare-dns.com", priority=1))
+    fwd.add_upstream(UpstreamConfig("8.8.8.8", 853, UpstreamProtocol.DOT, "dns.google", priority=2))
+    fwd.add_upstream(UpstreamConfig("9.9.9.9", 853, UpstreamProtocol.DOT, "dns.quad9.net", priority=3))
+    st = fwd.get_status()
+    print("=" * 65)
+    print("    RFC 8310 / RFC 9103 SECURE UPSTREAM FORWARDER POOL        ")
+    print("=" * 65)
+    print(f"Active Selection Strategy:   {st['strategy'].upper()}")
+    print(f"Configured Endpoints:       {st['endpoints_count']}")
+    print(f"TLS Sessions Cached:        {st['tls_sessions_cached']}")
+    print("-" * 65)
+    for ep in st["endpoints"]:
+        print(f"Endpoint: {ep['endpoint_id']}")
+        print(f"  Server Name:    {ep['server_name']}")
+        print(f"  Privacy:        {ep['privacy_profile'].upper()}")
+        print(f"  Circuit State:  {ep['circuit_state'].upper()}")
+        print(f"  Available:      {ep['is_available']}")
+        print(f"  EWMA Latency:   {ep['ewma_latency_ms']} ms")
+    print("=" * 65)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -323,6 +488,37 @@ def main():
     p_xfer.add_argument("zone", help="Authoritative zone origin")
     p_xfer.add_argument("--client-ip", default="127.0.0.1", help="Simulated slave client IP")
 
+    # svcb-parse
+    p_svcb = subparsers.add_parser("svcb-parse", help="Parse and inspect RFC 9460 SVCB/HTTPS presentation string")
+    p_svcb.add_argument("presentation", help="Presentation string (e.g. '1 . alpn=h2,h3 port=443')")
+
+    # root-status
+    subparsers.add_parser("root-status", help="Show RFC 8806 Hyperlocal Root Zone telemetry")
+
+    # pmtu-status
+    subparsers.add_parser("pmtu-status", help="Show RFC 8900 PMTU and TCP Fallback manager status")
+
+    # metrics-dump
+    subparsers.add_parser("metrics-dump", help="Dump live Prometheus exposition format metrics")
+
+    # fuzz-run
+    p_fuzz = subparsers.add_parser("fuzz-run", help="Run automated DNS wire protocol mutation fuzzing")
+    p_fuzz.add_argument("--iterations", type=int, default=100, help="Number of fuzzing mutations to execute")
+
+    # cookie-gen
+    p_ckgen = subparsers.add_parser("cookie-gen", help="Generate RFC 9018 Version 1 DNS Server Cookie")
+    p_ckgen.add_argument("client_cookie", help="8-octet client cookie (ASCII or 16-hex characters)")
+    p_ckgen.add_argument("client_ip", help="Client IP address")
+
+    # cookie-validate
+    p_ckval = subparsers.add_parser("cookie-validate", help="Validate RFC 9018 DNS Server Cookie")
+    p_ckval.add_argument("client_cookie", help="8-octet client cookie")
+    p_ckval.add_argument("server_cookie", help="16-octet server cookie (32 hex characters)")
+    p_ckval.add_argument("client_ip", help="Client IP address")
+
+    # forwarder-status
+    subparsers.add_parser("forwarder-status", help="Show RFC 8310/9103 Secure Upstream Forwarder pool status")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -345,6 +541,22 @@ def main():
         cmd_catalog_list(args)
     elif args.command == "transfer-zone":
         cmd_transfer_zone(args)
+    elif args.command == "svcb-parse":
+        cmd_svcb_parse(args)
+    elif args.command == "root-status":
+        cmd_root_status(args)
+    elif args.command == "pmtu-status":
+        cmd_pmtu_status(args)
+    elif args.command == "metrics-dump":
+        cmd_metrics_dump(args)
+    elif args.command == "fuzz-run":
+        cmd_fuzz_run(args)
+    elif args.command == "cookie-gen":
+        cmd_cookie_gen(args)
+    elif args.command == "cookie-validate":
+        cmd_cookie_validate(args)
+    elif args.command == "forwarder-status":
+        cmd_forwarder_status(args)
 
 
 if __name__ == "__main__":

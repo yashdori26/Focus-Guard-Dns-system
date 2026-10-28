@@ -47,6 +47,14 @@ from .dns64 import DNS64Engine
 from .geodns import GeoDNSEngine, HealthState
 from .catalog_zones import CatalogZoneEngine
 from .zone_transfer import ZoneTransferEngine
+from .svcb_https import SVCBResolver, HTTPSRecord, SVCBRecord
+from .local_root import LocalRootEngine
+from .pmtu_manager import PMTUManager, TCPFallbackManager
+from .aggressive_nsec import AggressiveNSECCache
+from .compact_dnssec import CompactDNSSECEngine
+from .rfc8482_any import RFC8482Engine
+from .telemetry_prometheus import get_prometheus_exporter
+from .dns_fuzzer import LoopVulnerabilityDetector
 from .. import db
 
 
@@ -104,6 +112,14 @@ class DNSPipeline:
         self.geodns = GeoDNSEngine()
         self.catalog_zones = CatalogZoneEngine()
         self.zone_transfer = ZoneTransferEngine()
+        self.svcb_resolver = SVCBResolver()
+        self.local_root = LocalRootEngine()
+        self.pmtu = PMTUManager()
+        self.tcp_fallback = TCPFallbackManager()
+        self.aggressive_nsec = AggressiveNSECCache()
+        self.compact_dnssec = CompactDNSSECEngine()
+        self.rfc8482 = RFC8482Engine()
+        self.prometheus = get_prometheus_exporter()
 
         # Telemetry & Operational Metrics
         self._total_queries = 0
@@ -283,6 +299,12 @@ class DNSPipeline:
         with self._lock:
             self._total_queries += 1
 
+        # -1.8 CVE-2000-0381 Cyclic Compression Pointer Loop Check
+        is_cyclic, _ = LoopVulnerabilityDetector.inspect_pointer_loops(query_bytes)
+        if is_cyclic:
+            reply = DNSRecord(DNSHeader(id=0, qr=1, rcode=RCODE.FORMERR))
+            return reply.pack(), {"status": "error", "rcode": "FORMERR", "reason": "Cyclic Pointer Loop Neutralized", "protocol": protocol}
+
         try:
             req = DNSRecord.parse(query_bytes)
         except Exception:
@@ -297,6 +319,22 @@ class DNSPipeline:
         qname = str(req.q.qname).rstrip(".").lower()
         qtype_int = req.q.qtype
         qtype_str = QTYPE.get(qtype_int, "A")
+
+        # -1.6 RFC 8482 Minimal ANY Query Interception
+        if self.rfc8482.is_any_query(req):
+            any_resp = self.rfc8482.process_query(req, client_ip=client_ip)
+            if any_resp is not None:
+                self.prometheus.record_query(protocol, "ANY", "NOERROR", 0.0001)
+                return any_resp.pack(), {
+                    "profile_id": profile_id,
+                    "domain": qname,
+                    "qtype": "ANY",
+                    "status": "allowed",
+                    "reason": "RFC 8482 Minimal ANY Synthesized",
+                    "rcode": "NOERROR",
+                    "client_ip": client_ip,
+                    "protocol": protocol,
+                }
 
         # -1.5 eBPF / XDP Fast Packet Filter
         xdp_act, xdp_reason = self.xdp_filter.inspect_packet(client_ip, packet_len=len(query_bytes))
@@ -641,6 +679,11 @@ class DNSPipeline:
                 "geodns_blocked": self.geodns.get_stats()["blocked_by_geofence"],
                 "catalog_members": self.catalog_zones.get_stats()["member_count"],
                 "zone_transfers_served": self.zone_transfer.get_stats()["axfr_transfers_served"] + self.zone_transfer.get_stats()["ixfr_transfers_served"],
+                "local_root_queries": self.local_root.get_stats()["total_queries_served"],
+                "pmtu_truncations": self.pmtu.get_stats()["truncation_events"],
+                "aggressive_nsec_hits": self.aggressive_nsec.get_stats()["total_cache_hits"],
+                "compact_dnssec_proofs": self.compact_dnssec.get_stats()["synthesized_nxdomain_count"] + self.compact_dnssec.get_stats()["synthesized_nodata_count"],
+                "rfc8482_any_intercepts": self.rfc8482.get_stats()["total_any_queries_intercepted"],
             }
 
 
