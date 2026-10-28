@@ -37,6 +37,10 @@ from .engine.oem_telemetry_collector import OemTelemetryCollector
 from .engine.dpc_provisioning_server import DpcProvisioningServer
 from .engine.kiosk_policy_manager import KioskPolicyManager, KioskProfile
 from .engine.managed_config_distributor import ManagedConfigDistributor, TenantAppConfig
+from .engine.fleet_control_plane import FleetControlPlane
+from .engine.mdm_websocket_hub import MdmWebSocketHub
+from .engine.geofence_engine import GeofenceEngine, GeofenceZone
+from .engine.enterprise_calendar import EnterpriseCalendarEngine, CalendarFocusEvent
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
@@ -44,6 +48,10 @@ _oem_telemetry = OemTelemetryCollector()
 _dpc_server = DpcProvisioningServer()
 _kiosk_manager = KioskPolicyManager()
 _appconfig_distributor = ManagedConfigDistributor()
+_fleet_control = FleetControlPlane()
+_websocket_hub = MdmWebSocketHub()
+_geofence_engine = GeofenceEngine()
+_calendar_engine = EnterpriseCalendarEngine()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -527,6 +535,69 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 "success": True,
             })
 
+        # Phase 4: Fleet Control Plane & Device Audit
+        if path in ("/api/v1/mdm/fleet/devices", "/api/mdm/fleet/devices"):
+            tenant = params.get("tenant_id", [None])[0]
+            online = params.get("only_online", ["false"])[0].lower() == "true"
+            devs = _fleet_control.list_devices(tenant_id=tenant, only_online=online)
+            return self._send_json({"devices": devs, "count": len(devs), "success": True})
+
+        if path in ("/api/v1/mdm/fleet/telemetry", "/api/mdm/fleet/telemetry"):
+            tenant = params.get("tenant_id", [None])[0]
+            summary = _fleet_control.get_fleet_telemetry(tenant_id=tenant)
+            return self._send_json({"telemetry": summary, "success": True})
+
+        if path in ("/api/v1/mdm/fleet/uninstall-check", "/api/mdm/fleet/uninstall-check"):
+            dev_id = params.get("device_id", [""])[0]
+            if not dev_id:
+                return self._send_error("device_id parameter required", 400)
+            dev = _fleet_control.get_device(dev_id)
+            if not dev:
+                return self._send_error("Device not found in fleet", 404)
+            return self._send_json({
+                "device_id": dev_id,
+                "can_uninstall": dev.can_uninstall(),
+                "lock_state": dev.lock_state.value,
+                "timer_seconds_remaining": dev.timer_seconds_remaining,
+                "timestamp": time.time(),
+                "success": True,
+            })
+
+        if path in ("/api/v1/mdm/fleet/commands", "/api/mdm/fleet/commands"):
+            dev_id = params.get("device_id", [""])[0]
+            if not dev_id:
+                return self._send_error("device_id parameter required", 400)
+            cmds = _fleet_control.fetch_pending_commands(dev_id)
+            return self._send_json({"device_id": dev_id, "commands": cmds, "count": len(cmds), "success": True})
+
+        # Phase 4: Geofence Engine Endpoints
+        if path in ("/api/v1/mdm/geofence/zones", "/api/mdm/geofence/zones"):
+            tenant = params.get("tenant_id", [None])[0]
+            zones = _geofence_engine.list_zones(tenant_id=tenant)
+            return self._send_json({"zones": zones, "count": len(zones), "success": True})
+
+        if path in ("/api/v1/mdm/geofence/evaluate", "/api/mdm/geofence/evaluate"):
+            dev_id = params.get("device_id", ["dev_test"])[0]
+            try:
+                lat = float(params.get("latitude", ["0.0"])[0])
+                lon = float(params.get("longitude", ["0.0"])[0])
+            except ValueError:
+                return self._send_error("latitude and longitude must be valid floating point coordinates", 400)
+            tenant = params.get("tenant_id", ["default_enterprise"])[0]
+            eval_res = _geofence_engine.evaluate_device_location(dev_id, lat, lon, tenant)
+            return self._send_json(eval_res)
+
+        # Phase 4: Enterprise Calendar Schedule Endpoints
+        if path in ("/api/v1/mdm/calendar/events", "/api/mdm/calendar/events"):
+            tenant = params.get("tenant_id", [None])[0]
+            events = _calendar_engine.list_events(tenant_id=tenant)
+            return self._send_json({"events": events, "count": len(events), "success": True})
+
+        if path in ("/api/v1/mdm/calendar/status", "/api/mdm/calendar/status"):
+            tenant = params.get("tenant_id", ["default_enterprise"])[0]
+            sched_status = _calendar_engine.evaluate_schedule_at(tenant_id=tenant)
+            return self._send_json(sched_status)
+
         self._send_error(f"Endpoint GET {path} not found", 404)
 
     def do_POST(self):
@@ -999,6 +1070,156 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             )
             saved_cfg = _appconfig_distributor.set_tenant_config(app_cfg)
             return self._send_json({"success": True, "appconfig": saved_cfg.to_dict()})
+
+        # Phase 4: Fleet Control Plane & Real-Time Directives
+        if path in ("/api/v1/mdm/fleet/heartbeat", "/api/mdm/fleet/heartbeat"):
+            dev_id = body.get("device_id", "").strip()
+            if not dev_id:
+                return self._send_error("device_id is required", 400)
+            lock_st = body.get("lock_state", "IDLE")
+            timer_rem = int(body.get("timer_remaining", 0))
+            ip_addr = body.get("ip_address", self.client_address[0] or "127.0.0.1")
+            pdns_m = body.get("private_dns_mode", "opportunistic")
+            comp_sc = int(body.get("compliance_score", 100))
+
+            updated = _fleet_control.record_heartbeat(
+                device_id=dev_id,
+                lock_state=lock_st,
+                timer_remaining=timer_rem,
+                ip_address=ip_addr,
+                private_dns_mode=pdns_m,
+                compliance_score=comp_sc,
+            )
+            if not updated:
+                # Auto-register device if unknown
+                tenant = body.get("tenant_id", "default_enterprise")
+                _fleet_control.register_device(device_id=dev_id, tenant_id=tenant)
+                updated = _fleet_control.record_heartbeat(
+                    device_id=dev_id,
+                    lock_state=lock_st,
+                    timer_remaining=timer_rem,
+                    ip_address=ip_addr,
+                    private_dns_mode=pdns_m,
+                    compliance_score=comp_sc,
+                )
+
+            _websocket_hub.broadcast_event(
+                topic=f"device:{dev_id}",
+                data={"event": "HEARTBEAT_INGESTED", "device": updated},
+            )
+            return self._send_json({"success": True, "device": updated})
+
+        if path in ("/api/v1/mdm/fleet/command", "/api/mdm/fleet/command"):
+            dev_id = body.get("device_id", "").strip()
+            cmd_type = body.get("command_type", "").strip()
+            payload = body.get("payload", {})
+            if not dev_id or not cmd_type:
+                return self._send_error("device_id and command_type required", 400)
+
+            cmd_id = _fleet_control.send_command(dev_id, cmd_type, payload)
+            if not cmd_id:
+                return self._send_error(f"Device '{dev_id}' not found or command '{cmd_type}' invalid", 400)
+
+            _websocket_hub.broadcast_event(
+                topic=f"device:{dev_id}",
+                data={"event": "COMMAND_DISPATCHED", "command_id": cmd_id, "type": cmd_type, "payload": payload},
+            )
+            return self._send_json({"success": True, "command_id": cmd_id, "device_id": dev_id, "command_type": cmd_type})
+
+        if path in ("/api/v1/mdm/fleet/unlock-uninstall", "/api/mdm/fleet/unlock-uninstall"):
+            dev_id = body.get("device_id", "").strip()
+            if not dev_id:
+                return self._send_error("device_id required", 400)
+            res = _fleet_control.unlock_device_for_clean_uninstallation(dev_id)
+            if not res:
+                return self._send_error(f"Device '{dev_id}' not found", 404)
+            _websocket_hub.broadcast_event(
+                topic=f"device:{dev_id}",
+                data={"event": "CLEAR_FOR_UNINSTALL_TRIGGERED", "device_id": dev_id},
+            )
+            return self._send_json({
+                "success": True,
+                "device_id": dev_id,
+                "message": "Device unlocked: clean uninstallation 100% permitted",
+                "can_uninstall": True,
+            })
+
+        # Phase 4: Geofence Engine Management
+        if path in ("/api/v1/mdm/geofence/zone", "/api/mdm/geofence/zone"):
+            zid = body.get("zone_id", f"geo_{int(time.time()*1000)}").strip()
+            name = body.get("name", "Focus Zone").strip()
+            lat = float(body.get("latitude", 0.0))
+            lon = float(body.get("longitude", 0.0))
+            radius = float(body.get("radius_meters", 200.0))
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            enforce = bool(body.get("enforce_focus_lock", True))
+            strict = bool(body.get("strict_uninstall_lock", True))
+            desc = body.get("description", "").strip()
+
+            z = GeofenceZone(
+                zone_id=zid,
+                name=name,
+                latitude=lat,
+                longitude=lon,
+                radius_meters=radius,
+                tenant_id=tenant,
+                enforce_focus_lock=enforce,
+                strict_uninstall_lock=strict,
+                description=desc,
+            )
+            saved_zone = _geofence_engine.create_or_update_zone(z)
+            return self._send_json({"success": True, "zone": saved_zone.to_dict()})
+
+        if path in ("/api/v1/mdm/geofence/evaluate", "/api/mdm/geofence/evaluate"):
+            dev_id = body.get("device_id", "dev_mobile").strip()
+            lat = float(body.get("latitude", 0.0))
+            lon = float(body.get("longitude", 0.0))
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            res = _geofence_engine.evaluate_device_location(dev_id, lat, lon, tenant)
+            return self._send_json(res)
+
+        # Phase 4: Enterprise Calendar Event Management
+        if path in ("/api/v1/mdm/calendar/event", "/api/mdm/calendar/event"):
+            eid = body.get("event_id", f"cal_{int(time.time()*1000)}").strip()
+            title = body.get("title", "Focus Session").strip()
+            sh = int(body.get("start_hour", 9))
+            sm = int(body.get("start_minute", 0))
+            eh = int(body.get("end_hour", 17))
+            em = int(body.get("end_minute", 0))
+            days = body.get("days_of_week", [0, 1, 2, 3, 4])
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            strict = bool(body.get("enforce_strict_lock", True))
+            kiosk = bool(body.get("kiosk_enabled", False))
+
+            ev = CalendarFocusEvent(
+                event_id=eid,
+                title=title,
+                start_hour=sh,
+                start_minute=sm,
+                end_hour=eh,
+                end_minute=em,
+                days_of_week=days,
+                tenant_id=tenant,
+                enforce_strict_lock=strict,
+                kiosk_enabled=kiosk,
+            )
+            saved_ev = _calendar_engine.add_event(ev)
+            return self._send_json({"success": True, "event": saved_ev.to_dict()})
+
+        if path in ("/api/v1/mdm/calendar/parse-ical", "/api/mdm/calendar/parse-ical"):
+            ical_data = body.get("ical_text", "").strip()
+            tenant = body.get("tenant_id", "default_enterprise").strip()
+            if not ical_data:
+                return self._send_error("ical_text required", 400)
+            imported_count = _calendar_engine.import_ical_vcalendar(ical_data, tenant_id=tenant)
+            return self._send_json({"success": True, "imported_events_count": imported_count, "tenant_id": tenant})
+
+        # Phase 4: Push Hub Notification Broadcast
+        if path in ("/api/v1/mdm/push/dispatch", "/api/mdm/push/dispatch"):
+            topic = body.get("topic", "admin:all").strip()
+            data = body.get("data", {})
+            delivered = _websocket_hub.broadcast_event(topic, data)
+            return self._send_json({"success": True, "topic": topic, "subscribers_reached": delivered})
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 

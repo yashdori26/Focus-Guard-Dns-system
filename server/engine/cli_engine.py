@@ -53,6 +53,9 @@ from .oem_telemetry_collector import (
 from .dpc_provisioning_server import DpcProvisioningServer
 from .kiosk_policy_manager import KioskPolicyManager, KioskProfile
 from .managed_config_distributor import ManagedConfigDistributor, TenantAppConfig
+from .fleet_control_plane import FleetControlPlane, FleetCommandType, FleetLockState
+from .geofence_engine import GeofenceEngine, GeofenceZone
+from .enterprise_calendar import EnterpriseCalendarEngine, CalendarFocusEvent
 
 
 def cmd_status(args):
@@ -706,6 +709,140 @@ def cmd_mdm_appconfig(args):
     print("=" * 65)
 
 
+def cmd_mdm_control(args):
+    """Executes remote fleet control plane commands and uninstallation overrides."""
+    plane = FleetControlPlane()
+    dev_id = args.device_id
+
+    if args.list_fleet:
+        devs = plane.list_devices(tenant_id=args.tenant)
+        print("=" * 65)
+        print(f"  ENTERPRISE FLEET CONTROL PLANE ({len(devs)} Devices)")
+        print("=" * 65)
+        for d in devs:
+            un_status = "[CLEAN UNINSTALL PERMITTED]" if d["can_uninstall"] else "[LOCKED - UNINSTALL BLOCKED]"
+            print(f"- {d['device_id']} ({d['device_model']}): {d['lock_state']} {un_status}")
+            print(f"  Tenant: {d['tenant_id']} | Compliance: {d['compliance_score']}% | Hardware: {d['attestation_level']}")
+        print("=" * 65)
+        return
+
+    if not dev_id:
+        print("Error: --device-id required unless --list-fleet is specified.")
+        return
+
+    dev = plane.get_device(dev_id)
+    if not dev:
+        dev = plane.register_device(device_id=dev_id, tenant_id=args.tenant)
+
+    if args.unlock_uninstall:
+        res = plane.unlock_device_for_clean_uninstallation(dev_id)
+        print("=" * 65)
+        print(f"  OPERATOR CLEAN UNINSTALLATION OVERRIDE: {dev_id}")
+        print("=" * 65)
+        print(f"Result:               {'SUCCESS' if res else 'FAILED'}")
+        print("State:                IDLE (Protection OFF, Timer 0)")
+        print(f"Can Uninstall:        {dev.can_uninstall()} (100% Permitted)")
+        print("Command Enqueued:     CLEAR_FOR_UNINSTALL")
+        print("=" * 65)
+        return
+
+    if args.send_command:
+        try:
+            cmd_enum = FleetCommandType(args.send_command)
+        except ValueError:
+            print(f"Invalid command type: '{args.send_command}'.")
+            return
+        cmd_id = plane.send_command(dev_id, args.send_command, {"source": "cli_operator", "timestamp": time.time()})
+        print("=" * 65)
+        print(f"  FLEET COMMAND DISPATCHED: {dev_id}")
+        print("=" * 65)
+        print(f"Command ID:           {cmd_id}")
+        print(f"Command Type:         {cmd_enum.value}")
+        print(f"Can Uninstall:        {dev.can_uninstall()}")
+        print("=" * 65)
+        return
+
+    # Default inspection
+    d = dev.to_dict()
+    print("=" * 65)
+    print(f"  ENDPOINT POSTURE: {dev_id} ({d['device_model']})")
+    print("=" * 65)
+    print(f"Lock State:           {d['lock_state']}")
+    print(f"Timer Remaining:      {d['timer_seconds_remaining']}s")
+    print(f"Can Uninstall:        {d['can_uninstall']}")
+    print(f"Compliance Score:     {d['compliance_score']}/100")
+    print(f"Attestation:          {d['attestation_level']}")
+    print(f"Emergency Exemption:  UNCONDITIONAL (911/112 dialer never blocked)")
+    print("=" * 65)
+
+
+def cmd_mdm_geofence(args):
+    """Evaluates GPS coordinates against enterprise geofence zones."""
+    engine = GeofenceEngine()
+    dev_id = args.device_id or "dev_cli_test"
+
+    if args.lat is not None and args.lon is not None:
+        eval_res = engine.evaluate_device_location(dev_id, args.lat, args.lon, args.tenant)
+        print("=" * 65)
+        print(f"  GEOFENCE LOCATION EVALUATION: {dev_id}")
+        print("=" * 65)
+        print(f"GPS Coordinates:      ({args.lat:.6f}, {args.lon:.6f})")
+        print(f"Inside Restricted:    {eval_res['inside_restricted_geofence']}")
+        print(f"Can Uninstall:        {eval_res['can_uninstall']}")
+        print(f"MDM Directive:        {eval_res['directive']}")
+        if eval_res.get("closest_zone_name"):
+            print(f"Closest Zone:         {eval_res['closest_zone_name']} ({eval_res['closest_zone_distance_meters']}m)")
+        print(f"Matching Zones:       {len(eval_res['matching_zones'])}")
+        for z in eval_res['matching_zones']:
+            print(f"  - {z['zone_name']} (Distance: {z['distance_meters']}m, Lock: {z['enforce_focus_lock']})")
+        print("-" * 65)
+        print(f"Life-Safety Law:      {eval_res['emergency_safety_law']}")
+        print("=" * 65)
+        return
+
+    zones = engine.list_zones(args.tenant)
+    print("=" * 65)
+    print(f"  ENTERPRISE GEOFENCE ZONES ({len(zones)} Configured)")
+    print("=" * 65)
+    for z in zones:
+        print(f"- {z['name']} ({z['zone_id']}):")
+        print(f"  Coordinates: ({z['latitude']:.4f}, {z['longitude']:.4f}) | Radius: {z['radius_meters']}m")
+        print(f"  Focus Lock: {z['enforce_focus_lock']} | Strict Uninstall Lock: {z['strict_uninstall_lock']}")
+    print("-" * 65)
+    print("Notice: Clean uninstallation is 100% permitted outside all geofences.")
+    print("=" * 65)
+
+
+def cmd_mdm_schedule(args):
+    """Evaluates recurring enterprise calendar focus intervals."""
+    engine = EnterpriseCalendarEngine()
+
+    if args.import_ical:
+        try:
+            with open(args.import_ical, "r", encoding="utf-8") as f:
+                content = f.read()
+            count = engine.import_ical_vcalendar(content, tenant_id=args.tenant)
+            print(f"Successfully imported {count} calendar focus events from '{args.import_ical}'.")
+        except Exception as e:
+            print(f"Error importing iCal file: {e}")
+            return
+
+    status = engine.evaluate_schedule_at(tenant_id=args.tenant)
+    print("=" * 65)
+    print("  ENTERPRISE CALENDAR SCHEDULE EVALUATION")
+    print("=" * 65)
+    print(f"Evaluated At:         {status['evaluated_time']}")
+    print(f"In Focus Window:      {status['in_focus_window']}")
+    print(f"Can Uninstall:        {status['can_uninstall']}")
+    print(f"Schedule Directive:   {status['directive']}")
+    print(f"Active Events:        {len(status['matching_events'])}")
+    for ev in status['matching_events']:
+        print(f"  - {ev['title']} ({ev['start_time']} - {ev['end_time']})")
+    print("-" * 65)
+    print(f"Emergency Rule:       {status['emergency_safety_status']}")
+    print("=" * 65)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -841,6 +978,26 @@ def main():
     p_mappcfg = subparsers.add_parser("mdm-appconfig", help="Export Managed Configurations AppConfig payload")
     p_mappcfg.add_argument("--tenant", default="default_enterprise", help="Tenant ID")
 
+    # mdm-control
+    p_mctl = subparsers.add_parser("mdm-control", help="Manage enterprise fleet control plane & remote uninstallation overrides")
+    p_mctl.add_argument("--device-id", default=None, help="Target device ID")
+    p_mctl.add_argument("--tenant", default="default_enterprise", help="Tenant ID")
+    p_mctl.add_argument("--list-fleet", action="store_true", help="List all enrolled fleet endpoints")
+    p_mctl.add_argument("--send-command", choices=["LOCK_FOCUS", "UNLOCK_FOCUS", "START_KIOSK", "STOP_KIOSK", "SYNC_POLICY", "CLEAR_FOR_UNINSTALL"], help="Queue remote MDM command")
+    p_mctl.add_argument("--unlock-uninstall", action="store_true", help="Disarm protection & lock to allow 100%% clean uninstallation")
+
+    # mdm-geofence
+    p_mgeo = subparsers.add_parser("mdm-geofence", help="Inspect and evaluate enterprise geofence boundaries")
+    p_mgeo.add_argument("--device-id", default="dev_cli_test", help="Device ID")
+    p_mgeo.add_argument("--tenant", default="default_enterprise", help="Tenant ID")
+    p_mgeo.add_argument("--lat", type=float, default=None, help="Device GPS latitude to evaluate")
+    p_mgeo.add_argument("--lon", type=float, default=None, help="Device GPS longitude to evaluate")
+
+    # mdm-schedule
+    p_msched = subparsers.add_parser("mdm-schedule", help="Inspect and evaluate recurring enterprise calendar schedules")
+    p_msched.add_argument("--tenant", default="default_enterprise", help="Tenant ID")
+    p_msched.add_argument("--import-ical", default=None, help="Path to RFC 5545 .ics calendar file to import")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -899,6 +1056,12 @@ def main():
         cmd_mdm_kiosk(args)
     elif args.command == "mdm-appconfig":
         cmd_mdm_appconfig(args)
+    elif args.command == "mdm-control":
+        cmd_mdm_control(args)
+    elif args.command == "mdm-geofence":
+        cmd_mdm_geofence(args)
+    elif args.command == "mdm-schedule":
+        cmd_mdm_schedule(args)
 
 
 if __name__ == "__main__":

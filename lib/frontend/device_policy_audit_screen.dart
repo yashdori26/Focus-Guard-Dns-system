@@ -7,6 +7,8 @@ import 'multi_oem_shield_card.dart';
 import 'lock_task_kiosk_card.dart';
 import 'device_owner_provisioning_screen.dart';
 import 'managed_config_screen.dart';
+import 'geofence_screen.dart';
+import 'enterprise_schedule_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -289,6 +291,64 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const ManagedConfigScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 12. Geofenced Boundary Enforcer Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    key: const Key('geofence_audit_tile'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.radar, color: Color(0xFF81C784), size: 26),
+                    title: const Text(
+                      'Geofenced Boundary Enforcer',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Campus & workplace location-based conditional focus & uninstallation locks',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const GeofenceScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 13. Enterprise Calendar & Schedule Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    key: const Key('schedule_audit_tile'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.calendar_month, color: Color(0xFFFFB74D), size: 26),
+                    title: const Text(
+                      'Enterprise Calendar & Timetables',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Time-tabled recurring work & study intervals with clean uninstallation off-hours',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const EnterpriseScheduleScreen()),
                       );
                     },
                   ),
