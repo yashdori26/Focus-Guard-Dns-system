@@ -66,6 +66,70 @@ from .cluster_sync import (
 )
 from .benchmark_suite import BenchmarkResult, BenchmarkSuite
 from .pipeline import DNSPipeline, get_pipeline
+from .zone_transfer import (
+    ZoneDelta,
+    ZoneTransferACL,
+    ZoneTransferEngine,
+    DNSNotifyBroadcaster,
+)
+from .dns64 import (
+    DNS64Engine,
+    embed_ipv4_in_ipv6,
+    extract_ipv4_from_ipv6,
+)
+from .xdp_filter import (
+    XDPAction,
+    XDPFilterRule,
+    XDPFilterEngine,
+    XDPPacketFilter,
+    BPFHashMap,
+    LPMTrie,
+    XDP_DROP,
+    XDP_PASS,
+    XDP_TX,
+)
+from .catalog_zones import (
+    CatalogMember,
+    CatalogZoneMember,
+    CatalogZoneManager,
+    CatalogZoneEngine,
+    CatalogZoneDelta,
+    CatalogZoneDiffEngine,
+    CatalogAuditEntry,
+    CatalogAuditLogger,
+)
+from .doh2_server import (
+    H2Frame,
+    HPACKCodec,
+    H2Stream,
+    H2Connection,
+    Doh2Server,
+    Doh2ServerThread,
+)
+from .geodns import (
+    HealthState,
+    RoutingStrategy,
+    GeoCoordinates,
+    GeoLocation,
+    EdgeEndpoint,
+    GeoRoutingDecision,
+    GeoEndpointPool,
+    GeoFencingPolicy,
+    GeoIPDatabase,
+    GeoDNSEngine,
+)
+from .zone_transfer_server import (
+    ZoneTransferServer,
+    AXFRClient,
+)
+from .geodns_data import (
+    CountryProfile,
+    CloudRegionProfile,
+    estimate_fiber_rtt_ms,
+    get_country_profile,
+    find_nearest_cloud_region,
+    populate_global_carrier_cidrs,
+)
 
 __all__ = [
     "RadixTrieMatcher",
@@ -129,4 +193,52 @@ __all__ = [
     "BenchmarkSuite",
     "DNSPipeline",
     "get_pipeline",
+    "ZoneDelta",
+    "ZoneTransferACL",
+    "ZoneTransferEngine",
+    "DNSNotifyBroadcaster",
+    "DNS64Engine",
+    "embed_ipv4_in_ipv6",
+    "extract_ipv4_from_ipv6",
+    "XDPAction",
+    "XDPFilterRule",
+    "XDPFilterEngine",
+    "XDPPacketFilter",
+    "BPFHashMap",
+    "LPMTrie",
+    "XDP_DROP",
+    "XDP_PASS",
+    "XDP_TX",
+    "CatalogMember",
+    "CatalogZoneMember",
+    "CatalogZoneManager",
+    "CatalogZoneEngine",
+    "CatalogZoneDelta",
+    "CatalogZoneDiffEngine",
+    "CatalogAuditEntry",
+    "CatalogAuditLogger",
+    "H2Frame",
+    "HPACKCodec",
+    "H2Stream",
+    "H2Connection",
+    "Doh2Server",
+    "Doh2ServerThread",
+    "HealthState",
+    "RoutingStrategy",
+    "GeoCoordinates",
+    "GeoLocation",
+    "EdgeEndpoint",
+    "GeoRoutingDecision",
+    "GeoEndpointPool",
+    "GeoFencingPolicy",
+    "GeoIPDatabase",
+    "GeoDNSEngine",
+    "ZoneTransferServer",
+    "AXFRClient",
+    "CountryProfile",
+    "CloudRegionProfile",
+    "estimate_fiber_rtt_ms",
+    "get_country_profile",
+    "find_nearest_cloud_region",
+    "populate_global_carrier_cidrs",
 ]

@@ -64,6 +64,21 @@ class TestBenchmarkSuiteSubsystem(unittest.TestCase):
         self.assertEqual(result.successful_queries, 100)
         self.assertLess(result.avg_latency, 5.0)
 
+    def test_xdp_and_geodns_benchmarks(self):
+        """Verify eBPF/XDP filter and GeoDNS routing benchmark routines."""
+        pipeline = DNSPipeline(enable_dnssec=False)
+        suite = BenchmarkSuite()
+
+        # Run XDP benchmark
+        xdp_res = suite.run_xdp_benchmark(pipeline, packet_count=200)
+        self.assertEqual(xdp_res.total_queries, 200)
+        self.assertGreater(xdp_res.qps, 1000.0)
+
+        # Run GeoDNS benchmark
+        geo_res = suite.run_geodns_benchmark(pipeline, query_count=200)
+        self.assertEqual(geo_res.total_queries, 200)
+        self.assertGreater(geo_res.qps, 500.0)
+
 
 if __name__ == "__main__":
     unittest.main()

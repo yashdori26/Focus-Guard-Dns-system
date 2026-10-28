@@ -23,6 +23,8 @@ from .threat_analytics import ThreatAnalyticsEngine, calculate_shannon_entropy
 from .dnssec_signer import DNSSECSignerEngine
 from .zone_authority import AuthoritativeZone, AuthoritativeRecord
 from .cluster_sync import AnycastHealthProbe
+from .dns64 import embed_ipv4_in_ipv6
+from .xdp_filter import XDP_DROP
 
 
 def cmd_status(args):
@@ -73,6 +75,21 @@ def cmd_status(args):
     print("Cluster Synchronization Mesh:")
     print(f"  Known Cluster Nodes:         {metrics['cluster_size']:,}")
     print(f"  Distributed Banned IPs:      {metrics['cluster_distributed_blocked_ips']:,}")
+    print("-" * 65)
+    print("eBPF / XDP Fast Packet Filter:")
+    print(f"  Frames Inspected:            {metrics.get('xdp_frames_inspected', 0):,}")
+    print(f"  Kernel Bypass Drops:         {metrics.get('xdp_frames_dropped', 0):,}")
+    print("-" * 65)
+    print("DNS64 IPv6 Transition:")
+    print(f"  Synthetic AAAA Generated:    {metrics.get('dns64_synthetic_aaaa', 0):,}")
+    print("-" * 65)
+    print("GeoDNS Topology Routing:")
+    print(f"  Total Geo Queries:           {metrics.get('geodns_queries', 0):,}")
+    print(f"  Geo-Fence Blocked:           {metrics.get('geodns_blocked', 0):,}")
+    print("-" * 65)
+    print("RFC 9432 Catalog Zones & Zone Transfers:")
+    print(f"  Catalog Members:             {metrics.get('catalog_members', 0):,}")
+    print(f"  AXFR/IXFR Transfers Served:  {metrics.get('zone_transfers_served', 0):,}")
     print("=" * 65)
 
 
@@ -158,6 +175,101 @@ def cmd_health_check(args):
     print("=" * 60)
 
 
+def cmd_dns64_synth(args):
+    """Synthesizes IPv6 AAAA record for an IPv4 address according to RFC 6052."""
+    v4 = args.ipv4.strip()
+    prefix = args.prefix.strip()
+    v6 = embed_ipv4_in_ipv6(v4, prefix)
+    print("=" * 60)
+    print("        FOCUS-DNS RFC 6052 DNS64 SYNTHESIS TOOL        ")
+    print("=" * 60)
+    print(f"IPv4 Address:      {v4}")
+    print(f"DNS64 Prefix:      {prefix}")
+    print(f"Synthesized AAAA:  {v6}")
+    print("=" * 60)
+
+
+def cmd_geodns_lookup(args):
+    """Simulates a GeoDNS proximity lookup for a domain and client IP."""
+    pipeline = get_pipeline()
+    res = pipeline.geodns.resolve(args.domain, args.client_ip, ecs_ip=args.ecs)
+    print("=" * 60)
+    print("        FOCUS-DNS GEODNS TOPOLOGY RESOLUTION REPORT     ")
+    print("=" * 60)
+    print(f"Domain:            {args.domain}")
+    print(f"Client IP:         {args.client_ip}")
+    if args.ecs:
+        print(f"ECS Subnet:        {args.ecs}")
+    print(f"Policy Action:     {res.policy_action.upper()}")
+    if res.client_location:
+        loc = res.client_location
+        print(f"Client Location:   {loc.city}, {loc.country_code} ({loc.country_name}) [{loc.continent_code}]")
+        print(f"Coordinates:       {loc.coordinates.latitude:.4f}, {loc.coordinates.longitude:.4f}")
+    if res.selected_endpoint:
+        ep = res.selected_endpoint
+        print(f"Routed Endpoint:   {ep.name} (ID: {ep.endpoint_id})")
+        print(f"Endpoint IPv4:     {ep.ipv4_address}")
+        if ep.ipv6_address:
+            print(f"Endpoint IPv6:     {ep.ipv6_address}")
+        print(f"Haversine Distance: {res.distance_km:.2f} km")
+        print(f"Selection Reason:  {res.reason}")
+    print(f"Failover Occurred: {'YES' if res.failover_occurred else 'NO'}")
+    print("=" * 60)
+
+
+def cmd_xdp_status(args):
+    """Displays kernel-bypass eBPF / XDP packet filter stats and active BPF maps."""
+    pipeline = get_pipeline()
+    st = pipeline.xdp_filter.get_stats()
+    print("=" * 60)
+    print("         FOCUS-DNS eBPF / XDP PACKET FILTER STATUS     ")
+    print("=" * 60)
+    print(f"Attached Interface:        {st['interface']}")
+    print(f"Total Frames Inspected:    {st['total_frames_inspected']:,}")
+    print(f"Total Frames Passed:       {st['total_frames_passed']:,}")
+    print(f"Total Frames Dropped:      {st['total_frames_dropped']:,}")
+    print(f"Drop Ratio:                {st['drop_ratio_percent']}%")
+    print(f"Active BPF Hash Map Rules: {st['active_bpf_ip_rules']:,}")
+    print(f"Active BPF LPM CIDR Rules: {st['active_bpf_cidr_rules']:,}")
+    print("=" * 60)
+
+
+def cmd_catalog_list(args):
+    """Lists member zones in RFC 9432 Catalog Zone."""
+    pipeline = get_pipeline()
+    st = pipeline.catalog_zones.get_stats()
+    members = pipeline.catalog_zones.list_members()
+    print("=" * 60)
+    print("         FOCUS-DNS RFC 9432 CATALOG ZONE MEMBERS       ")
+    print("=" * 60)
+    print(f"Catalog Origin:  {st['catalog_origin']}")
+    print(f"Current Serial:  {st['serial']}")
+    print(f"Total Members:   {st['member_count']}")
+    print("-" * 60)
+    for m in members:
+        print(f"  • {m['zone_origin']} [Group: {m['group']}, ID: {m['unique_id']}]")
+    print("=" * 60)
+
+
+def cmd_transfer_zone(args):
+    """Executes local AXFR zone replication test."""
+    pipeline = get_pipeline()
+    zone = pipeline.zone_authority.get_zone(args.zone)
+    if not zone:
+        print(f"Zone {args.zone} does not exist in local authoritative database.")
+        return
+    req = DNSRecord.question(args.zone, "AXFR")
+    rcode, chunks = pipeline.zone_transfer.handle_axfr_request(req, zone, args.client_ip)
+    print("=" * 60)
+    print("        FOCUS-DNS RFC 5936 AXFR ZONE TRANSFER TEST      ")
+    print("=" * 60)
+    print(f"Zone Origin:     {args.zone}")
+    print(f"Target Client:   {args.client_ip}")
+    print(f"Response RCODE:  {rcode}")
+    print(f"Stream Chunks:   {len(chunks)} frames generated")
+    print("=" * 60)
+
+
 def main():
     parser = argparse.ArgumentParser(description="FocusDNS High-Performance Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -189,6 +301,28 @@ def main():
     p_health.add_argument("--dot-port", type=int, default=8853)
     p_health.add_argument("--http-port", type=int, default=8080)
 
+    # dns64-synth
+    p_dns64 = subparsers.add_parser("dns64-synth", help="Synthesize IPv6 AAAA record from IPv4")
+    p_dns64.add_argument("ipv4", help="IPv4 address to synthesize")
+    p_dns64.add_argument("--prefix", default="64:ff9b::/96", help="NAT64 IPv6 prefix")
+
+    # geodns-lookup
+    p_geo = subparsers.add_parser("geodns-lookup", help="Simulate GeoDNS nearest endpoint resolution")
+    p_geo.add_argument("domain", help="Domain name to resolve")
+    p_geo.add_argument("client_ip", help="Client IP address")
+    p_geo.add_argument("--ecs", default=None, help="Optional EDNS Client Subnet IP")
+
+    # xdp-status
+    subparsers.add_parser("xdp-status", help="Show eBPF/XDP driver-level packet filter status")
+
+    # catalog-list
+    subparsers.add_parser("catalog-list", help="List member zones in RFC 9432 Catalog Zone")
+
+    # transfer-zone
+    p_xfer = subparsers.add_parser("transfer-zone", help="Test RFC 5936 AXFR zone transfer stream")
+    p_xfer.add_argument("zone", help="Authoritative zone origin")
+    p_xfer.add_argument("--client-ip", default="127.0.0.1", help="Simulated slave client IP")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -201,6 +335,16 @@ def main():
         cmd_dnssec_keys(args)
     elif args.command == "health-check":
         cmd_health_check(args)
+    elif args.command == "dns64-synth":
+        cmd_dns64_synth(args)
+    elif args.command == "geodns-lookup":
+        cmd_geodns_lookup(args)
+    elif args.command == "xdp-status":
+        cmd_xdp_status(args)
+    elif args.command == "catalog-list":
+        cmd_catalog_list(args)
+    elif args.command == "transfer-zone":
+        cmd_transfer_zone(args)
 
 
 if __name__ == "__main__":

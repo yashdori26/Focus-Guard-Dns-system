@@ -246,3 +246,72 @@ class BenchmarkSuite:
             duration_seconds=end_time - start_time,
             latencies_ms=latencies,
         )
+
+    def run_xdp_benchmark(
+        self,
+        pipeline,
+        packet_count: int = 20000,
+    ) -> BenchmarkResult:
+        """Evaluates eBPF / XDP driver-level packet inspection and kernel bypass drop rate."""
+        latencies: List[float] = []
+        successes = 0
+        failures = 0
+
+        # Simulate mix of whitelisted and blacklisted client IPs
+        test_ips = ["192.168.1.1", "10.0.0.1", "198.51.100.5", "192.0.2.1"]
+
+        start_time = time.perf_counter()
+        for i in range(packet_count):
+            client_ip = test_ips[i % len(test_ips)]
+            t0 = time.perf_counter()
+            act, _ = pipeline.xdp_filter.inspect_packet(client_ip, packet_len=64)
+            t1 = time.perf_counter()
+            latencies.append((t1 - t0) * 1000.0)
+            if act == 2:  # XDP_PASS
+                successes += 1
+            else:
+                failures += 1
+        end_time = time.perf_counter()
+
+        return BenchmarkResult(
+            protocol="eBPF-XDP-Kernel-Filter",
+            total_queries=successes + failures,
+            successful_queries=successes,
+            failed_queries=failures,
+            duration_seconds=end_time - start_time,
+            latencies_ms=latencies,
+        )
+
+    def run_geodns_benchmark(
+        self,
+        pipeline,
+        query_count: int = 10000,
+    ) -> BenchmarkResult:
+        """Evaluates GeoDNS in-memory radix lookup and Haversine distance proximity resolution."""
+        latencies: List[float] = []
+        successes = 0
+        failures = 0
+
+        test_ips = ["8.8.8.8", "193.99.144.1", "106.51.5.10", "200.160.2.1", "103.22.200.5"]
+
+        start_time = time.perf_counter()
+        for i in range(query_count):
+            client_ip = test_ips[i % len(test_ips)]
+            t0 = time.perf_counter()
+            decision = pipeline.geodns.resolve("example.com", client_ip)
+            t1 = time.perf_counter()
+            latencies.append((t1 - t0) * 1000.0)
+            if decision.policy_action == "allow" and decision.selected_endpoint:
+                successes += 1
+            else:
+                failures += 1
+        end_time = time.perf_counter()
+
+        return BenchmarkResult(
+            protocol="GeoDNS-Topology-Routing",
+            total_queries=successes + failures,
+            successful_queries=successes,
+            failed_queries=failures,
+            duration_seconds=end_time - start_time,
+            latencies_ms=latencies,
+        )

@@ -233,6 +233,13 @@ class AuthoritativeZone:
                 self.serial += 1
         return removed
 
+    def get_records(self, name: str, rtype: str) -> List[AuthoritativeRecord]:
+        """Returns direct list of authoritative records matching name and type."""
+        clean = name.strip().lower().rstrip(".")
+        clean_rtype = rtype.strip().upper()
+        with self._lock:
+            return list(self._records.get((clean, clean_rtype), []))
+
     def query(self, qname: str, qtype: str) -> Tuple[List[AuthoritativeRecord], bool, bool]:
         """
         Queries the zone for matching RRsets.
@@ -439,6 +446,16 @@ class ZoneAuthorityEngine:
         # Telemetry
         self._authoritative_hits = 0
         self._updates_processed = 0
+
+    @property
+    def default_view(self) -> SplitHorizonView:
+        return self._default_view
+
+    def add_zone(self, zone: AuthoritativeZone):
+        self._default_view.add_zone(zone)
+
+    def get_zone(self, origin: str) -> Optional[AuthoritativeZone]:
+        return self._default_view.get_zone(origin)
 
     def add_view(self, view: SplitHorizonView):
         with self._lock:

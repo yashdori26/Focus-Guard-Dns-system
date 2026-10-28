@@ -42,6 +42,11 @@ from .rate_limiter import DNSRateLimiter, RateLimitAction
 from .upstream_pool import UpstreamPool, UpstreamNode, UpstreamRoutingStrategy
 from .zone_authority import ZoneAuthorityEngine, AuthoritativeZone, AuthoritativeRecord, SplitHorizonView
 from .cluster_sync import ClusterSyncEngine, ThreatIntelMessage
+from .xdp_filter import XDPPacketFilter, XDPAction
+from .dns64 import DNS64Engine
+from .geodns import GeoDNSEngine, HealthState
+from .catalog_zones import CatalogZoneEngine
+from .zone_transfer import ZoneTransferEngine
 from .. import db
 
 
@@ -94,6 +99,11 @@ class DNSPipeline:
         self.upstream_pool = UpstreamPool(query_timeout=upstream_timeout)
         self.zone_authority = ZoneAuthorityEngine()
         self.cluster_sync = ClusterSyncEngine()
+        self.xdp_filter = XDPPacketFilter()
+        self.dns64 = DNS64Engine()
+        self.geodns = GeoDNSEngine()
+        self.catalog_zones = CatalogZoneEngine()
+        self.zone_transfer = ZoneTransferEngine()
 
         # Telemetry & Operational Metrics
         self._total_queries = 0
@@ -288,6 +298,11 @@ class DNSPipeline:
         qtype_int = req.q.qtype
         qtype_str = QTYPE.get(qtype_int, "A")
 
+        # -1.5 eBPF / XDP Fast Packet Filter
+        xdp_act, xdp_reason = self.xdp_filter.inspect_packet(client_ip, packet_len=len(query_bytes))
+        if xdp_act == 1:  # XDP_DROP
+            return b"", {"status": "dropped", "reason": f"eBPF/XDP Drop: {xdp_reason}", "client_ip": client_ip, "protocol": protocol}
+
         # -1. Response Rate Limiting (RRL) & Anti-Amplification Check
         rl_action = self.rate_limiter.check_query_rate(client_ip)
         if rl_action == RateLimitAction.DROP:
@@ -346,6 +361,44 @@ class DNSPipeline:
         # 0b. Firefox Canary Domain Check (Mozilla DoH opt-out standard)
         if qname == FIREFOX_CANARY_DOMAIN:
             return self.build_blocked_response(req, qname, "Bypass Prevention: Firefox Canary Domain", profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg)
+
+        # 0c. GeoDNS Proximity & Geo-Fencing Fast Path
+        clean_qname = qname.rstrip(".")
+        if clean_qname in self.geodns.domain_pool_bindings:
+            ecs_ip = edns_info.get("ecs_client_ip") if edns_info else None
+            geo_dec = self.geodns.resolve(clean_qname, client_ip, ecs_ip=ecs_ip)
+            if geo_dec.policy_action == "block":
+                return self.build_blocked_response(
+                    req, qname, f"Geo-Fence Policy: {geo_dec.reason}",
+                    profile_id, client_ip, protocol, ede_code=EDE_BLOCKED, edns_msg=edns_msg
+                )
+            elif geo_dec.selected_endpoint:
+                ep = geo_dec.selected_endpoint
+                reply = req.reply()
+                reply.header.rcode = RCODE.NOERROR
+                reply.header.ra = 1
+                ans_ip = ""
+                if req.q.qtype == QTYPE.A:
+                    reply.add_answer(RR(f"{qname}.", QTYPE.A, ttl=60, rdata=A(ep.ipv4_address)))
+                    ans_ip = ep.ipv4_address
+                elif req.q.qtype == QTYPE.AAAA and ep.ipv6_address:
+                    reply.add_answer(RR(f"{qname}.", QTYPE.AAAA, ttl=60, rdata=AAAA(ep.ipv6_address)))
+                    ans_ip = ep.ipv6_address
+                if ans_ip:
+                    telem = {
+                        "profile_id": profile_id,
+                        "domain": qname,
+                        "subdomain": "",
+                        "qtype": qtype_str,
+                        "status": "allowed",
+                        "reason": f"GeoDNS Routed ({ep.name}, {geo_dec.distance_km} km)",
+                        "ip": ans_ip,
+                        "rcode": "NOERROR",
+                        "client_ip": client_ip,
+                        "protocol": protocol,
+                    }
+                    db.log_query_async(profile_id, qname, "", "allowed", telem["reason"], client_ip)
+                    return reply.pack(), telem
 
         # 1. Trie Matcher Fast-Path
         match_flags, match_rule, match_metadata = self.trie.match(qname)
@@ -486,6 +539,25 @@ class DNSPipeline:
                 db.log_query_async(profile_id, qname, "", "blocked", "DNSSEC Spoofing Detected", client_ip)
                 return reply.pack(), telemetry
 
+        # RFC 6147 DNS64 IPv6 Synthesis: If AAAA query resulted in NO AAAA records, synthesize from A records
+        if self.dns64.enabled and req.q.qtype == QTYPE.AAAA and RCODE.get(upstream_reply.header.rcode, "NOERROR") == "NOERROR":
+            has_aaaa = any(rr.rtype == QTYPE.AAAA for rr in upstream_reply.rr)
+            if not has_aaaa:
+                a_req = DNSRecord.question(qname, "A")
+                a_bytes, _ = self.forward_upstream(a_req.pack())
+                if a_bytes:
+                    try:
+                        a_rep = DNSRecord.parse(a_bytes)
+                        a_addrs = [str(rr.rdata) for rr in a_rep.rr if rr.rtype == QTYPE.A]
+                        synth_rrs = self.dns64.synthesize_aaaa_records(qname, a_addrs)
+                        if synth_rrs:
+                            for s_rr in synth_rrs:
+                                upstream_reply.add_answer(s_rr)
+                            upstream_bytes = upstream_reply.pack()
+                            reason = f"DNS64 Synthesized ({synth_rrs[0].rdata})"
+                    except Exception:
+                        pass
+
         # Cache positive responses in RFC 8767 Cache
         upstream_rcode_str = RCODE.get(upstream_reply.header.rcode, "NOERROR")
         if upstream_rcode_str == "NOERROR" and upstream_reply.rr:
@@ -562,6 +634,13 @@ class DNSPipeline:
                 "zone_authority_zones": zone_stats["total_zones"],
                 "cluster_size": cluster_stats["cluster_size"],
                 "cluster_distributed_blocked_ips": cluster_stats["distributed_blocked_ips"],
+                "xdp_frames_inspected": self.xdp_filter.get_stats()["total_frames_inspected"],
+                "xdp_frames_dropped": self.xdp_filter.get_stats()["total_frames_dropped"],
+                "dns64_synthetic_aaaa": self.dns64.get_stats()["synthetic_aaaa_generated"],
+                "geodns_queries": self.geodns.get_stats()["total_queries"],
+                "geodns_blocked": self.geodns.get_stats()["blocked_by_geofence"],
+                "catalog_members": self.catalog_zones.get_stats()["member_count"],
+                "zone_transfers_served": self.zone_transfer.get_stats()["axfr_transfers_served"] + self.zone_transfer.get_stats()["ixfr_transfers_served"],
             }
 
 
