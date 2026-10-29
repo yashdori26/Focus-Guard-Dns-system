@@ -91,9 +91,27 @@ class TestOpenWrtLuci(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(base_dir, "files/focus_dns.config")))
         self.assertTrue(os.path.exists(os.path.join(base_dir, "files/focus_dns.init")))
         self.assertTrue(os.path.exists(os.path.join(base_dir, "files/focus_dns.nftables")))
+        self.assertTrue(os.path.exists(os.path.join(base_dir, "files/focus_dns_sqm.nftables")))
+        self.assertTrue(os.path.exists(os.path.join(base_dir, "files/focus_dns_sqm.init")))
+        self.assertTrue(os.path.exists(os.path.join(base_dir, "luci-app-focus-dns/luasrc/model/cbi/focus_dns_sqm.lua")))
         self.assertTrue(os.path.exists(os.path.join(base_dir, "luci-app-focus-dns/luasrc/controller/focus_dns.lua")))
         self.assertTrue(os.path.exists(os.path.join(base_dir, "luci-app-focus-dns/luasrc/model/cbi/focus_dns.lua")))
         self.assertTrue(os.path.exists(os.path.join(base_dir, "luci-app-focus-dns/luasrc/view/focus_dns/status.htm")))
+
+    def test_openwrt_sqm_dscp_and_conditional_lock(self):
+        """Verifies SQM nftables DSCP markings and conditional lock in init script."""
+        base_dir = "/home/ya5/.gemini/antigravity/scratch/focus_dns/router/openwrt"
+        with open(os.path.join(base_dir, "files/focus_dns_sqm.nftables"), "r") as fp:
+            nft_content = fp.read()
+            self.assertIn("0x2e", nft_content) # DSCP EF (Emergency VoIP)
+            self.assertIn("0x30", nft_content) # DSCP CS6 (DNS)
+            self.assertIn("5223", nft_content) # APNs exemption
+
+        with open(os.path.join(base_dir, "files/focus_dns_sqm.init"), "r") as fp:
+            init_content = fp.read()
+            self.assertIn("lock_active", init_content)
+            self.assertIn("remaining_timer", init_content)
+            self.assertIn("return 1", init_content) # Reject stop when locked
 
 
 if __name__ == "__main__":

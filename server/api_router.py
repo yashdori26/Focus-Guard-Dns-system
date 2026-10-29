@@ -47,6 +47,14 @@ from router.openwrt.mac_profile_router import MacProfileRouter
 from router.daemon.router_stub_daemon import RouterStubDaemon
 from router.daemon.router_telemetry_reporter import RouterTelemetryReporter
 from router.pfsense.pf_rules_generator import PfRulesGenerator
+from .engine.macos_extension_manager import MacOsExtensionManager
+from router.linux_ebpf.focus_dns_ebpf_loader import FocusDnsEbpfLoader
+from router.linux_ebpf.ebpf_xdp_router import EbpfXdpRouter
+from router.asuswrt.merlin_config_generator import MerlinConfigGenerator
+from router.asuswrt.jffs_scripts import AsuswrtJffsScripts
+from router.ddwrt.ddwrt_firewall_manager import DdWrtFirewallManager
+from router.daemon.router_doq_engine import RouterDoqEngine
+from router.daemon.router_dnssec_validator import RouterDnssecValidator
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
@@ -64,6 +72,12 @@ _mac_profile_router = MacProfileRouter()
 _router_stub_daemon = RouterStubDaemon(mac_router=_mac_profile_router)
 _router_telemetry = RouterTelemetryReporter(stub_daemon=_router_stub_daemon, mac_router=_mac_profile_router)
 _pf_generator = PfRulesGenerator()
+_macos_manager = MacOsExtensionManager()
+_ebpf_loader = FocusDnsEbpfLoader()
+_ebpf_router = EbpfXdpRouter(loader=_ebpf_loader)
+_ddwrt_manager = DdWrtFirewallManager()
+_router_doq = RouterDoqEngine()
+_router_dnssec = RouterDnssecValidator()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -660,6 +674,48 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 "reason": "Clean uninstallation 100% permitted" if can_uninst else "Active focus lock prohibits service removal",
                 "success": True,
             })
+
+        # Phase 2: macOS NetworkExtension GET Routes
+        if path in ("/api/v1/macos/status", "/api/macos/status"):
+            return self._send_json(_macos_manager.get_status())
+
+        if path in ("/api/v1/macos/mobileconfig", "/api/macos/mobileconfig"):
+            profile_id = params.get("profile_id", [None])[0]
+            plist_bytes = _macos_manager.generate_mobileconfig(profile_id=profile_id)
+            self._set_cors_headers(200, content_type="application/x-apple-aspen-config")
+            self.send_header("Content-Disposition", 'attachment; filename="FocusGuard.mobileconfig"')
+            self.end_headers()
+            self.wfile.write(plist_bytes)
+            return
+
+        if path in ("/api/v1/macos/launchd", "/api/macos/launchd"):
+            plist_xml = _macos_manager.generate_launchd_plist()
+            return self._send_json({"launchd_plist": plist_xml, "success": True})
+
+        # Phase 2: Linux eBPF GET Routes
+        if path in ("/api/v1/ebpf/status", "/api/ebpf/status"):
+            return self._send_json(_ebpf_router.get_status())
+
+        # Phase 2: Asuswrt-Merlin & DD-WRT GET Routes
+        if path in ("/api/v1/asuswrt/dnsmasq-postconf", "/api/asuswrt/dnsmasq-postconf"):
+            profile_id = params.get("profile_id", ["profile_home_primary"])[0]
+            script = MerlinConfigGenerator.generate_dnsmasq_postconf(assigned_profile=profile_id)
+            return self._send_json({"script": script, "success": True})
+
+        if path in ("/api/v1/asuswrt/nat-start", "/api/asuswrt/nat-start"):
+            script = MerlinConfigGenerator.generate_nat_start()
+            return self._send_json({"script": script, "success": True})
+
+        if path in ("/api/v1/ddwrt/rc-firewall", "/api/ddwrt/rc-firewall"):
+            script = _ddwrt_manager.generate_rc_firewall()
+            return self._send_json({"script": script, "success": True})
+
+        # Phase 2: Router DoQ & DNSSEC GET Routes
+        if path in ("/api/v1/router/doq/telemetry", "/api/router/doq/telemetry"):
+            return self._send_json(_router_doq.get_telemetry())
+
+        if path in ("/api/v1/router/dnssec/stats", "/api/router/dnssec/stats"):
+            return self._send_json(_router_dnssec.get_stats())
 
         self._send_error(f"Endpoint GET {path} not found", 404)
 
@@ -1352,6 +1408,62 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             ok, msg = _windows_controller.simulate_service_stop_attempt()
             status_code = 200 if ok else 403
             return self._send_json({"allowed": ok, "message": msg, "can_uninstall": _windows_controller.can_uninstall()}, status=status_code)
+
+        # Phase 2: macOS Extension Control Routes
+        if path in ("/api/v1/macos/lock", "/api/macos/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _macos_manager.set_protection(True, timer_seconds=duration)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": True,
+                "remaining_timer_seconds": duration,
+                "can_uninstall": False,
+                "message": f"macOS Network Extension locked for {duration} seconds. Uninstallation disallowed."
+            })
+
+        if path in ("/api/v1/macos/unlock", "/api/macos/unlock"):
+            _macos_manager.set_protection(False, timer_seconds=0)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": False,
+                "remaining_timer_seconds": 0,
+                "can_uninstall": True,
+                "message": "macOS Network Extension unlocked. Clean removal permitted."
+            })
+
+        if path in ("/api/v1/macos/telemetry", "/api/macos/telemetry"):
+            res = _macos_manager.process_telemetry_event(body)
+            status_code = 200 if res.get("status") == "OK" else 403
+            return self._send_json(res, status=status_code)
+
+        # Phase 2: Linux eBPF Control Routes
+        if path in ("/api/v1/ebpf/lock", "/api/ebpf/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _ebpf_loader.set_protection_policy(True, timer_seconds=duration)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": True,
+                "remaining_timer_seconds": duration,
+                "can_uninstall": False,
+                "message": f"Linux eBPF kernel hooks locked for {duration} seconds."
+            })
+
+        if path in ("/api/v1/ebpf/unlock", "/api/ebpf/unlock"):
+            _ebpf_loader.set_protection_policy(False, timer_seconds=0)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": False,
+                "remaining_timer_seconds": 0,
+                "can_uninstall": True,
+                "message": "Linux eBPF kernel hooks unlocked. Clean detachment permitted."
+            })
+
+        if path in ("/api/v1/ebpf/unload", "/api/ebpf/unload"):
+            try:
+                _ebpf_loader.unload_ebpf_program()
+                return self._send_json({"success": True, "message": "eBPF hooks cleanly detached."})
+            except PermissionError as pe:
+                return self._send_json({"success": False, "error": str(pe)}, status=403)
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 

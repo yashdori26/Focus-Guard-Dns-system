@@ -1,0 +1,64 @@
+#!/bin/sh /etc/rc.common
+# FocusGuard DNS - OpenWrt Smart Queue Management (CAKE) Init Script
+# Copyright (C) 2026 FocusGuard Security Inc.
+
+START=96
+STOP=04
+USE_PROCD=1
+
+CONFIG="focus_dns"
+
+start_service() {
+    local enabled
+    local iface
+    local download
+    local upload
+
+    config_load "${CONFIG}"
+    config_get_bool enabled settings enabled 1
+    config_get iface settings interface "br-lan"
+    config_get download settings download_mbps "100"
+    config_get upload settings upload_mbps "20"
+
+    [ "$enabled" -eq 1 ] || return 0
+
+    logger -t "focus_dns_sqm" "Initializing CAKE traffic shaper on ${iface} (${download}M/${upload}M)..."
+
+    # Mount nftables DSCP classification rules
+    if [ -f /etc/focus_dns/focus_dns_sqm.nftables ]; then
+        nft -f /etc/focus_dns/focus_dns_sqm.nftables
+    fi
+
+    # Mount ingress CAKE qdisc on LAN bridge
+    tc qdisc del dev "${iface}" root 2>/dev/null
+    tc qdisc add dev "${iface}" root cake bandwidth "${download}mbit" diffserv4 nat dual-srchost wash
+
+    logger -t "focus_dns_sqm" "CAKE traffic shaping mounted successfully."
+}
+
+stop_service() {
+    local lock_active
+    local timer_sec
+
+    config_load "${CONFIG}"
+    config_get_bool lock_active settings is_locked 0
+    config_get timer_sec settings remaining_timer 0
+
+    # Inviolable Conditional Uninstallation Law
+    if [ "$lock_active" -eq 1 ] || [ "$timer_sec" -gt 0 ]; then
+        logger -t "focus_dns_sqm" "CRITICAL: Attempted to stop QoS shaper while Focus Lock is active ($timer_sec remaining). Denied."
+        return 1
+    fi
+
+    local iface
+    config_get iface settings interface "br-lan"
+
+    tc qdisc del dev "${iface}" root 2>/dev/null
+    nft delete table inet focus_dns_sqm 2>/dev/null
+
+    logger -t "focus_dns_sqm" "CAKE traffic shaping cleanly dismantled."
+}
+
+service_triggers() {
+    procd_add_reload_trigger "${CONFIG}"
+}

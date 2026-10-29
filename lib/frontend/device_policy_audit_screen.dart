@@ -11,6 +11,8 @@ import 'geofence_screen.dart';
 import 'enterprise_schedule_screen.dart';
 import 'router_firewall_screen.dart';
 import 'windows_wfp_screen.dart';
+import 'macos_proxy_screen.dart';
+import 'linux_ebpf_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -407,6 +409,62 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const WindowsWfpScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 16. macOS NetworkExtension Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.laptop_mac, color: Color(0xFFAB47BC), size: 26),
+                    title: const Text(
+                      'macOS NetworkExtension & Menu Bar',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'System-wide NEDNSProxy, Content Filter socket drop & Keychain Enclave',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const MacOsProxyScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 17. Linux eBPF / XDP & Router Drivers Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.memory, color: Color(0xFFFF7043), size: 26),
+                    title: const Text(
+                      'Linux eBPF & Router Drivers',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Kernel socket redirection, Asuswrt-Merlin JFFS & DD-WRT NVRAM firewall',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const LinuxEbpfScreen()),
                       );
                     },
                   ),

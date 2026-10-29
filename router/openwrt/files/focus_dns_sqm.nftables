@@ -1,0 +1,38 @@
+#!/usr/sbin/nft -f
+# FocusGuard DNS - OpenWrt nftables QoS & DSCP Packet Classification
+# Inviolable Life Safety Exemption: Prioritizes 911 / Emergency VoIP & DNS above all else
+
+table inet focus_dns_sqm {
+    chain prerouting {
+        type filter hook prerouting priority mangle; policy accept;
+
+        # 1. Life Safety Exemption: Emergency VoIP & SIP (DSCP EF / Expedited Forwarding = 0x2e)
+        udp dport { 5060, 5061, 10000-20000 } ip dscp set 0x2e return
+        udp sport { 5060, 5061, 10000-20000 } ip dscp set 0x2e return
+
+        # 2. FocusDNS Core Infrastructure (DSCP CS6 / Network Control = 0x30)
+        udp dport 53 ip dscp set 0x30 return
+        tcp dport 53 ip dscp set 0x30 return
+        tcp dport 853 ip dscp set 0x30 return
+        udp dport 853 ip dscp set 0x30 return
+
+        # 3. DHCP Core Infrastructure (DSCP CS6)
+        udp dport { 67, 68 } ip dscp set 0x30 return
+        udp sport { 67, 68 } ip dscp set 0x30 return
+
+        # 4. Apple Push Notifications (APNs 5223 - Life Safety / Alert Exemption)
+        tcp dport 5223 ip dscp set 0x30 return
+
+        # 5. Background / Distraction Policing (DSCP CS1 / Scavenger = 0x08)
+        # Applied during active focus sessions to throttle background video and social feeds
+        tcp dport { 1935, 3478 } ip dscp set 0x08 return
+    }
+
+    chain postrouting {
+        type filter hook postrouting priority mangle; policy accept;
+
+        # Outbound WAN traffic DSCP preservation
+        oifname "eth0" udp dport { 53, 853 } ip dscp set 0x30
+        oifname "eth0" udp dport { 5060, 5061 } ip dscp set 0x2e
+    }
+}
