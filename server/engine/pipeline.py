@@ -55,6 +55,7 @@ from .compact_dnssec import CompactDNSSECEngine
 from .rfc8482_any import RFC8482Engine
 from .telemetry_prometheus import get_prometheus_exporter
 from .dns_fuzzer import LoopVulnerabilityDetector
+from .ai_pipeline_hook import AIPipelineHook
 from .. import db
 
 
@@ -120,6 +121,7 @@ class DNSPipeline:
         self.compact_dnssec = CompactDNSSECEngine()
         self.rfc8482 = RFC8482Engine()
         self.prometheus = get_prometheus_exporter()
+        self.ai_hook = AIPipelineHook()
 
         # Telemetry & Operational Metrics
         self._total_queries = 0
@@ -475,6 +477,21 @@ class DNSPipeline:
                 return self.build_safesearch_response(req, qname, "SafeSearch: Bing VIP", BING_STRICT_IPV4, BING_STRICT_IPV6, profile_id, client_ip, protocol)
             elif "duckduckgo" in qname:
                 return self.build_safesearch_response(req, qname, "SafeSearch: DuckDuckGo VIP", DUCKDUCKGO_SAFE_IPV4, DUCKDUCKGO_SAFE_IPV6, profile_id, client_ip, protocol)
+
+        # 1c. AI-Powered On-Device Threat Hunting Fast Interception
+        if hasattr(self, "ai_hook") and self.ai_hook and self.ai_hook.enabled:
+            ai_verdict = self.ai_hook.intercept_query(qname, client_ip, qtype_str)
+            if ai_verdict.is_threat:
+                return self.build_blocked_response(
+                    req,
+                    qname,
+                    f"Security: AI Threat Hunting ({ai_verdict.reason})",
+                    profile_id,
+                    client_ip,
+                    protocol,
+                    ede_code=EDE_BLOCKED,
+                    edns_msg=edns_msg,
+                )
 
         # 2. RFC 8767 Stale-While-Revalidate Cache Check
         cached_wire, cache_state, ttl_remaining = self.cache.get(qname, qtype_int)

@@ -58,6 +58,7 @@ from router.daemon.router_dnssec_validator import RouterDnssecValidator
 from router.mikrotik.routeros_dns_manager import RouterOsDnsManager
 from router.ubiquiti.ubiquiti_gateway_engine import UbiquitiGatewayEngine
 from router.daemon.router_orchestrator import RouterMasterOrchestrator
+from server.ai.api_ai_router import AIApiDispatcher
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
@@ -84,6 +85,7 @@ _router_dnssec = RouterDnssecValidator()
 _mikrotik_manager = RouterOsDnsManager()
 _ubiquiti_engine = UbiquitiGatewayEngine()
 _router_orchestrator = RouterMasterOrchestrator()
+_ai_dispatcher = AIApiDispatcher()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -749,6 +751,13 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
         # Phase 3: Master Router Orchestrator GET Routes
         if path in ("/api/v1/orchestrator/status", "/api/orchestrator/status"):
             return self._send_json(_router_orchestrator.get_unified_status())
+
+        # AI Threat Hunting GET Routes
+        if path.startswith("/api/v1/ai/") or path.startswith("/api/ai/"):
+            ai_res = _ai_dispatcher.handle_get(path, params)
+            if ai_res is not None:
+                status_code, resp_body = ai_res
+                return self._send_json(resp_body, status=status_code)
 
         self._send_error(f"Endpoint GET {path} not found", 404)
 
@@ -1559,6 +1568,13 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
                 return self._send_json({"success": True, "script": cmds})
             except PermissionError as pe:
                 return self._send_json({"success": False, "error": str(pe)}, status=403)
+
+        # AI Threat Hunting POST Routes
+        if path.startswith("/api/v1/ai/") or path.startswith("/api/ai/"):
+            ai_res = _ai_dispatcher.handle_post(path, body)
+            if ai_res is not None:
+                status_code, resp_body = ai_res
+                return self._send_json(resp_body, status=status_code)
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 
