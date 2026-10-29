@@ -13,6 +13,8 @@ import 'router_firewall_screen.dart';
 import 'windows_wfp_screen.dart';
 import 'macos_proxy_screen.dart';
 import 'linux_ebpf_screen.dart';
+import 'mikrotik_ubiquiti_screen.dart';
+import 'router_orchestrator_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -465,6 +467,62 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const LinuxEbpfScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 18. MikroTik & Ubiquiti Enterprise Gateways Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.settings_ethernet, color: Color(0xFF26A69A), size: 26),
+                    title: const Text(
+                      'MikroTik & Ubiquiti Gateways',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'RouterOS v7 dst-nat & containers, Ubiquiti VyOS & UniFi on_boot daemons',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const MikrotikUbiquitiScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 19. Master Router Orchestrator Cockpit Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.hub_rounded, color: Color(0xFF66BB6A), size: 26),
+                    title: const Text(
+                      'Master Router Orchestrator Cockpit',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Unified DoQ, DNSSEC trust anchors, Multi-WAN failover, CAKE SQM & IPSet',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RouterOrchestratorScreen()),
                       );
                     },
                   ),

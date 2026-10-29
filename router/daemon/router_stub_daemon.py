@@ -80,7 +80,18 @@ class RouterStubDaemon:
         self._cache_hits = 0
         self._failsafe_fallbacks = 0
         self._blocked_bypasses = 0
+        self._is_locked = False
+        self._remaining_timer_seconds = 0
         self._start_time = time.time()
+
+    def set_lock(self, locked: bool, remaining_seconds: int = 0) -> None:
+        """Sets conditional focus mode lock posture."""
+        self._is_locked = locked
+        self._remaining_timer_seconds = max(0, remaining_seconds)
+
+    def can_uninstall(self) -> bool:
+        """Enforces conditional uninstallation."""
+        return (not self._is_locked) and (self._remaining_timer_seconds == 0)
 
     def start(self) -> bool:
         """Starts the daemon listener loop."""

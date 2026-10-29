@@ -55,6 +55,9 @@ from router.asuswrt.jffs_scripts import AsuswrtJffsScripts
 from router.ddwrt.ddwrt_firewall_manager import DdWrtFirewallManager
 from router.daemon.router_doq_engine import RouterDoqEngine
 from router.daemon.router_dnssec_validator import RouterDnssecValidator
+from router.mikrotik.routeros_dns_manager import RouterOsDnsManager
+from router.ubiquiti.ubiquiti_gateway_engine import UbiquitiGatewayEngine
+from router.daemon.router_orchestrator import RouterMasterOrchestrator
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
@@ -78,6 +81,9 @@ _ebpf_router = EbpfXdpRouter(loader=_ebpf_loader)
 _ddwrt_manager = DdWrtFirewallManager()
 _router_doq = RouterDoqEngine()
 _router_dnssec = RouterDnssecValidator()
+_mikrotik_manager = RouterOsDnsManager()
+_ubiquiti_engine = UbiquitiGatewayEngine()
+_router_orchestrator = RouterMasterOrchestrator()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -716,6 +722,33 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
         if path in ("/api/v1/router/dnssec/stats", "/api/router/dnssec/stats"):
             return self._send_json(_router_dnssec.get_stats())
+
+        # Phase 3: MikroTik & Ubiquiti Enterprise Gateway GET Routes
+        if path in ("/api/v1/mikrotik/status", "/api/mikrotik/status"):
+            return self._send_json(_mikrotik_manager.get_status())
+
+        if path in ("/api/v1/mikrotik/script", "/api/mikrotik/script"):
+            return self._send_json({
+                "nat": _mikrotik_manager.generate_nat_redirect_rules(),
+                "filter": _mikrotik_manager.generate_filter_anti_bypass_rules(),
+                "netwatch": _mikrotik_manager.generate_netwatch_fail_safe(),
+                "container": _mikrotik_manager.generate_container_spec(),
+                "success": True
+            })
+
+        if path in ("/api/v1/ubiquiti/status", "/api/ubiquiti/status"):
+            return self._send_json(_ubiquiti_engine.get_status())
+
+        if path in ("/api/v1/ubiquiti/script", "/api/ubiquiti/script"):
+            return self._send_json({
+                "edgeos": _ubiquiti_engine.generate_edgeos_config(),
+                "unifi": _ubiquiti_engine.generate_unifi_on_boot_script(),
+                "success": True
+            })
+
+        # Phase 3: Master Router Orchestrator GET Routes
+        if path in ("/api/v1/orchestrator/status", "/api/orchestrator/status"):
+            return self._send_json(_router_orchestrator.get_unified_status())
 
         self._send_error(f"Endpoint GET {path} not found", 404)
 
@@ -1462,6 +1495,68 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             try:
                 _ebpf_loader.unload_ebpf_program()
                 return self._send_json({"success": True, "message": "eBPF hooks cleanly detached."})
+            except PermissionError as pe:
+                return self._send_json({"success": False, "error": str(pe)}, status=403)
+
+        # Phase 3: Router Master Orchestrator Control Routes
+        if path in ("/api/v1/orchestrator/lock", "/api/orchestrator/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _router_orchestrator.set_focus_lock(True, duration)
+            return self._send_json({
+                "success": True,
+                "is_locked": True,
+                "remaining_timer_seconds": duration,
+                "can_uninstall": False,
+                "message": f"Master Router Orchestrator locked for {duration} seconds."
+            })
+
+        if path in ("/api/v1/orchestrator/unlock", "/api/orchestrator/unlock"):
+            _router_orchestrator.set_focus_lock(False, 0)
+            return self._send_json({
+                "success": True,
+                "is_locked": False,
+                "remaining_timer_seconds": 0,
+                "can_uninstall": True,
+                "message": "Master Router Orchestrator unlocked. Clean deactivation permitted."
+            })
+
+        if path in ("/api/v1/orchestrator/stop", "/api/orchestrator/stop"):
+            try:
+                _router_orchestrator.stop()
+                return self._send_json({"success": True, "message": "Master Router Orchestrator stopped."})
+            except PermissionError as pe:
+                return self._send_json({"success": False, "error": str(pe)}, status=403)
+
+        # Phase 3: MikroTik & Ubiquiti Teardown and Lock Routes
+        if path in ("/api/v1/mikrotik/lock", "/api/mikrotik/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _mikrotik_manager.set_lock(True, duration)
+            return self._send_json({"success": True, "is_locked": True, "can_uninstall": False})
+
+        if path in ("/api/v1/mikrotik/unlock", "/api/mikrotik/unlock"):
+            _mikrotik_manager.set_lock(False, 0)
+            return self._send_json({"success": True, "is_locked": False, "can_uninstall": True})
+
+        if path in ("/api/v1/mikrotik/teardown", "/api/mikrotik/teardown"):
+            try:
+                cmds = _mikrotik_manager.generate_uninstall_script()
+                return self._send_json({"success": True, "script": cmds})
+            except PermissionError as pe:
+                return self._send_json({"success": False, "error": str(pe)}, status=403)
+
+        if path in ("/api/v1/ubiquiti/lock", "/api/ubiquiti/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _ubiquiti_engine.set_lock(True, duration)
+            return self._send_json({"success": True, "is_locked": True, "can_uninstall": False})
+
+        if path in ("/api/v1/ubiquiti/unlock", "/api/ubiquiti/unlock"):
+            _ubiquiti_engine.set_lock(False, 0)
+            return self._send_json({"success": True, "is_locked": False, "can_uninstall": True})
+
+        if path in ("/api/v1/ubiquiti/teardown", "/api/ubiquiti/teardown"):
+            try:
+                cmds = _ubiquiti_engine.generate_teardown_commands()
+                return self._send_json({"success": True, "script": cmds})
             except PermissionError as pe:
                 return self._send_json({"success": False, "error": str(pe)}, status=403)
 
