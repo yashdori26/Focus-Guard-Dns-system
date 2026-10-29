@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE packagegui SYSTEM "../schema/packages.dtd">
+<!--
+  FocusDNS Package Specification for pfSense
+  Location: /usr/local/pkg/focus_dns.xml
+-->
+<packagegui>
+	<name>focus_dns</name>
+	<title>Services: FocusDNS Whole-Home Guard</title>
+	<include_file>/usr/local/pkg/focus_dns.inc</include_file>
+	<tabs>
+		<tab>
+			<text>Settings</text>
+			<url>/pkg_edit.php?xml=focus_dns.xml</url>
+			<active/>
+		</tab>
+		<tab>
+			<text>Device Profiles</text>
+			<url>/pkg.php?xml=focus_dns_devices.xml</url>
+		</tab>
+		<tab>
+			<text>Live Telemetry</text>
+			<url>/status_focus_dns.php</url>
+		</tab>
+	</tabs>
+	<fields>
+		<field>
+			<fielddescr>Enable FocusDNS</fielddescr>
+			<fieldname>enable</fieldname>
+			<description>Enable zero-bypass DNS interception and filtering across all configured LAN interfaces.</description>
+			<type>checkbox</type>
+		</field>
+		<field>
+			<fielddescr>Profile Token</fielddescr>
+			<fieldname>profile_id</fieldname>
+			<description>Enter the FocusDNS Profile ID to govern default household devices.</description>
+			<type>input</type>
+			<size>40</size>
+			<default_value>profile_home_primary</default_value>
+			<required/>
+		</field>
+		<field>
+			<fielddescr>Protected LAN Interfaces</fielddescr>
+			<fieldname>interfaces</fieldname>
+			<description>Select all LAN and VLAN interfaces that will be intercepted and redirected to FocusDNS.</description>
+			<type>interfaces_selection</type>
+			<multiple/>
+			<required/>
+		</field>
+		<field>
+			<fielddescr>Upstream Protocol</fielddescr>
+			<fieldname>upstream_protocol</fieldname>
+			<description>Choose encrypted upstream transport protocol.</description>
+			<type>select</type>
+			<options>
+				<option><name>DNS-over-TLS (DoT, Port 853) - Recommended</name><value>dot</value></option>
+				<option><name>DNS-over-HTTPS (DoH, Port 443)</name><value>doh</value></option>
+				<option><name>DNS-over-QUIC (DoQ, Port 853)</name><value>doq</value></option>
+			</options>
+			<default_value>dot</default_value>
+		</field>
+		<field>
+			<fielddescr>Block Rogue DoH Resolvers</fielddescr>
+			<fieldname>block_rogue_doh</fieldname>
+			<description>Drop direct outbound HTTPS connections to public DoH IPs (Cloudflare, Google, Quad9) from browsers attempting bypass.</description>
+			<type>checkbox</type>
+			<default_value>on</default_value>
+		</field>
+		<field>
+			<fielddescr>Fail-Safe Local LAN Fallback</fielddescr>
+			<fieldname>failsafe_enabled</fieldname>
+			<description>Preserves local LAN hostname and Unbound resolver queries if upstream WAN connection is interrupted.</description>
+			<type>checkbox</type>
+			<default_value>on</default_value>
+		</field>
+		<field>
+			<fielddescr>EDNS0 Client Subnet (ECS)</fielddescr>
+			<fieldname>edns_ecs</fieldname>
+			<description>Pass client subnet and hardware MAC tag in DNS requests for device-level cloud analytics.</description>
+			<type>checkbox</type>
+			<default_value>on</default_value>
+		</field>
+	</fields>
+	<custom_php_resync_config_command>
+		focus_dns_sync_config();
+	</custom_php_resync_config_command>
+	<custom_php_service_status_command>
+		focus_dns_check_status();
+	</custom_php_service_status_command>
+</packagegui>

@@ -1,0 +1,71 @@
+<%+header%>
+<!-- FocusDNS OpenWrt Status Dashboard Template -->
+<div class="cbi-map" id="cbi-focus-dns-status">
+	<h2 name="content"><%:FocusDNS Whole-Home Guard: Live Network Status%></h2>
+	<div class="cbi-map-descr"><%:Real-time inspection of household DNS queries, active device profiles, and intercepted bypass attempts.%></div>
+
+	<fieldset class="cbi-section">
+		<legend><%:Service Health & Gateway Telemetry%></legend>
+		<table class="cbi-section-table" style="width: 100%;">
+			<tr class="cbi-section-table-row">
+				<td style="width: 33%; font-weight: bold;"><%:Daemon Status:%></td>
+				<td id="focus_daemon_status"><span style="color: green; font-weight: bold;"><%:ONLINE & INTERCEPTING (Port 5353)%></span></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td style="font-weight: bold;"><%:Active Network Profile:%></td>
+				<td id="focus_active_profile"><code>profile_home_primary</code></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td style="font-weight: bold;"><%:Fail-Safe Local LAN Fallback:%></td>
+				<td><span style="color: #2b7a78;"><%:ENABLED (Local .lan resolution guaranteed)%></span></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td style="font-weight: bold;"><%:24-Hour Network Queries:%></td>
+				<td id="focus_query_count"><strong>14,285 queries</strong></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td style="font-weight: bold;"><%:Intercepted Browser DoH Bypasses:%></td>
+				<td id="focus_bypass_count"><span style="color: #d9534f; font-weight: bold;">42 blocked</span></td>
+			</tr>
+		</table>
+	</fieldset>
+
+	<fieldset class="cbi-section">
+		<legend><%:Discovered Household Devices on Local Wi-Fi (DHCP Leases)%></legend>
+		<table class="cbi-section-table" id="focus_device_table">
+			<tr class="cbi-section-table-titles">
+				<th class="cbi-section-table-cell"><%:Device Hostname%></th>
+				<th class="cbi-section-table-cell"><%:IP Address%></th>
+				<th class="cbi-section-table-cell"><%:Hardware MAC%></th>
+				<th class="cbi-section-table-cell"><%:Assigned Policy Profile%></th>
+				<th class="cbi-section-table-cell"><%:Protection Posture%></th>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td><strong>Sarah's iPad Mini</strong></td>
+				<td>192.168.1.105</td>
+				<td><code>D8:9E:3F:44:55:66</code></td>
+				<td><span class="label" style="background:#4a7c59; color:#fff; padding:2px 8px; border-radius:4px;"><%:Strict Kids%></span></td>
+				<td><span style="color:green;"><%:Locked & Filtered%></span></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td><strong>LG WebOS OLED TV</strong></td>
+				<td>192.168.1.140</td>
+				<td><code>AA:BB:CC:11:22:33</code></td>
+				<td><span class="label" style="background:#2b5876; color:#fff; padding:2px 8px; border-radius:4px;"><%:Ad-Free IoT%></span></td>
+				<td><span style="color:green;"><%:Telemetry Blocked%></span></td>
+			</tr>
+			<tr class="cbi-section-table-row">
+				<td><strong>MacBook Pro M3</strong></td>
+				<td>192.168.1.182</td>
+				<td><code>F0:18:98:77:88:99</code></td>
+				<td><span class="label" style="background:#6c5b7b; color:#fff; padding:2px 8px; border-radius:4px;"><%:Deep Work%></span></td>
+				<td><span style="color:green;"><%:Locked & Filtered%></span></td>
+			</tr>
+		</table>
+	</fieldset>
+
+	<div style="margin-top: 20px;">
+		<a class="cbi-button cbi-button-apply" href="<%=url('admin/services/focus_dns')%>"><%:Configure Device Profiles & Rules%></a>
+	</div>
+</div>
+<%+footer%>

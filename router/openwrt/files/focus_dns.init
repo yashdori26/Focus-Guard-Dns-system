@@ -1,0 +1,125 @@
+#!/bin/sh /etc/rc.common
+# FocusDNS OpenWrt Procd Init Service
+# Location: /etc/init.d/focus_dns
+
+USE_PROCD=1
+START=94
+STOP=10
+
+CONF="focus_dns"
+PROG="/usr/bin/focus-router-daemon"
+NFT_SCRIPT="/usr/share/focus_dns/focus_dns.nftables"
+
+start_service() {
+	local enabled
+	local profile_id
+	local primary_port
+	local upstream_protocol
+	local upstream_server
+	local upstream_port
+	local failsafe
+	local block_doh
+	local block_dot
+
+	config_load "$CONF"
+	config_get_bool enabled settings enabled 0
+
+	[ "$enabled" -eq 1 ] || {
+		logger -t focus_dns "Service disabled in /etc/config/focus_dns. Exiting."
+		return 0
+	}
+
+	config_get profile_id settings profile_id "default_profile"
+	config_get primary_port settings primary_port "5353"
+	config_get upstream_protocol settings upstream_protocol "dot"
+	config_get upstream_server settings upstream_dot_server "dns.focusguard.io"
+	config_get upstream_port settings upstream_dot_port "853"
+	config_get_bool failsafe settings failsafe_enabled 1
+	config_get_bool block_doh settings block_rogue_doh 1
+	config_get_bool block_dot settings block_rogue_dot 1
+
+	logger -t focus_dns "Starting FocusDNS Router Daemon (Profile: $profile_id, Port: $primary_port)..."
+
+	procd_open_instance "focus_dns_daemon"
+	procd_set_param command "$PROG" \
+		--listen-port "$primary_port" \
+		--profile "$profile_id" \
+		--upstream-protocol "$upstream_protocol" \
+		--upstream-server "$upstream_server" \
+		--upstream-port "$upstream_port" \
+		--failsafe "$failsafe"
+
+	# Respawn daemon if killed or crashed
+	procd_set_param respawn 3600 5 0
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param file /etc/config/focus_dns
+	procd_close_instance
+
+	# Inject firewall interception rules into nftables / iptables
+	install_firewall_interception "$primary_port" "$block_doh" "$block_dot"
+}
+
+stop_service() {
+	logger -t focus_dns "Stopping FocusDNS Router Daemon & Flushing Interception Rules..."
+	remove_firewall_interception
+}
+
+reload_service() {
+	logger -t focus_dns "Reloading FocusDNS configuration..."
+	stop
+	start
+}
+
+service_triggers() {
+	procd_add_reload_trigger "focus_dns"
+	procd_add_network_trigger "lan"
+}
+
+install_firewall_interception() {
+	local port="$1"
+	local block_doh="$2"
+	local block_dot="$3"
+
+	# Apply nftables rules if nft is available, fallback to iptables
+	if command -v nft >/dev/null 2>&1; then
+		logger -t focus_dns "Applying nftables port 53 redirection to 127.0.0.1:$port..."
+		nft add table inet focus_dns 2>/dev/null || true
+		nft add chain inet focus_dns prerouting '{ type nat hook prerouting priority -100; policy accept; }' 2>/dev/null || true
+		
+		# Redirect all LAN UDP and TCP port 53 to FocusDNS local daemon
+		nft add rule inet focus_dns prerouting iifname "br-lan" udp dport 53 redirect to :"$port" 2>/dev/null || true
+		nft add rule inet focus_dns prerouting iifname "br-lan" tcp dport 53 redirect to :"$port" 2>/dev/null || true
+
+		if [ "$block_doh" -eq 1 ]; then
+			# Block well-known rogue public DoH IPs on port 443
+			nft add chain inet focus_dns forward '{ type filter hook forward priority 0; policy accept; }' 2>/dev/null || true
+			for ip in 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 149.112.112.112 208.67.222.222; do
+				nft add rule inet focus_dns forward ip daddr "$ip" tcp dport 443 reject 2>/dev/null || true
+			done
+		fi
+
+		if [ "$block_dot" -eq 1 ]; then
+			# Block all non-FocusDNS port 853 traffic
+			nft add rule inet focus_dns forward tcp dport 853 reject 2>/dev/null || true
+		fi
+	elif command -v iptables >/dev/null 2>&1; then
+		logger -t focus_dns "Applying legacy iptables port 53 redirection to 127.0.0.1:$port..."
+		iptables -t nat -N FOCUS_DNS_PREROUTING 2>/dev/null || true
+		iptables -t nat -F FOCUS_DNS_PREROUTING
+		iptables -t nat -A FOCUS_DNS_PREROUTING -p udp --dport 53 -j REDIRECT --to-ports "$port"
+		iptables -t nat -A FOCUS_DNS_PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports "$port"
+		iptables -t nat -I PREROUTING 1 -j FOCUS_DNS_PREROUTING
+	fi
+}
+
+remove_firewall_interception() {
+	if command -v nft >/dev/null 2>&1; then
+		nft delete table inet focus_dns 2>/dev/null || true
+	fi
+	if command -v iptables >/dev/null 2>&1; then
+		iptables -t nat -D PREROUTING -j FOCUS_DNS_PREROUTING 2>/dev/null || true
+		iptables -t nat -F FOCUS_DNS_PREROUTING 2>/dev/null || true
+		iptables -t nat -X FOCUS_DNS_PREROUTING 2>/dev/null || true
+	fi
+}

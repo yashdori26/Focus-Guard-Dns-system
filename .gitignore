@@ -43,6 +43,7 @@ app.*.map.json
 /android/app/release
 
 # Python Backend & Database
+**/__pycache__/
 server/venv/
 server/__pycache__/
 server/*.pyc

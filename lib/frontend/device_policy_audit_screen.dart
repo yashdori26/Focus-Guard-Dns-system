@@ -9,6 +9,8 @@ import 'device_owner_provisioning_screen.dart';
 import 'managed_config_screen.dart';
 import 'geofence_screen.dart';
 import 'enterprise_schedule_screen.dart';
+import 'router_firewall_screen.dart';
+import 'windows_wfp_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -349,6 +351,62 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const EnterpriseScheduleScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 14. Whole-Home Router Firewall Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.router, color: Color(0xFF4DB6AC), size: 26),
+                    title: const Text(
+                      'Whole-Home Router Firewall',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'OpenWrt, pfSense & OPNSense gateway protection with 1-click install',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RouterFirewallScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 15. Windows WFP Protection Driver Tile
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.desktop_windows, color: Color(0xFF64B5F6), size: 26),
+                    title: const Text(
+                      'Windows WFP Protection Driver',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Kernel-mode WFP callouts, per-app bypass prevention & service protection',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const WindowsWfpScreen()),
                       );
                     },
                   ),

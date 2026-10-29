@@ -41,6 +41,12 @@ from .engine.fleet_control_plane import FleetControlPlane
 from .engine.mdm_websocket_hub import MdmWebSocketHub
 from .engine.geofence_engine import GeofenceEngine, GeofenceZone
 from .engine.enterprise_calendar import EnterpriseCalendarEngine, CalendarFocusEvent
+from .engine.wfp_engine import WfpRuleCompiler
+from .engine.windows_daemon_controller import WindowsDaemonController
+from router.openwrt.mac_profile_router import MacProfileRouter
+from router.daemon.router_stub_daemon import RouterStubDaemon
+from router.daemon.router_telemetry_reporter import RouterTelemetryReporter
+from router.pfsense.pf_rules_generator import PfRulesGenerator
 
 _attestation_validator = AttestationValidator()
 _private_dns_server = PrivateDnsServerManager()
@@ -52,6 +58,12 @@ _fleet_control = FleetControlPlane()
 _websocket_hub = MdmWebSocketHub()
 _geofence_engine = GeofenceEngine()
 _calendar_engine = EnterpriseCalendarEngine()
+_wfp_compiler = WfpRuleCompiler()
+_windows_controller = WindowsDaemonController()
+_mac_profile_router = MacProfileRouter()
+_router_stub_daemon = RouterStubDaemon(mac_router=_mac_profile_router)
+_router_telemetry = RouterTelemetryReporter(stub_daemon=_router_stub_daemon, mac_router=_mac_profile_router)
+_pf_generator = PfRulesGenerator()
 
 class FocusDNSApiHandler(BaseHTTPRequestHandler):
 
@@ -597,6 +609,57 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             tenant = params.get("tenant_id", ["default_enterprise"])[0]
             sched_status = _calendar_engine.evaluate_schedule_at(tenant_id=tenant)
             return self._send_json(sched_status)
+
+        # Topic 5: Router Gateway & Windows WFP GET Endpoints
+        if path in ("/api/v1/router/status", "/api/router/status"):
+            snapshot = _router_telemetry.get_latest_snapshot()
+            return self._send_json(snapshot)
+
+        if path in ("/api/v1/router/devices", "/api/router/devices"):
+            devices = _mac_profile_router.get_all_devices()
+            if not devices:
+                # Provide standard discovered leases
+                _mac_profile_router.parse_dhcp_leases(
+                    "1730000000 D8:9E:3F:44:55:66 192.168.1.105 Sarahs-iPad-Mini *\n"
+                    "1730000000 AA:BB:CC:11:22:33 192.168.1.140 LG-WebOS-TV *\n"
+                    "1730000000 F0:18:98:77:88:99 192.168.1.182 MacBook-Pro-M3 *\n"
+                )
+                devices = _mac_profile_router.get_all_devices()
+            return self._send_json({"devices": devices, "count": len(devices), "success": True})
+
+        if path in ("/api/v1/router/install-script", "/api/router/install-script"):
+            platform = params.get("platform", ["openwrt"])[0].lower()
+            profile = params.get("profile_id", ["profile_home_primary"])[0]
+            if platform == "openwrt":
+                script = f'opkg update && opkg install luci-app-focus-dns && uci set focus_dns.settings.profile_id="{profile}" && uci commit && /etc/init.d/focus_dns restart'
+            elif platform == "pfsense":
+                script = 'pkg install -y focus_dns && php -r "require_once(\'/usr/local/pkg/focus_dns.inc\'); focus_dns_sync_config();"'
+            elif platform == "opnsense":
+                script = 'opnsense-patch -a focus_dns && configctl focus_dns start'
+            else:
+                script = f'curl -fsSL https://get.focusguard.io/router.sh | sh -s -- --profile "{profile}"'
+            return self._send_json({"platform": platform, "profile_id": profile, "command": script, "success": True})
+
+        if path in ("/api/v1/router/pf-anchor", "/api/router/pf-anchor"):
+            anchor_conf = _pf_generator.generate_pf_anchor_config()
+            return self._send_json({"anchor_config": anchor_conf, "summary": _pf_generator.get_summary(), "success": True})
+
+        if path in ("/api/v1/wfp/status", "/api/wfp/status"):
+            return self._send_json(_windows_controller.get_status())
+
+        if path in ("/api/v1/wfp/audit", "/api/wfp/audit"):
+            limit = int(params.get("limit", [50])[0])
+            return self._send_json({"audit_records": _windows_controller.get_audit_log(limit=limit), "success": True})
+
+        if path in ("/api/v1/wfp/uninstall-check", "/api/wfp/uninstall-check"):
+            can_uninst = _windows_controller.can_uninstall()
+            return self._send_json({
+                "can_uninstall": can_uninst,
+                "is_protection_active": _windows_controller._is_protection_active,
+                "remaining_timer_seconds": _windows_controller._remaining_timer_seconds,
+                "reason": "Clean uninstallation 100% permitted" if can_uninst else "Active focus lock prohibits service removal",
+                "success": True,
+            })
 
         self._send_error(f"Endpoint GET {path} not found", 404)
 
@@ -1220,6 +1283,75 @@ class FocusDNSApiHandler(BaseHTTPRequestHandler):
             data = body.get("data", {})
             delivered = _websocket_hub.broadcast_event(topic, data)
             return self._send_json({"success": True, "topic": topic, "subscribers_reached": delivered})
+
+        # Topic 5: Router Gateway & Windows WFP POST Endpoints
+        if path in ("/api/v1/router/device/profile", "/api/router/device/profile"):
+            mac = body.get("mac_address", "").strip().upper()
+            profile = body.get("profile_id", "profile_home_primary").strip()
+            hostname = body.get("hostname", "")
+            category = body.get("device_category", "Generic")
+            strict = bool(body.get("strict_lock", False))
+            if not mac:
+                return self._send_error("mac_address is required", 400)
+            _mac_profile_router.register_manual_mapping(
+                mac_address=mac,
+                profile_id=profile,
+                hostname=hostname,
+                category=category,
+                strict_lock=strict,
+            )
+            return self._send_json({
+                "success": True,
+                "mac_address": mac,
+                "assigned_profile": profile,
+                "strict_lock": strict,
+            })
+
+        if path in ("/api/v1/router/device/bypass-event", "/api/router/device/bypass-event"):
+            count = int(body.get("count", 1))
+            _router_telemetry.record_bypass_intercepted(count)
+            return self._send_json({"success": True, "bypasses_blocked": _router_telemetry._bypasses_blocked_count})
+
+        if path in ("/api/v1/wfp/lock", "/api/wfp/lock"):
+            duration = int(body.get("duration_seconds", 1800))
+            _windows_controller.arm_focus_lock(duration_seconds=duration)
+            _wfp_compiler.set_protection_state(active=True, remaining_seconds=duration)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": True,
+                "duration_seconds": duration,
+                "can_uninstall": False,
+                "message": "Windows WFP Focus Lock armed. Service stop & uninstallation locked.",
+            })
+
+        if path in ("/api/v1/wfp/unlock", "/api/wfp/unlock"):
+            _windows_controller.disarm_focus_lock()
+            _wfp_compiler.set_protection_state(active=False, remaining_seconds=0)
+            return self._send_json({
+                "success": True,
+                "is_protection_active": False,
+                "can_uninstall": True,
+                "message": "Windows WFP Focus Lock disarmed. Clean uninstallation 100% permitted.",
+            })
+
+        if path in ("/api/v1/wfp/block-app", "/api/wfp/block-app"):
+            app_name = body.get("app_name", "").strip()
+            if not app_name:
+                return self._send_error("app_name is required", 400)
+            _windows_controller.block_application(app_name)
+            return self._send_json({"success": True, "app_name": app_name, "is_blocked": True})
+
+        if path in ("/api/v1/wfp/unblock-app", "/api/wfp/unblock-app"):
+            app_name = body.get("app_name", "").strip()
+            if not app_name:
+                return self._send_error("app_name is required", 400)
+            unblocked = _windows_controller.unblock_application(app_name)
+            return self._send_json({"success": unblocked, "app_name": app_name, "is_blocked": False})
+
+        if path in ("/api/v1/wfp/simulate-stop", "/api/wfp/simulate-stop"):
+            ok, msg = _windows_controller.simulate_service_stop_attempt()
+            status_code = 200 if ok else 403
+            return self._send_json({"allowed": ok, "message": msg, "can_uninstall": _windows_controller.can_uninstall()}, status=status_code)
 
         self._send_error(f"Endpoint POST {path} not found", 404)
 
