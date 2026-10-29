@@ -16,6 +16,7 @@ import 'linux_ebpf_screen.dart';
 import 'mikrotik_ubiquiti_screen.dart';
 import 'router_orchestrator_screen.dart';
 import '../screens/ai_threat_radar_screen.dart';
+import '../screens/enterprise_analytics_dashboard_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -553,6 +554,35 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const AiThreatRadarScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 21. Enterprise Multi-Tenancy & Columnar Analytics
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    key: const Key('enterprise_portal_tile'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.analytics_rounded, color: Color(0xFF81C784), size: 26),
+                    title: const Text(
+                      'Enterprise Multi-Tenancy & Big Data Portal',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'DuckDB columnar analytics, hierarchical RBAC, real-time WebSocket fleet push & RFC 5424 SIEM',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const EnterpriseAnalyticsDashboardScreen()),
                       );
                     },
                   ),

@@ -66,6 +66,14 @@ from server.enterprise.parquet_archiver import (
 from server.enterprise.audit_log_exporter import (
     AuditLogExporter,
 )
+from server.enterprise.device_heartbeat_agent import (
+    DeviceHeartbeatAgent,
+    DeviceAgentState,
+)
+from server.engine.enterprise_pipeline_hook import (
+    EnterprisePipelineHook,
+    get_enterprise_pipeline_hook,
+)
 
 __all__ = [
     "ColumnarAnalyticsEngine",
@@ -102,4 +110,8 @@ __all__ = [
     "CompiledFleetPolicy",
     "ParquetArchiver",
     "AuditLogExporter",
+    "DeviceHeartbeatAgent",
+    "DeviceAgentState",
+    "EnterprisePipelineHook",
+    "get_enterprise_pipeline_hook",
 ]
