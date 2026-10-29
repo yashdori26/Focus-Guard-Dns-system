@@ -15,6 +15,7 @@ import 'macos_proxy_screen.dart';
 import 'linux_ebpf_screen.dart';
 import 'mikrotik_ubiquiti_screen.dart';
 import 'router_orchestrator_screen.dart';
+import '../screens/ai_threat_radar_screen.dart';
 
 /// Screen displaying comprehensive MDM policy, cryptographic protection state,
 /// anti-tamper security metrics, and uninstallation permission audit.
@@ -523,6 +524,35 @@ class _DevicePolicyAuditScreenState extends State<DevicePolicyAuditScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const RouterOrchestratorScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 20. AI Threat Radar & On-Device Neural Hunter Tile
+                Container(
+                  key: const Key('ai_threat_radar_tile'),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF2C2C2E)),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    leading: const Icon(Icons.radar_rounded, color: Color(0xFF00E5FF), size: 26),
+                    title: const Text(
+                      'AI Threat Radar & On-Device Hunter',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Zero-hour phishing, Unicode TR39 homographs, DGA neural MLP & category policy',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AiThreatRadarScreen()),
                       );
                     },
                   ),
