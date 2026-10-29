@@ -896,3 +896,478 @@ class UsageInvoiceModel {
     'signature_sha256': signatureSha256,
   };
 }
+
+@immutable
+class SiemIngestAlertModel {
+  final String alertId;
+  final String vendor;
+  final String tenantId;
+  final String? deviceId;
+  final String? clientIp;
+  final String indicatorDomain;
+  final String threatType;
+  final String severity;
+  final double riskScore;
+  final double receivedAt;
+  final bool deduplicated;
+
+  const SiemIngestAlertModel({
+    required this.alertId,
+    required this.vendor,
+    required this.tenantId,
+    this.deviceId,
+    this.clientIp,
+    required this.indicatorDomain,
+    required this.threatType,
+    required this.severity,
+    required this.riskScore,
+    required this.receivedAt,
+    required this.deduplicated,
+  });
+
+  factory SiemIngestAlertModel.fromJson(Map<String, dynamic> json) {
+    return SiemIngestAlertModel(
+      alertId: json['alert_id'] as String? ?? '',
+      vendor: json['vendor'] as String? ?? 'GENERIC_SYSLOG',
+      tenantId: json['tenant_id'] as String? ?? '',
+      deviceId: json['device_id'] as String?,
+      clientIp: json['client_ip'] as String?,
+      indicatorDomain: json['indicator_domain'] as String? ?? '',
+      threatType: json['threat_type'] as String? ?? 'EXTERNAL_ALERT',
+      severity: json['severity'] as String? ?? 'HIGH',
+      riskScore: (json['risk_score'] as num?)?.toDouble() ?? 75.0,
+      receivedAt: (json['received_at'] as num?)?.toDouble() ?? 0.0,
+      deduplicated: json['deduplicated'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'alert_id': alertId,
+    'vendor': vendor,
+    'tenant_id': tenantId,
+    'device_id': deviceId,
+    'client_ip': clientIp,
+    'indicator_domain': indicatorDomain,
+    'threat_type': threatType,
+    'severity': severity,
+    'risk_score': riskScore,
+    'received_at': receivedAt,
+    'deduplicated': deduplicated,
+  };
+}
+
+@immutable
+class ThreatHuntQueryModel {
+  final String tenantId;
+  final String? subTenantId;
+  final String? deviceId;
+  final String? cidrSubnet;
+  final String? domainPattern;
+  final double? minEntropy;
+  final String? threatType;
+  final String? action;
+  final int limit;
+
+  const ThreatHuntQueryModel({
+    required this.tenantId,
+    this.subTenantId,
+    this.deviceId,
+    this.cidrSubnet,
+    this.domainPattern,
+    this.minEntropy,
+    this.threatType,
+    this.action,
+    this.limit = 200,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'tenant_id': tenantId,
+    if (subTenantId != null) 'sub_tenant_id': subTenantId,
+    if (deviceId != null) 'device_id': deviceId,
+    if (cidrSubnet != null) 'cidr_subnet': cidrSubnet,
+    if (domainPattern != null) 'domain_pattern': domainPattern,
+    if (minEntropy != null) 'min_entropy': minEntropy,
+    if (threatType != null) 'threat_type': threatType,
+    if (action != null) 'action': action,
+    'limit': limit,
+  };
+
+  factory ThreatHuntQueryModel.fromJson(Map<String, dynamic> json) {
+    return ThreatHuntQueryModel(
+      tenantId: json['tenant_id'] as String? ?? '',
+      subTenantId: json['sub_tenant_id'] as String?,
+      deviceId: json['device_id'] as String?,
+      cidrSubnet: json['cidr_subnet'] as String?,
+      domainPattern: json['domain_pattern'] as String?,
+      minEntropy: (json['min_entropy'] as num?)?.toDouble(),
+      threatType: json['threat_type'] as String?,
+      action: json['action'] as String?,
+      limit: json['limit'] as int? ?? 200,
+    );
+  }
+}
+
+@immutable
+class ThreatHuntResultRecordModel {
+  final int timestampUs;
+  final String tenantId;
+  final String subTenantId;
+  final String deviceId;
+  final String clientIp;
+  final String domain;
+  final String qtype;
+  final String rcode;
+  final String action;
+  final String threatType;
+  final String category;
+  final int latencyUs;
+  final int bytesTransferred;
+  final double shannonEntropy;
+  final double vowelRatio;
+  final bool isDgaCandidate;
+  final bool isPunycode;
+
+  const ThreatHuntResultRecordModel({
+    required this.timestampUs,
+    required this.tenantId,
+    required this.subTenantId,
+    required this.deviceId,
+    required this.clientIp,
+    required this.domain,
+    required this.qtype,
+    required this.rcode,
+    required this.action,
+    required this.threatType,
+    required this.category,
+    required this.latencyUs,
+    required this.bytesTransferred,
+    required this.shannonEntropy,
+    required this.vowelRatio,
+    required this.isDgaCandidate,
+    required this.isPunycode,
+  });
+
+  factory ThreatHuntResultRecordModel.fromJson(Map<String, dynamic> json) {
+    return ThreatHuntResultRecordModel(
+      timestampUs: json['timestamp_us'] as int? ?? 0,
+      tenantId: json['tenant_id'] as String? ?? '',
+      subTenantId: json['sub_tenant_id'] as String? ?? '',
+      deviceId: json['device_id'] as String? ?? '',
+      clientIp: json['client_ip'] as String? ?? '',
+      domain: json['domain'] as String? ?? '',
+      qtype: json['qtype'] as String? ?? 'A',
+      rcode: json['rcode'] as String? ?? 'NOERROR',
+      action: json['action'] as String? ?? 'ALLOW',
+      threatType: json['threat_type'] as String? ?? 'NONE',
+      category: json['category'] as String? ?? 'General',
+      latencyUs: json['latency_us'] as int? ?? 0,
+      bytesTransferred: json['bytes_transferred'] as int? ?? 0,
+      shannonEntropy: (json['shannon_entropy'] as num?)?.toDouble() ?? 0.0,
+      vowelRatio: (json['vowel_ratio'] as num?)?.toDouble() ?? 0.0,
+      isDgaCandidate: json['is_dga_candidate'] as bool? ?? false,
+      isPunycode: json['is_punycode'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'timestamp_us': timestampUs,
+    'tenant_id': tenantId,
+    'sub_tenant_id': subTenantId,
+    'device_id': deviceId,
+    'client_ip': clientIp,
+    'domain': domain,
+    'qtype': qtype,
+    'rcode': rcode,
+    'action': action,
+    'threat_type': threatType,
+    'category': category,
+    'latency_us': latencyUs,
+    'bytes_transferred': bytesTransferred,
+    'shannon_entropy': shannonEntropy,
+    'vowel_ratio': vowelRatio,
+    'is_dga_candidate': isDgaCandidate,
+    'is_punycode': isPunycode,
+  };
+}
+
+@immutable
+class ThreatHuntResultModel {
+  final String tenantId;
+  final int totalMatches;
+  final double executionTimeMs;
+  final int dgaAnomalyCount;
+  final List<ThreatHuntResultRecordModel> records;
+
+  const ThreatHuntResultModel({
+    required this.tenantId,
+    required this.totalMatches,
+    required this.executionTimeMs,
+    required this.dgaAnomalyCount,
+    required this.records,
+  });
+
+  factory ThreatHuntResultModel.fromJson(Map<String, dynamic> json) {
+    final rawList = json['records'] as List? ?? [];
+    return ThreatHuntResultModel(
+      tenantId: json['tenant_id'] as String? ?? '',
+      totalMatches: json['total_matches'] as int? ?? rawList.length,
+      executionTimeMs: (json['execution_time_ms'] as num?)?.toDouble() ?? 0.0,
+      dgaAnomalyCount: json['dga_anomaly_count'] as int? ?? 0,
+      records: rawList.map((e) => ThreatHuntResultRecordModel.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'tenant_id': tenantId,
+    'total_matches': totalMatches,
+    'execution_time_ms': executionTimeMs,
+    'dga_anomaly_count': dgaAnomalyCount,
+    'records': records.map((e) => e.toJson()).toList(),
+  };
+}
+
+@immutable
+class DnsTimelineEntryModel {
+  final int timestampUs;
+  final String domain;
+  final String clientIp;
+  final String action;
+  final String threatType;
+
+  const DnsTimelineEntryModel({
+    required this.timestampUs,
+    required this.domain,
+    required this.clientIp,
+    required this.action,
+    required this.threatType,
+  });
+
+  factory DnsTimelineEntryModel.fromJson(Map<String, dynamic> json) {
+    return DnsTimelineEntryModel(
+      timestampUs: json['timestamp_us'] as int? ?? 0,
+      domain: json['domain'] as String? ?? '',
+      clientIp: json['client_ip'] as String? ?? '',
+      action: json['action'] as String? ?? 'ALLOW',
+      threatType: json['threat_type'] as String? ?? 'NONE',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'timestamp_us': timestampUs,
+    'domain': domain,
+    'client_ip': clientIp,
+    'action': action,
+    'threat_type': threatType,
+  };
+}
+
+@immutable
+class EndpointDnsTimelineModel {
+  final String tenantId;
+  final String deviceId;
+  final int timeWindowMinutes;
+  final int totalQueriesRecorded;
+  final int burstCount;
+  final List<Map<String, dynamic>> suspectedBeacons;
+  final List<DnsTimelineEntryModel> timeline;
+
+  const EndpointDnsTimelineModel({
+    required this.tenantId,
+    required this.deviceId,
+    required this.timeWindowMinutes,
+    required this.totalQueriesRecorded,
+    required this.burstCount,
+    required this.suspectedBeacons,
+    required this.timeline,
+  });
+
+  factory EndpointDnsTimelineModel.fromJson(Map<String, dynamic> json) {
+    final rawTimeline = json['timeline'] as List? ?? [];
+    final rawBeacons = json['suspected_beacons'] as List? ?? [];
+    return EndpointDnsTimelineModel(
+      tenantId: json['tenant_id'] as String? ?? '',
+      deviceId: json['device_id'] as String? ?? '',
+      timeWindowMinutes: json['time_window_minutes'] as int? ?? 30,
+      totalQueriesRecorded: json['total_queries_recorded'] as int? ?? rawTimeline.length,
+      burstCount: json['burst_count'] as int? ?? 0,
+      suspectedBeacons: rawBeacons.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+      timeline: rawTimeline.map((e) => DnsTimelineEntryModel.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'tenant_id': tenantId,
+    'device_id': deviceId,
+    'time_window_minutes': timeWindowMinutes,
+    'total_queries_recorded': totalQueriesRecorded,
+    'burst_count': burstCount,
+    'suspected_beacons': suspectedBeacons,
+    'timeline': timeline.map((e) => e.toJson()).toList(),
+  };
+}
+
+@immutable
+class PolicyDriftRecordModel {
+  final String recordId;
+  final String tenantId;
+  final String fleetId;
+  final String deviceId;
+  final String driftType;
+  final String expectedPolicyHash;
+  final String reportedPolicyHash;
+  final String details;
+  final double detectedAt;
+  final bool remediated;
+  final double? remediatedAt;
+
+  const PolicyDriftRecordModel({
+    required this.recordId,
+    required this.tenantId,
+    required this.fleetId,
+    required this.deviceId,
+    required this.driftType,
+    required this.expectedPolicyHash,
+    required this.reportedPolicyHash,
+    required this.details,
+    required this.detectedAt,
+    required this.remediated,
+    this.remediatedAt,
+  });
+
+  factory PolicyDriftRecordModel.fromJson(Map<String, dynamic> json) {
+    return PolicyDriftRecordModel(
+      recordId: json['record_id'] as String? ?? '',
+      tenantId: json['tenant_id'] as String? ?? '',
+      fleetId: json['fleet_id'] as String? ?? '',
+      deviceId: json['device_id'] as String? ?? '',
+      driftType: json['drift_type'] as String? ?? 'HASH_MISMATCH',
+      expectedPolicyHash: json['expected_policy_hash'] as String? ?? '',
+      reportedPolicyHash: json['reported_policy_hash'] as String? ?? '',
+      details: json['details'] as String? ?? '',
+      detectedAt: (json['detected_at'] as num?)?.toDouble() ?? 0.0,
+      remediated: json['remediated'] as bool? ?? false,
+      remediatedAt: (json['remediated_at'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'record_id': recordId,
+    'tenant_id': tenantId,
+    'fleet_id': fleetId,
+    'device_id': deviceId,
+    'drift_type': driftType,
+    'expected_policy_hash': expectedPolicyHash,
+    'reported_policy_hash': reportedPolicyHash,
+    'details': details,
+    'detected_at': detectedAt,
+    'remediated': remediated,
+    if (remediatedAt != null) 'remediated_at': remediatedAt,
+  };
+}
+
+@immutable
+class TenantComplianceReportModel {
+  final String tenantId;
+  final int totalDevices;
+  final int compliantDevices;
+  final int driftedDevices;
+  final double complianceScore;
+  final double generatedAt;
+  final List<PolicyDriftRecordModel> drifts;
+
+  const TenantComplianceReportModel({
+    required this.tenantId,
+    required this.totalDevices,
+    required this.compliantDevices,
+    required this.driftedDevices,
+    required this.complianceScore,
+    required this.generatedAt,
+    required this.drifts,
+  });
+
+  factory TenantComplianceReportModel.fromJson(Map<String, dynamic> json) {
+    final rawDrifts = json['drifts'] as List? ?? [];
+    return TenantComplianceReportModel(
+      tenantId: json['tenant_id'] as String? ?? '',
+      totalDevices: json['total_devices'] as int? ?? 1,
+      compliantDevices: json['compliant_devices'] as int? ?? 1,
+      driftedDevices: json['drifted_devices'] as int? ?? 0,
+      complianceScore: (json['compliance_score'] as num?)?.toDouble() ?? 100.0,
+      generatedAt: (json['generated_at'] as num?)?.toDouble() ?? 0.0,
+      drifts: rawDrifts.map((e) => PolicyDriftRecordModel.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'tenant_id': tenantId,
+    'total_devices': totalDevices,
+    'compliant_devices': compliantDevices,
+    'drifted_devices': driftedDevices,
+    'compliance_score': complianceScore,
+    'generated_at': generatedAt,
+    'drifts': drifts.map((e) => e.toJson()).toList(),
+  };
+}
+
+@immutable
+class BillingSummaryModel {
+  final String orgId;
+  final String planTier;
+  final int activeDevices;
+  final int maxDevices;
+  final int totalQueriesMonth;
+  final double peakQps;
+  final double currentCostUsd;
+  final bool isQuotaExceeded;
+  final List<String> warnings;
+
+  const BillingSummaryModel({
+    required this.orgId,
+    required this.planTier,
+    required this.activeDevices,
+    required this.maxDevices,
+    required this.totalQueriesMonth,
+    required this.peakQps,
+    required this.currentCostUsd,
+    required this.isQuotaExceeded,
+    required this.warnings,
+  });
+
+  factory BillingSummaryModel.fromJson(Map<String, dynamic> json) {
+    final usage = json['usage'] as Map? ?? {};
+    final inv = json['current_invoice'] as Map? ?? {};
+    final charges = inv['charges_usd'] as Map? ?? {};
+    final metrics = inv['metrics'] as Map? ?? {};
+    final active = metrics['active_devices'] as int? ?? usage['active_devices_estimate'] as int? ?? 0;
+    final maxDev = usage['quota_max_devices'] as int? ?? 500;
+    final totalQueries = metrics['total_queries'] as int? ?? usage['total_queries'] as int? ?? 0;
+    final qps = (metrics['peak_qps'] as num?)?.toDouble() ?? (usage['peak_qps'] as num?)?.toDouble() ?? 0.0;
+    final cost = (charges['total'] as num?)?.toDouble() ?? (inv['total_amount_usd'] as num?)?.toDouble() ?? 0.0;
+    final rawWarnings = json['warnings'] as List? ?? [];
+
+    return BillingSummaryModel(
+      orgId: json['org_id'] as String? ?? '',
+      planTier: inv['plan_tier'] as String? ?? 'ENTERPRISE',
+      activeDevices: active,
+      maxDevices: maxDev,
+      totalQueriesMonth: totalQueries,
+      peakQps: qps,
+      currentCostUsd: cost,
+      isQuotaExceeded: active > maxDev,
+      warnings: rawWarnings.map((e) => e.toString()).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'org_id': orgId,
+    'plan_tier': planTier,
+    'active_devices': activeDevices,
+    'max_devices': maxDevices,
+    'total_queries_month': totalQueriesMonth,
+    'peak_qps': peakQps,
+    'current_cost_usd': currentCostUsd,
+    'is_quota_exceeded': isQuotaExceeded,
+    'warnings': warnings,
+  };
+}
+

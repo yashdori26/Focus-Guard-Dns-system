@@ -11,6 +11,8 @@ import 'enterprise_rbac_screen.dart';
 import 'enterprise_siem_screen.dart';
 import 'enterprise_classroom_screen.dart';
 import 'enterprise_scim_sso_screen.dart';
+import 'enterprise_soar_incidents_screen.dart';
+import 'enterprise_billing_invoices_screen.dart';
 
 class EnterpriseAnalyticsDashboardScreen extends StatefulWidget {
   final String tenantId;
@@ -79,11 +81,11 @@ class _EnterpriseAnalyticsDashboardScreenState
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E1E20),
         elevation: 0,
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.analytics_outlined, color: Color(0xFF64B5F6), size: 22),
-            const SizedBox(width: 10),
-            const Expanded(
+            Icon(Icons.analytics_outlined, color: Color(0xFF64B5F6), size: 22),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 'Enterprise Big Data Analytics',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
@@ -140,6 +142,20 @@ class _EnterpriseAnalyticsDashboardScreenState
               MaterialPageRoute(builder: (_) => EnterpriseScimSsoScreen(service: _service)),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.security, color: Color(0xFFEF5350)),
+            tooltip: 'SOAR Incident Console',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => EnterpriseSoarIncidentsScreen(service: _service, tenantId: _selectedTenant)),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.receipt_long, color: Color(0xFF81C784)),
+            tooltip: 'Commercial Billing & Invoices',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => EnterpriseBillingInvoicesScreen(service: _service, orgId: _selectedTenant)),
+            ),
+          ),
         ],
       ),
       body: _isLoading
@@ -154,6 +170,8 @@ class _EnterpriseAnalyticsDashboardScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildTenantPill(),
+                    const SizedBox(height: 16),
+                    _buildQuickActionRibbon(),
                     const SizedBox(height: 16),
                     _buildKpiMetricsRow(),
                     const SizedBox(height: 18),
@@ -206,6 +224,92 @@ class _EnterpriseAnalyticsDashboardScreenState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActionRibbon() {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EnterpriseSoarIncidentsScreen(
+                  service: _service,
+                  tenantId: _selectedTenant,
+                ),
+              ),
+            ),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E20),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF5350).withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.security, color: Color(0xFFEF5350), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'SOAR Incidents & SIEM',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.white38, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EnterpriseBillingInvoicesScreen(
+                  service: _service,
+                  orgId: _selectedTenant,
+                ),
+              ),
+            ),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E20),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF81C784).withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.receipt_long, color: Color(0xFF81C784), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Commercial Billing & Quotas',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.white38, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

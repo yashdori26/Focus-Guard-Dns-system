@@ -75,6 +75,27 @@ from server.enterprise.clickhouse_analytics import (
     ClickHouseAnalyticsEngine,
     get_clickhouse_engine
 )
+from server.enterprise.siem_ingest_gateway import (
+    SiemIngestGateway,
+    SiemIngestAlert,
+    SiemVendorType,
+    get_siem_ingest_gateway
+)
+from server.enterprise.threat_hunter import (
+    ThreatHunter,
+    ThreatHuntQuery,
+    ThreatHuntResult,
+    get_threat_hunter
+)
+from server.enterprise.policy_drift_auditor import (
+    PolicyDriftAuditor,
+    PolicyDriftRecord,
+    get_policy_drift_auditor
+)
+from server.enterprise.pii_redactor import (
+    PiiRedactor,
+    get_pii_redactor
+)
 
 logger = logging.getLogger("FocusDNS.Enterprise.ApiRouter")
 
@@ -98,6 +119,10 @@ class EnterpriseApiDispatcher:
         sso: Optional[SamlOidcAuthenticator] = None,
         metering: Optional[UsageMeteringEngine] = None,
         clickhouse: Optional[ClickHouseAnalyticsEngine] = None,
+        siem_gateway: Optional[SiemIngestGateway] = None,
+        threat_hunter: Optional[ThreatHunter] = None,
+        drift_auditor: Optional[PolicyDriftAuditor] = None,
+        pii_redactor: Optional[PiiRedactor] = None,
     ):
         self.rbac = rbac or get_rbac_engine()
         self.tenants = tenants or get_tenant_manager()
@@ -110,6 +135,10 @@ class EnterpriseApiDispatcher:
         self.sso = sso or get_sso_authenticator()
         self.metering = metering or get_metering_engine()
         self.clickhouse = clickhouse or get_clickhouse_engine()
+        self.siem_gateway = siem_gateway or get_siem_ingest_gateway()
+        self.threat_hunter = threat_hunter or get_threat_hunter()
+        self.drift_auditor = drift_auditor or get_policy_drift_auditor()
+        self.pii_redactor = pii_redactor or get_pii_redactor()
 
     def _extract_authenticated_user(self, headers: Dict[str, str]) -> Optional[EnterpriseUser]:
         auth_header = headers.get("Authorization", headers.get("authorization", ""))
@@ -334,7 +363,75 @@ class EnterpriseApiDispatcher:
         if clean_path in ("/api/v1/enterprise/clickhouse/stats", "/api/enterprise/clickhouse/stats"):
             return 200, {"success": True, "stats": self.clickhouse.get_metrics()}
 
+        # 12. Inbound SIEM Ingest Alerts & Telemetry
+        if clean_path in ("/api/v1/enterprise/siem/alerts", "/api/enterprise/siem/alerts"):
+            limit = int(params.get("limit", [50])[0])
+            tenant_id = params.get("tenant_id", [""])[0] or None
+            alerts = self.siem_gateway.get_recent_alerts(limit=limit, tenant_id=tenant_id)
+            return 200, {"success": True, "count": len(alerts), "alerts": alerts}
+
+        if clean_path in ("/api/v1/enterprise/siem/telemetry", "/api/enterprise/siem/telemetry"):
+            return 200, {"success": True, "telemetry": self.siem_gateway.get_telemetry()}
+
+        # 13. Threat Hunter Device Timeline
+        if clean_path in ("/api/v1/enterprise/threat-hunter/timeline", "/api/enterprise/threat-hunter/timeline"):
+            tenant_id = params.get("tenant_id", [""])[0]
+            device_id = params.get("device_id", [""])[0]
+            if not tenant_id or not device_id:
+                return 400, {"success": False, "error": "Missing required 'tenant_id' or 'device_id'"}
+            window_min = int(params.get("window_minutes", [30])[0])
+            timeline = self.threat_hunter.reconstruct_device_timeline(
+                tenant_id=tenant_id,
+                device_id=device_id,
+                window_minutes=window_min
+            )
+            return 200, {"success": True, "timeline": timeline}
+
+        # 14. Fleet Policy Drift & Compliance
+        if clean_path in ("/api/v1/enterprise/compliance/drift", "/api/enterprise/compliance/drift"):
+            tenant_id = params.get("tenant_id", [""])[0]
+            if not tenant_id:
+                return 400, {"success": False, "error": "Missing required 'tenant_id'"}
+            report = self.drift_auditor.generate_compliance_report(tenant_id)
+            return 200, {"success": True, "report": report.to_dict()}
+
+        # 15. Billing Summary & Invoices
+        if clean_path in ("/api/v1/enterprise/billing/summary", "/api/enterprise/billing/summary"):
+            org_id = params.get("org_id", [""])[0]
+            if not org_id:
+                return 400, {"success": False, "error": "Missing parameter: 'org_id'"}
+            usage = self.metering.get_current_usage(org_id)
+            inv = self.metering.generate_signed_invoice(org_id)
+            return 200, {
+                "success": True,
+                "org_id": org_id,
+                "usage": usage,
+                "current_invoice": inv
+            }
+
+        # 16. PII Redacted Query Analytics View
+        if clean_path in ("/api/v1/enterprise/analytics/redacted", "/api/enterprise/analytics/redacted"):
+            tenant_id = params.get("tenant_id", [""])[0]
+            if not tenant_id:
+                return 400, {"success": False, "error": "Missing parameter: 'tenant_id'"}
+            role_str = params.get("role", ["COMPLIANCE_AUDITOR"])[0]
+            limit = int(params.get("limit", [50])[0])
+            role = RoleTier.from_str(role_str)
+            raw_events = self.threat_hunter._fetch_columnar_events(
+                tenant_id=tenant_id,
+                start_us=0,
+                end_us=int(time.time() * 1_000_000),
+                limit=limit
+            )
+            redacted = self.pii_redactor.redact_dataset(
+                raw_events,
+                viewer_role=role,
+                tenant_id=tenant_id
+            )
+            return 200, {"success": True, "count": len(redacted), "events": redacted}
+
         return None
+
 
     def handle_post(
         self,
@@ -638,7 +735,85 @@ class EnterpriseApiDispatcher:
             )
             return 200, {"success": True, "quota_warnings": warnings}
 
+        # 12. Inbound SIEM Webhooks (Splunk, Datadog, Elastic)
+        if clean_path in ("/api/v1/enterprise/siem/webhook/splunk", "/api/enterprise/siem/webhook/splunk"):
+            ok, msg, alert = self.siem_gateway.ingest_splunk_alert(payload, headers=headers)
+            status = 200 if ok else 401
+            return status, {"success": ok, "message": msg, "alert": alert.to_dict() if alert else None}
+
+        if clean_path in ("/api/v1/enterprise/siem/webhook/datadog", "/api/enterprise/siem/webhook/datadog"):
+            ok, msg, alert = self.siem_gateway.ingest_datadog_alert(payload, headers=headers)
+            status = 200 if ok else 401
+            return status, {"success": ok, "message": msg, "alert": alert.to_dict() if alert else None}
+
+        if clean_path in ("/api/v1/enterprise/siem/webhook/elastic", "/api/enterprise/siem/webhook/elastic"):
+            ok, msg, alert = self.siem_gateway.ingest_elastic_alert(payload, headers=headers)
+            status = 200 if ok else 401
+            return status, {"success": ok, "message": msg, "alert": alert.to_dict() if alert else None}
+
+        # 13. Threat Hunter Retrospective & IOC Scanning
+        if clean_path in ("/api/v1/enterprise/threat-hunter/query", "/api/enterprise/threat-hunter/query"):
+            tenant_id = payload.get("tenant_id", "")
+            if not tenant_id:
+                return 400, {"success": False, "error": "Missing 'tenant_id'"}
+            th_query = ThreatHuntQuery(
+                tenant_id=tenant_id,
+                start_time_us=payload.get("start_time_us"),
+                end_time_us=payload.get("end_time_us"),
+                sub_tenant_id=payload.get("sub_tenant_id"),
+                device_id=payload.get("device_id"),
+                cidr_subnet=payload.get("cidr_subnet"),
+                domain_pattern=payload.get("domain_pattern"),
+                min_entropy=payload.get("min_entropy"),
+                threat_type=payload.get("threat_type"),
+                action=payload.get("action"),
+                limit=int(payload.get("limit", 200))
+            )
+            result = self.threat_hunter.execute_hunt(th_query)
+            return 200, {"success": True, "result": result.to_dict()}
+
+        if clean_path in ("/api/v1/enterprise/threat-hunter/ioc-scan", "/api/enterprise/threat-hunter/ioc-scan"):
+            tenant_id = payload.get("tenant_id", "")
+            iocs = payload.get("iocs", [])
+            if not tenant_id or not isinstance(iocs, list):
+                return 400, {"success": False, "error": "Missing 'tenant_id' or 'iocs' list"}
+            lookback = int(payload.get("lookback_seconds", 86400))
+            hits = self.threat_hunter.scan_ioc_batch(tenant_id, iocs, lookback_seconds=lookback)
+            return 200, {"success": True, "hits_count": len(hits), "hits": hits}
+
+        # 14. Policy Drift Remediation Push
+        if clean_path in ("/api/v1/enterprise/compliance/drift/remediate", "/api/enterprise/compliance/drift/remediate"):
+            device_id = payload.get("device_id", "")
+            record_id = payload.get("record_id", "")
+            target_record = None
+            if record_id and record_id in self.drift_auditor._drift_records:
+                target_record = self.drift_auditor._drift_records[record_id]
+            elif device_id:
+                for r in self.drift_auditor._drift_records.values():
+                    if r.device_id == device_id and not r.remediated:
+                        target_record = r
+                        break
+
+            if not target_record:
+                return 404, {"success": False, "error": f"No active drift record found for target"}
+
+            ok = self.drift_auditor.remediate_device(target_record)
+            return 200 if ok else 500, {"success": ok, "record": target_record.to_dict()}
+
+        # 15. Invoice Signature Verification
+        if clean_path in ("/api/v1/enterprise/billing/invoices/verify", "/api/enterprise/billing/invoices/verify"):
+            invoice = payload.get("invoice")
+            if not invoice or not isinstance(invoice, dict):
+                return 400, {"success": False, "error": "Missing 'invoice' object"}
+            is_valid = self.metering.verify_invoice_signature(invoice)
+            return 200, {
+                "success": is_valid,
+                "verified": is_valid,
+                "certificate_status": "VALID_HMAC_SHA256" if is_valid else "TAMPERING_DETECTED"
+            }
+
         return None
+
 
 
 # Global Singleton

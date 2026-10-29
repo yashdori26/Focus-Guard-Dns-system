@@ -762,7 +762,267 @@ class EnterpriseService {
     return UsageInvoiceModel.fromJson(Map<String, dynamic>.from(body['invoice'] as Map));
   }
 
+  // 12. Inbound SIEM Ingest Alerts
+  Future<List<SiemIngestAlertModel>> fetchSiemIngestAlerts({int limit = 50, String? tenantId}) async {
+    if (mockOnly) {
+      final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      return [
+        SiemIngestAlertModel(
+          alertId: 'splunk_c2_alert_882',
+          vendor: 'SPLUNK',
+          tenantId: tenantId ?? 'org_springfield',
+          deviceId: 'chromebook_03',
+          clientIp: '10.0.1.42',
+          indicatorDomain: 'malicious-c2-beacon.xyz',
+          threatType: 'COMMAND_AND_CONTROL',
+          severity: 'CRITICAL',
+          riskScore: 92.5,
+          receivedAt: nowSec - 90,
+          deduplicated: false,
+        ),
+        SiemIngestAlertModel(
+          alertId: 'datadog_dga_alert_911',
+          vendor: 'DATADOG',
+          tenantId: tenantId ?? 'org_springfield',
+          deviceId: 'win11_laptop_12',
+          clientIp: '192.168.1.88',
+          indicatorDomain: 'xk9284lz789.biz',
+          threatType: 'DGA_ANOMALY',
+          severity: 'HIGH',
+          riskScore: 84.0,
+          receivedAt: nowSec - 240,
+          deduplicated: true,
+        ),
+      ];
+    }
+    final tenantParam = tenantId != null ? '&tenant_id=$tenantId' : '';
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/siem/alerts?limit=$limit$tenantParam');
+    try {
+      final res = await _client.get(uri, headers: _buildHeaders());
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final raw = body['alerts'] as List? ?? [];
+        return raw.map((e) => SiemIngestAlertModel.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // 13. Threat Hunter Retrospective & Forensic Queries
+  Future<ThreatHuntResultModel> executeThreatHunt(ThreatHuntQueryModel query) async {
+    if (mockOnly) {
+      return ThreatHuntResultModel(
+        tenantId: query.tenantId,
+        totalMatches: 2,
+        executionTimeMs: 4.82,
+        dgaAnomalyCount: 1,
+        records: [
+          ThreatHuntResultRecordModel(
+            timestampUs: DateTime.now().millisecondsSinceEpoch * 1000 - 60000000,
+            tenantId: query.tenantId,
+            subTenantId: 'unit_science',
+            deviceId: 'chromebook_03',
+            clientIp: '10.0.1.42',
+            domain: 'bcdfghjklmnpqrstvwxyz.org',
+            qtype: 'A',
+            rcode: 'NOERROR',
+            action: 'BLOCK',
+            threatType: 'DGA_MALWARE',
+            category: 'Malware',
+            latencyUs: 1400,
+            bytesTransferred: 120,
+            shannonEntropy: 4.12,
+            vowelRatio: 0.05,
+            isDgaCandidate: true,
+            isPunycode: false,
+          ),
+          ThreatHuntResultRecordModel(
+            timestampUs: DateTime.now().millisecondsSinceEpoch * 1000 - 30000000,
+            tenantId: query.tenantId,
+            subTenantId: 'unit_science',
+            deviceId: 'chromebook_03',
+            clientIp: '10.0.1.42',
+            domain: 'google.com',
+            qtype: 'A',
+            rcode: 'NOERROR',
+            action: 'ALLOW',
+            threatType: 'NONE',
+            category: 'Search',
+            latencyUs: 450,
+            bytesTransferred: 64,
+            shannonEntropy: 2.15,
+            vowelRatio: 0.50,
+            isDgaCandidate: false,
+            isPunycode: false,
+          ),
+        ],
+      );
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/threat-hunter/query');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode(query.toJson()),
+    );
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return ThreatHuntResultModel.fromJson(Map<String, dynamic>.from(body['result'] as Map));
+  }
+
+  // 14. Endpoint Chronological DNS Timeline
+  Future<EndpointDnsTimelineModel> fetchEndpointTimeline({
+    required String tenantId,
+    required String deviceId,
+    int windowMinutes = 30,
+  }) async {
+    if (mockOnly) {
+      final nowUs = DateTime.now().millisecondsSinceEpoch * 1000;
+      return EndpointDnsTimelineModel(
+        tenantId: tenantId,
+        deviceId: deviceId,
+        timeWindowMinutes: windowMinutes,
+        totalQueriesRecorded: 3,
+        burstCount: 1,
+        suspectedBeacons: [
+          {
+            'domain': 'c2-beacon.badnet.cc',
+            'occurrences': 5,
+            'avg_interval_seconds': 10.0,
+            'jitter_ratio': 0.05,
+            'classification': 'REGULAR_HEARTBEAT_BEACON'
+          }
+        ],
+        timeline: [
+          DnsTimelineEntryModel(
+            timestampUs: nowUs - 20000000,
+            domain: 'c2-beacon.badnet.cc',
+            clientIp: '10.0.1.42',
+            action: 'BLOCK',
+            threatType: 'C2',
+          ),
+          DnsTimelineEntryModel(
+            timestampUs: nowUs - 10000000,
+            domain: 'c2-beacon.badnet.cc',
+            clientIp: '10.0.1.42',
+            action: 'BLOCK',
+            threatType: 'C2',
+          ),
+          DnsTimelineEntryModel(
+            timestampUs: nowUs,
+            domain: 'c2-beacon.badnet.cc',
+            clientIp: '10.0.1.42',
+            action: 'BLOCK',
+            threatType: 'C2',
+          ),
+        ],
+      );
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/threat-hunter/timeline?tenant_id=$tenantId&device_id=$deviceId&window_minutes=$windowMinutes');
+    final res = await _client.get(uri, headers: _buildHeaders());
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return EndpointDnsTimelineModel.fromJson(Map<String, dynamic>.from(body['timeline'] as Map));
+  }
+
+  // 15. Policy Drift & Compliance
+  Future<TenantComplianceReportModel> fetchComplianceDriftReport(String tenantId) async {
+    if (mockOnly) {
+      return TenantComplianceReportModel(
+        tenantId: tenantId,
+        totalDevices: 48,
+        compliantDevices: 46,
+        driftedDevices: 2,
+        complianceScore: 95.83,
+        generatedAt: DateTime.now().millisecondsSinceEpoch / 1000.0,
+        drifts: [
+          PolicyDriftRecordModel(
+            recordId: 'drift_chromebook_09_1',
+            tenantId: tenantId,
+            fleetId: 'flt_chromebooks',
+            deviceId: 'chromebook_09',
+            driftType: 'EXTERNAL_DNS_BYPASS',
+            expectedPolicyHash: '7a9f82bc4e10',
+            reportedPolicyHash: '7a9f82bc4e10',
+            details: 'Unauthorized public DNS resolvers configured: [8.8.8.8]',
+            detectedAt: DateTime.now().millisecondsSinceEpoch / 1000.0 - 180,
+            remediated: false,
+          ),
+          PolicyDriftRecordModel(
+            recordId: 'drift_laptop_12_2',
+            tenantId: tenantId,
+            fleetId: 'flt_windows_laptops',
+            deviceId: 'win11_laptop_12',
+            driftType: 'HASH_MISMATCH',
+            expectedPolicyHash: '7a9f82bc4e10',
+            reportedPolicyHash: 'outdated_hash_441',
+            details: 'Policy hash mismatch: expected=7a9f82bc, reported=outdated',
+            detectedAt: DateTime.now().millisecondsSinceEpoch / 1000.0 - 600,
+            remediated: true,
+            remediatedAt: DateTime.now().millisecondsSinceEpoch / 1000.0 - 580,
+          ),
+        ],
+      );
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/compliance/drift?tenant_id=$tenantId');
+    final res = await _client.get(uri, headers: _buildHeaders());
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return TenantComplianceReportModel.fromJson(Map<String, dynamic>.from(body['report'] as Map));
+  }
+
+  Future<bool> remediatePolicyDrift({required String deviceId, String? recordId}) async {
+    if (mockOnly) return true;
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/compliance/drift/remediate');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({
+        'device_id': deviceId,
+        if (recordId != null) 'record_id': recordId,
+      }),
+    );
+    return res.statusCode == 200;
+  }
+
+  // 16. Commercial Billing Summary & Invoice Verification
+  Future<BillingSummaryModel> fetchBillingSummary(String orgId) async {
+    if (mockOnly) {
+      return BillingSummaryModel(
+        orgId: orgId,
+        planTier: 'ENTERPRISE',
+        activeDevices: 480,
+        maxDevices: 500,
+        totalQueriesMonth: 4820000,
+        peakQps: 1840.5,
+        currentCostUsd: 580.75,
+        isQuotaExceeded: false,
+        warnings: const ['Organization active devices at 96% of quota.'],
+      );
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/billing/summary?org_id=$orgId');
+    final res = await _client.get(uri, headers: _buildHeaders());
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return BillingSummaryModel.fromJson(body);
+  }
+
+  Future<bool> verifyInvoiceHmacCertificate(Map<String, dynamic> invoiceJson) async {
+    if (mockOnly) {
+      final charges = invoiceJson['charges_usd'] as Map? ?? {};
+      final total = (charges['total'] as num?)?.toDouble() ?? 0.0;
+      if (total > 10000.0 || (invoiceJson['signature_sha256'] as String? ?? '').isEmpty) {
+        return false;
+      }
+      return true;
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/billing/invoices/verify');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({'invoice': invoiceJson}),
+    );
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body['verified'] as bool? ?? false;
+  }
+
   void dispose() {
+
     _client.close();
   }
 }

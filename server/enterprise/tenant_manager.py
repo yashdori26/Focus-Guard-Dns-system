@@ -414,6 +414,67 @@ class TenantManager:
                 device_count=row["device_count"]
             )
 
+    def list_fleets(self, org_id: str) -> List[DeviceFleet]:
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM device_fleets WHERE org_id = ?", (org_id,))
+            rows = cursor.fetchall()
+            conn.close()
+            return [
+                DeviceFleet(
+                    fleet_id=r["fleet_id"],
+                    unit_id=r["unit_id"],
+                    org_id=r["org_id"],
+                    name=r["name"],
+                    platform=r["platform"],
+                    policy_profile_id=r["policy_profile_id"],
+                    is_locked=bool(r["is_locked"]),
+                    locked_until=r["locked_until"],
+                    device_count=r["device_count"]
+                )
+                for r in rows
+            ]
+
+    def list_organizations(self) -> List[Organization]:
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM organizations WHERE is_active = 1")
+            rows = cursor.fetchall()
+            conn.close()
+            result = []
+            for r in rows:
+                q = TenantQuota(
+                    max_devices=r["max_devices"],
+                    max_qps=r["max_qps"],
+                    retention_days=r["retention_days"],
+                    allow_siem=bool(r["allow_siem"]),
+                    allow_custom_dga=bool(r["allow_custom_dga"])
+                )
+                result.append(Organization(
+                    org_id=r["org_id"],
+                    name=r["name"],
+                    domain=r["domain"],
+                    plan_tier=r["plan_tier"],
+                    is_active=bool(r["is_active"]),
+                    created_at=r["created_at"],
+                    quota=q
+                ))
+            return result
+
+    def increment_device_count(self, fleet_id: str, delta: int = 1) -> None:
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE device_fleets SET device_count = MAX(0, device_count + ?) WHERE fleet_id = ?",
+                (delta, fleet_id)
+            )
+            conn.commit()
+            conn.close()
+
+
     def _update_fleet_lock_status(self, fleet_id: str, is_locked: bool, locked_until: Optional[float]) -> None:
         with self._lock:
             conn = self._get_connection()

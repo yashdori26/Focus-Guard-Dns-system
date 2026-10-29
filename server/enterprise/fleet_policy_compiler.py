@@ -18,6 +18,7 @@ import collections
 import hashlib
 import json
 import logging
+import threading
 from typing import Dict, List, Set, Optional, Tuple, Any
 
 from server.enterprise.tenant_manager import Organization, TenantUnit, DeviceFleet
@@ -113,6 +114,38 @@ class FleetPolicyCompiler:
     and formats payloads for instantaneous WebSocket distribution.
     """
 
+    def __init__(self):
+        import threading
+        self._lock = threading.RLock()
+        self._compiled_cache: Dict[str, CompiledFleetPolicy] = {}
+
+    def get_compiled_policy(self, fleet_id: str) -> Optional[CompiledFleetPolicy]:
+        with self._lock:
+            return self._compiled_cache.get(fleet_id)
+
+    def get_fleet_hash(self, fleet_id: str) -> str:
+        """Compute SHA256 hash of compiled fleet policy."""
+        with self._lock:
+            p = self._compiled_cache.get(fleet_id)
+            if p:
+                raw = json.dumps(p.to_dict(), sort_keys=True).encode("utf-8")
+                return hashlib.sha256(raw).hexdigest()
+            # Deterministic default hash for fleet if not compiled yet
+            return hashlib.sha256(f"fleet_default_{fleet_id}".encode("utf-8")).hexdigest()
+
+    def get_fleet_rules(self, fleet_id: str) -> Dict[str, str]:
+        """Return flattened rule dictionary for fleet."""
+        with self._lock:
+            p = self._compiled_cache.get(fleet_id)
+            if not p:
+                return {}
+            rules: Dict[str, str] = {}
+            for dom in p.whitelisted_domains:
+                rules[dom] = "ALLOW"
+            for dom in p.blocked_domains:
+                rules[dom] = "BLOCK"
+            return rules
+
     def compile(
         self,
         org: Organization,
@@ -177,7 +210,7 @@ class FleetPolicyCompiler:
         lock_duration = fleet.remaining_lock_seconds
 
         import time
-        return CompiledFleetPolicy(
+        compiled = CompiledFleetPolicy(
             fleet_id=fleet.fleet_id,
             org_id=org.org_id,
             unit_id=unit.unit_id,
@@ -190,3 +223,21 @@ class FleetPolicyCompiler:
             is_strict_mode=is_strict,
             lock_duration_seconds=lock_duration
         )
+        with self._lock:
+            self._compiled_cache[fleet.fleet_id] = compiled
+        return compiled
+
+
+
+# Global Singleton
+_global_policy_compiler: Optional[FleetPolicyCompiler] = None
+_compiler_lock = threading.Lock()
+
+
+def get_fleet_policy_compiler() -> FleetPolicyCompiler:
+    global _global_policy_compiler
+    with _compiler_lock:
+        if _global_policy_compiler is None:
+            _global_policy_compiler = FleetPolicyCompiler()
+        return _global_policy_compiler
+

@@ -35,6 +35,13 @@ class RoleTier(str, Enum):
     TEACHER_PARENT = "TEACHER_PARENT"
     COMPLIANCE_AUDITOR = "COMPLIANCE_AUDITOR"
 
+    @classmethod
+    def from_str(cls, val: str) -> "RoleTier":
+        try:
+            return cls(val.upper())
+        except Exception:
+            return cls.TEAM_LEAD
+
     @property
     def level(self) -> int:
         levels = {
@@ -45,6 +52,7 @@ class RoleTier(str, Enum):
             RoleTier.COMPLIANCE_AUDITOR: 20
         }
         return levels.get(self, 0)
+
 
 
 class Permission(str, Enum):
@@ -295,6 +303,30 @@ class RbacEngine:
                 status="SUCCESS"
             )
             return new_user
+
+    def create_user(
+        self,
+        username: str,
+        email: str,
+        role: RoleTier = RoleTier.TEAM_LEAD,
+        tenant_id: str = "default",
+        password_hash: Optional[str] = None,
+        password: Optional[str] = None,
+        sub_tenant_ids: Optional[List[str]] = None,
+        actor_user_id: str = "system",
+        user_id: Optional[str] = None
+    ) -> EnterpriseUser:
+        """Alias for register_user."""
+        return self.register_user(
+            username=username,
+            email=email,
+            password=password,
+            role=role,
+            tenant_id=tenant_id,
+            sub_tenant_ids=sub_tenant_ids,
+            actor_user_id=actor_user_id,
+            user_id=user_id
+        )
 
     def get_user(self, user_id: str) -> Optional[EnterpriseUser]:
         with self._lock:

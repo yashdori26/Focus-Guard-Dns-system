@@ -309,6 +309,10 @@ class FleetWebSocketServer:
 
         return msg_id
 
+    def push_to_device(self, device_id: str, payload: Dict[str, Any]) -> str:
+        """Alias for send_to_device."""
+        return self.send_to_device(device_id, payload)
+
     def broadcast_to_fleet(self, fleet_id: str, payload: Dict[str, Any]) -> int:
         """Fans out a policy message across all devices in a fleet."""
         with self._lock:

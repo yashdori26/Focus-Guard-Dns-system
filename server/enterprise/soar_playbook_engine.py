@@ -185,31 +185,48 @@ class SoarPlaybookEngine:
 
     def evaluate_threat_event(
         self,
-        tenant_id: str,
-        device_id: str,
-        domain: str,
-        threat_type: str,
+        tenant_id: Any,
+        device_id: Optional[str] = None,
+        domain: Optional[str] = None,
+        threat_type: Optional[str] = None,
         risk_score: float = 90.0,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Optional[SoarIncident]:
         """
         Evaluates an inbound threat catch and triggers associated defensive playbooks.
+        Accepts either positional arguments or a dictionary payload.
         """
-        clean_domain = domain.lower().strip(".")
+        if isinstance(tenant_id, dict):
+            d = tenant_id
+            tenant_id = d.get("tenant_id", "")
+            device_id = d.get("device_id", "")
+            domain = d.get("domain", "")
+            threat_type = d.get("threat_type", "")
+            risk_score = float(d.get("risk_score", 90.0))
+            metadata = d.get("metadata") or {
+                k: v for k, v in d.items()
+                if k not in ("tenant_id", "device_id", "domain", "threat_type", "risk_score")
+            }
+
+        clean_domain = (domain or "").lower().strip(".")
         metadata = metadata or {}
+        upper_threat = (threat_type or "").upper()
 
         trigger_type: Optional[SoarTriggerType] = None
-        if threat_type in ("PHISHING", "PHISHING_ZERO_HOUR") and risk_score >= 80.0:
+        if any(w in upper_threat for w in ("PHISHING", "C2", "COMMAND_AND_CONTROL", "MALWARE")) and risk_score >= 70.0:
             trigger_type = SoarTriggerType.ZERO_HOUR_PHISHING
-        elif threat_type in ("DGA", "DGA_MALWARE"):
+        elif any(w in upper_threat for w in ("DGA", "STORM", "ANOMALY")):
             trigger_type = SoarTriggerType.DGA_STORM
-        elif threat_type in ("TUNNELING", "DNS_TUNNELING"):
+        elif any(w in upper_threat for w in ("TUNNEL", "DNS_TUNNELING", "EXFIL")):
             trigger_type = SoarTriggerType.DNS_TUNNELING
-        elif threat_type == "STRICT_TAMPER":
+        elif any(w in upper_threat for w in ("TAMPER", "DRIFT", "BYPASS")):
             trigger_type = SoarTriggerType.STRICT_MODE_TAMPER
+        elif risk_score >= 85.0:
+            trigger_type = SoarTriggerType.ZERO_HOUR_PHISHING
 
         if not trigger_type:
             return None
+
 
         with self._lock:
             incident_id = f"inc_{secrets.token_hex(6)}"

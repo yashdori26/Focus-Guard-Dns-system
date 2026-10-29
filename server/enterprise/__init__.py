@@ -106,6 +106,31 @@ from server.enterprise.usage_metering import (
     UsageMeteringEngine,
     get_metering_engine,
 )
+from server.enterprise.siem_ingest_gateway import (
+    SiemIngestGateway,
+    SiemIngestAlert,
+    SiemVendorType,
+    get_siem_ingest_gateway,
+)
+from server.enterprise.threat_hunter import (
+    ThreatHunter,
+    ThreatHuntQuery,
+    ThreatHuntResult,
+    get_threat_hunter,
+    calculate_shannon_entropy,
+    is_dga_candidate,
+)
+from server.enterprise.policy_drift_auditor import (
+    PolicyDriftAuditor,
+    PolicyDriftRecord,
+    TenantComplianceReport,
+    DriftType,
+    get_policy_drift_auditor,
+)
+from server.enterprise.pii_redactor import (
+    PiiRedactor,
+    get_pii_redactor,
+)
 
 __all__ = [
     "ColumnarAnalyticsEngine",
@@ -166,4 +191,22 @@ __all__ = [
     "SoarTriggerType",
     "UsageMeteringEngine",
     "get_metering_engine",
+    "SiemIngestGateway",
+    "SiemIngestAlert",
+    "SiemVendorType",
+    "get_siem_ingest_gateway",
+    "ThreatHunter",
+    "ThreatHuntQuery",
+    "ThreatHuntResult",
+    "get_threat_hunter",
+    "calculate_shannon_entropy",
+    "is_dga_candidate",
+    "PolicyDriftAuditor",
+    "PolicyDriftRecord",
+    "TenantComplianceReport",
+    "DriftType",
+    "get_policy_drift_auditor",
+    "PiiRedactor",
+    "get_pii_redactor",
 ]
+
