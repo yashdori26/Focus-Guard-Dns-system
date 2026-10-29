@@ -74,6 +74,38 @@ from server.engine.enterprise_pipeline_hook import (
     EnterprisePipelineHook,
     get_enterprise_pipeline_hook,
 )
+from server.enterprise.clickhouse_analytics import (
+    ClickHouseAnalyticsEngine,
+    get_clickhouse_engine,
+    TDigest,
+    CountMinSketch,
+)
+from server.enterprise.scim_directory_sync import (
+    ScimDirectorySyncEngine,
+    get_scim_engine,
+)
+from server.enterprise.saml_oidc_authenticator import (
+    SamlOidcAuthenticator,
+    get_sso_authenticator,
+    SamlIdentityProviderConfig,
+    OidcProviderConfig,
+)
+from server.enterprise.classroom_orchestrator import (
+    ClassroomOrchestrator,
+    get_classroom_orchestrator,
+    ClassroomFocusMode,
+    ClassroomSession,
+)
+from server.enterprise.soar_playbook_engine import (
+    SoarPlaybookEngine,
+    get_soar_engine,
+    SoarIncident,
+    SoarTriggerType,
+)
+from server.enterprise.usage_metering import (
+    UsageMeteringEngine,
+    get_metering_engine,
+)
 
 __all__ = [
     "ColumnarAnalyticsEngine",
@@ -114,4 +146,24 @@ __all__ = [
     "DeviceAgentState",
     "EnterprisePipelineHook",
     "get_enterprise_pipeline_hook",
+    "ClickHouseAnalyticsEngine",
+    "get_clickhouse_engine",
+    "TDigest",
+    "CountMinSketch",
+    "ScimDirectorySyncEngine",
+    "get_scim_engine",
+    "SamlOidcAuthenticator",
+    "get_sso_authenticator",
+    "SamlIdentityProviderConfig",
+    "OidcProviderConfig",
+    "ClassroomOrchestrator",
+    "get_classroom_orchestrator",
+    "ClassroomFocusMode",
+    "ClassroomSession",
+    "SoarPlaybookEngine",
+    "get_soar_engine",
+    "SoarIncident",
+    "SoarTriggerType",
+    "UsageMeteringEngine",
+    "get_metering_engine",
 ]

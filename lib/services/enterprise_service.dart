@@ -544,6 +544,224 @@ class EnterpriseService {
     }
   }
 
+  // 8. Classroom & Fleet Orchestrator
+  Future<List<ClassroomSessionModel>> fetchClassroomSessions({String? orgId}) async {
+    if (mockOnly) {
+      return [
+        ClassroomSessionModel(
+          sessionId: 'cls_period_3_bio',
+          orgId: orgId ?? 'org_springfield',
+          unitId: 'unit_lincoln_high',
+          fleetId: 'flt_cart_4b',
+          classroomName: 'Biology 101 - Period 3',
+          teacherUserId: 'usr_teacher_smith',
+          mode: ClassroomFocusMode.normalProtection,
+          durationSeconds: 2700,
+          remainingSeconds: 1840,
+          isActive: true,
+          studentCount: 28,
+          students: const [
+            StudentDeviceModel(
+              deviceId: 'chromebook_01',
+              studentName: 'Alex Johnson',
+              studentId: 'STU-9401',
+              clientIp: '192.168.1.101',
+              lastQueryTime: 1761700050.0,
+              lastQueriedDomain: 'khanacademy.org',
+              distractionCount: 0,
+              isLocked: false,
+              handRaised: false,
+            ),
+            StudentDeviceModel(
+              deviceId: 'chromebook_02',
+              studentName: 'Emma Watson',
+              studentId: 'STU-9402',
+              clientIp: '192.168.1.102',
+              lastQueryTime: 1761700045.0,
+              lastQueriedDomain: 'canvas.instructure.com',
+              distractionCount: 0,
+              isLocked: false,
+              handRaised: true,
+            ),
+            StudentDeviceModel(
+              deviceId: 'chromebook_03',
+              studentName: 'Liam Miller',
+              studentId: 'STU-9403',
+              clientIp: '192.168.1.103',
+              lastQueryTime: 1761700030.0,
+              lastQueriedDomain: 'roblox.com',
+              distractionCount: 2,
+              isLocked: true,
+              handRaised: false,
+            ),
+          ],
+          distractionAlertCount: 2,
+          allowedExamDomains: const ['canvas.instructure.com', 'exam.school.edu'],
+        )
+      ];
+    }
+
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/classroom/sessions');
+    try {
+      final res = await _client.get(uri, headers: _buildHeaders());
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final raw = body['sessions'] as List? ?? [];
+        return raw.map((e) => ClassroomSessionModel.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  Future<ClassroomSessionModel> startClassroomSession({
+    required String orgId,
+    required String unitId,
+    required String fleetId,
+    required String classroomName,
+    int durationSeconds = 2700,
+    ClassroomFocusMode mode = ClassroomFocusMode.normalProtection,
+  }) async {
+    if (mockOnly) {
+      return ClassroomSessionModel(
+        sessionId: 'cls_${DateTime.now().millisecondsSinceEpoch}',
+        orgId: orgId,
+        unitId: unitId,
+        fleetId: fleetId,
+        classroomName: classroomName,
+        teacherUserId: 'usr_teacher_smith',
+        mode: mode,
+        durationSeconds: durationSeconds,
+        remainingSeconds: durationSeconds,
+        isActive: true,
+        studentCount: 30,
+        students: const [],
+        distractionAlertCount: 0,
+        allowedExamDomains: const ['canvas.instructure.com', 'exam.school.edu'],
+      );
+    }
+
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/classroom/start');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({
+        'org_id': orgId,
+        'unit_id': unitId,
+        'fleet_id': fleetId,
+        'classroom_name': classroomName,
+        'duration_seconds': durationSeconds,
+        'mode': mode.wireName,
+      }),
+    );
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return ClassroomSessionModel.fromJson(Map<String, dynamic>.from(body['session'] as Map));
+  }
+
+  Future<bool> endClassroomSession(String sessionId) async {
+    if (mockOnly) return true;
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/classroom/end');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({'session_id': sessionId}),
+    );
+    return res.statusCode == 200;
+  }
+
+  Future<bool> setClassroomFocusMode(String sessionId, ClassroomFocusMode mode) async {
+    if (mockOnly) return true;
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/classroom/mode');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({'session_id': sessionId, 'mode': mode.wireName}),
+    );
+    return res.statusCode == 200;
+  }
+
+  // 9. SOAR Automated Threat Response
+  Future<List<SoarIncidentModel>> fetchSoarIncidents({int limit = 50}) async {
+    if (mockOnly) {
+      final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      return [
+        SoarIncidentModel(
+          incidentId: 'inc_84a91c',
+          timestamp: nowSec - 120,
+          tenantId: 'org_springfield',
+          deviceId: 'chromebook_03',
+          triggerType: 'ZERO_HOUR_PHISHING',
+          domain: 'login-credential-steal.xyz',
+          riskScore: 94.5,
+          actionsExecuted: const ['SNAPSHOT_FORENSICS', 'AUTO_BLACKLIST_DOMAIN', 'QUARANTINE_DEVICE'],
+          snapshotRecords: 24,
+          status: 'CONTAINED',
+        ),
+      ];
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/soar/incidents?limit=$limit');
+    try {
+      final res = await _client.get(uri, headers: _buildHeaders());
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final raw = body['incidents'] as List? ?? [];
+        return raw.map((e) => SoarIncidentModel.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> liftDeviceQuarantine(String deviceId) async {
+    if (mockOnly) return true;
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/soar/lift-quarantine');
+    final res = await _client.post(
+      uri,
+      headers: _buildHeaders(),
+      body: jsonEncode({'device_id': deviceId}),
+    );
+    return res.statusCode == 200;
+  }
+
+  // 10. SCIM 2.0 Directory Logs
+  Future<List<ScimProvisioningLogModel>> fetchScimProvisioningLogs({int limit = 50}) async {
+    if (mockOnly) {
+      final nowSec = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      return [
+        ScimProvisioningLogModel(
+          timestamp: nowSec - 600,
+          action: 'PROVISION_USER',
+          resourceId: 'usr_scim_123',
+          identifier: 'john.doe@springfield.k12.us',
+          details: 'Role=TEACHER_PARENT (Mapped from FocusDNS-Teachers)',
+        ),
+      ];
+    }
+    return [];
+  }
+
+  // 11. Commercial Billing & Invoicing
+  Future<UsageInvoiceModel> fetchUsageInvoice(String orgId) async {
+    if (mockOnly) {
+      return UsageInvoiceModel(
+        invoiceId: 'inv_org_springfield_2026_10_a9f1',
+        orgId: orgId,
+        orgName: 'Springfield Unified District',
+        planTier: 'EDUCATION_ENTERPRISE',
+        billingCycle: '2026-10',
+        generatedAt: DateTime.now().millisecondsSinceEpoch / 1000.0,
+        totalQueries: 4820000,
+        peakQps: 1840.5,
+        activeDevices: 480,
+        totalAmountUsd: 580.75,
+        signatureSha256: '9f83c18b4382e293847291849182736481729384719283749182736481928374',
+      );
+    }
+    final uri = Uri.parse('$baseUrl/api/v1/enterprise/metering/invoice?org_id=$orgId');
+    final res = await _client.get(uri, headers: _buildHeaders());
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return UsageInvoiceModel.fromJson(Map<String, dynamic>.from(body['invoice'] as Map));
+  }
+
   void dispose() {
     _client.close();
   }

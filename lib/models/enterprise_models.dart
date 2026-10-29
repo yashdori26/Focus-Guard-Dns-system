@@ -577,3 +577,322 @@ class FleetDeviceConnectionModel {
     'is_alive': isAlive,
   };
 }
+
+enum ClassroomFocusMode {
+  normalProtection,
+  restrictedResearch,
+  strictExamMode;
+
+  static ClassroomFocusMode fromString(String val) {
+    switch (val.toUpperCase()) {
+      case 'RESTRICTED_RESEARCH':
+        return ClassroomFocusMode.restrictedResearch;
+      case 'STRICT_EXAM_MODE':
+        return ClassroomFocusMode.strictExamMode;
+      default:
+        return ClassroomFocusMode.normalProtection;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ClassroomFocusMode.normalProtection:
+        return 'Standard Protection';
+      case ClassroomFocusMode.restrictedResearch:
+        return 'Restricted Research';
+      case ClassroomFocusMode.strictExamMode:
+        return 'Strict Exam Lockdown';
+    }
+  }
+
+  String get displayName => label;
+
+  String get wireName {
+    switch (this) {
+      case ClassroomFocusMode.normalProtection:
+        return 'NORMAL_PROTECTION';
+      case ClassroomFocusMode.restrictedResearch:
+        return 'RESTRICTED_RESEARCH';
+      case ClassroomFocusMode.strictExamMode:
+        return 'STRICT_EXAM_MODE';
+    }
+  }
+}
+
+@immutable
+class StudentDeviceModel {
+  final String deviceId;
+  final String studentName;
+  final String studentId;
+  final String clientIp;
+  final double lastQueryTime;
+  final String lastQueriedDomain;
+  final int distractionCount;
+  final bool isLocked;
+  final bool handRaised;
+
+  const StudentDeviceModel({
+    required this.deviceId,
+    required this.studentName,
+    required this.studentId,
+    required this.clientIp,
+    required this.lastQueryTime,
+    required this.lastQueriedDomain,
+    required this.distractionCount,
+    required this.isLocked,
+    required this.handRaised,
+  });
+
+  factory StudentDeviceModel.fromJson(Map<String, dynamic> json) {
+    return StudentDeviceModel(
+      deviceId: json['device_id'] as String? ?? '',
+      studentName: json['student_name'] as String? ?? '',
+      studentId: json['student_id'] as String? ?? '',
+      clientIp: json['client_ip'] as String? ?? '127.0.0.1',
+      lastQueryTime: (json['last_query_time'] as num?)?.toDouble() ?? 0.0,
+      lastQueriedDomain: json['last_queried_domain'] as String? ?? '',
+      distractionCount: json['distraction_count'] as int? ?? 0,
+      isLocked: json['is_locked'] as bool? ?? false,
+      handRaised: json['hand_raised'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'device_id': deviceId,
+    'student_name': studentName,
+    'student_id': studentId,
+    'client_ip': clientIp,
+    'last_query_time': lastQueryTime,
+    'last_queried_domain': lastQueriedDomain,
+    'distraction_count': distractionCount,
+    'is_locked': isLocked,
+    'hand_raised': handRaised,
+  };
+}
+
+@immutable
+class ClassroomSessionModel {
+  final String sessionId;
+  final String orgId;
+  final String unitId;
+  final String fleetId;
+  final String classroomName;
+  final String teacherUserId;
+  final ClassroomFocusMode mode;
+  final int durationSeconds;
+  final int remainingSeconds;
+  final bool isActive;
+  final int studentCount;
+  final List<StudentDeviceModel> students;
+  final int distractionAlertCount;
+  final List<String> allowedExamDomains;
+
+  const ClassroomSessionModel({
+    required this.sessionId,
+    required this.orgId,
+    required this.unitId,
+    required this.fleetId,
+    required this.classroomName,
+    required this.teacherUserId,
+    required this.mode,
+    required this.durationSeconds,
+    required this.remainingSeconds,
+    required this.isActive,
+    required this.studentCount,
+    required this.students,
+    required this.distractionAlertCount,
+    required this.allowedExamDomains,
+  });
+
+  factory ClassroomSessionModel.fromJson(Map<String, dynamic> json) {
+    final rawStudents = json['students'] as List? ?? [];
+    return ClassroomSessionModel(
+      sessionId: json['session_id'] as String? ?? '',
+      orgId: json['org_id'] as String? ?? '',
+      unitId: json['unit_id'] as String? ?? '',
+      fleetId: json['fleet_id'] as String? ?? '',
+      classroomName: json['classroom_name'] as String? ?? '',
+      teacherUserId: json['teacher_user_id'] as String? ?? '',
+      mode: ClassroomFocusMode.fromString(json['mode'] as String? ?? 'NORMAL_PROTECTION'),
+      durationSeconds: json['duration_seconds'] as int? ?? 2700,
+      remainingSeconds: json['remaining_seconds'] as int? ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      studentCount: json['student_count'] as int? ?? rawStudents.length,
+      students: rawStudents.map((s) => StudentDeviceModel.fromJson(Map<String, dynamic>.from(s as Map))).toList(),
+      distractionAlertCount: json['distraction_alert_count'] as int? ?? 0,
+      allowedExamDomains: (json['allowed_exam_domains'] as List?)?.map((e) => e.toString()).toList() ?? [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'session_id': sessionId,
+    'org_id': orgId,
+    'unit_id': unitId,
+    'fleet_id': fleetId,
+    'classroom_name': classroomName,
+    'teacher_user_id': teacherUserId,
+    'mode': mode.wireName,
+    'duration_seconds': durationSeconds,
+    'remaining_seconds': remainingSeconds,
+    'is_active': isActive,
+    'student_count': studentCount,
+    'students': students.map((s) => s.toJson()).toList(),
+    'distraction_alert_count': distractionAlertCount,
+    'allowed_exam_domains': allowedExamDomains,
+  };
+}
+
+@immutable
+class SoarIncidentModel {
+  final String incidentId;
+  final double timestamp;
+  final String tenantId;
+  final String deviceId;
+  final String triggerType;
+  final String domain;
+  final double riskScore;
+  final List<String> actionsExecuted;
+  final int snapshotRecords;
+  final String status;
+
+  const SoarIncidentModel({
+    required this.incidentId,
+    required this.timestamp,
+    required this.tenantId,
+    required this.deviceId,
+    required this.triggerType,
+    required this.domain,
+    required this.riskScore,
+    required this.actionsExecuted,
+    required this.snapshotRecords,
+    required this.status,
+  });
+
+  factory SoarIncidentModel.fromJson(Map<String, dynamic> json) {
+    return SoarIncidentModel(
+      incidentId: json['incident_id'] as String? ?? '',
+      timestamp: (json['timestamp'] as num?)?.toDouble() ?? 0.0,
+      tenantId: json['tenant_id'] as String? ?? '',
+      deviceId: json['device_id'] as String? ?? '',
+      triggerType: json['trigger_type'] as String? ?? '',
+      domain: json['domain'] as String? ?? '',
+      riskScore: (json['risk_score'] as num?)?.toDouble() ?? 0.0,
+      actionsExecuted: (json['actions_executed'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      snapshotRecords: json['snapshot_records'] as int? ?? 0,
+      status: json['status'] as String? ?? 'OPEN',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'incident_id': incidentId,
+    'timestamp': timestamp,
+    'tenant_id': tenantId,
+    'device_id': deviceId,
+    'trigger_type': triggerType,
+    'domain': domain,
+    'risk_score': riskScore,
+    'actions_executed': actionsExecuted,
+    'snapshot_records': snapshotRecords,
+    'status': status,
+  };
+}
+
+@immutable
+class ScimProvisioningLogModel {
+  final double timestamp;
+  final String action;
+  final String resourceId;
+  final String identifier;
+  final String details;
+
+  const ScimProvisioningLogModel({
+    required this.timestamp,
+    required this.action,
+    required this.resourceId,
+    required this.identifier,
+    required this.details,
+  });
+
+  factory ScimProvisioningLogModel.fromJson(Map<String, dynamic> json) {
+    return ScimProvisioningLogModel(
+      timestamp: (json['timestamp'] as num?)?.toDouble() ?? 0.0,
+      action: json['action'] as String? ?? '',
+      resourceId: json['resource_id'] as String? ?? '',
+      identifier: json['identifier'] as String? ?? '',
+      details: json['details'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'timestamp': timestamp,
+    'action': action,
+    'resource_id': resourceId,
+    'identifier': identifier,
+    'details': details,
+  };
+}
+
+@immutable
+class UsageInvoiceModel {
+  final String invoiceId;
+  final String orgId;
+  final String orgName;
+  final String planTier;
+  final String billingCycle;
+  final double generatedAt;
+  final int totalQueries;
+  final double peakQps;
+  final int activeDevices;
+  final double totalAmountUsd;
+  final String signatureSha256;
+
+  const UsageInvoiceModel({
+    required this.invoiceId,
+    required this.orgId,
+    required this.orgName,
+    required this.planTier,
+    required this.billingCycle,
+    required this.generatedAt,
+    required this.totalQueries,
+    required this.peakQps,
+    required this.activeDevices,
+    required this.totalAmountUsd,
+    required this.signatureSha256,
+  });
+
+  factory UsageInvoiceModel.fromJson(Map<String, dynamic> json) {
+    final metrics = json['metrics'] as Map? ?? {};
+    final charges = json['charges_usd'] as Map? ?? {};
+    return UsageInvoiceModel(
+      invoiceId: json['invoice_id'] as String? ?? '',
+      orgId: json['org_id'] as String? ?? '',
+      orgName: json['org_name'] as String? ?? '',
+      planTier: json['plan_tier'] as String? ?? 'ENTERPRISE',
+      billingCycle: json['billing_cycle'] as String? ?? '',
+      generatedAt: (json['generated_at'] as num?)?.toDouble() ?? 0.0,
+      totalQueries: metrics['total_queries'] as int? ?? 0,
+      peakQps: (metrics['peak_qps'] as num?)?.toDouble() ?? 0.0,
+      activeDevices: metrics['active_devices'] as int? ?? 0,
+      totalAmountUsd: (charges['total'] as num?)?.toDouble() ?? 0.0,
+      signatureSha256: json['signature_sha256'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'invoice_id': invoiceId,
+    'org_id': orgId,
+    'org_name': orgName,
+    'plan_tier': planTier,
+    'billing_cycle': billingCycle,
+    'generated_at': generatedAt,
+    'metrics': {
+      'total_queries': totalQueries,
+      'peak_qps': peakQps,
+      'active_devices': activeDevices,
+    },
+    'charges_usd': {
+      'total': totalAmountUsd,
+    },
+    'signature_sha256': signatureSha256,
+  };
+}

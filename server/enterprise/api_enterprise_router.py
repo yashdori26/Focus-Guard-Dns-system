@@ -50,6 +50,31 @@ from server.enterprise.siem_forwarder import (
     SiemTransport,
     get_siem_forwarder
 )
+from server.enterprise.classroom_orchestrator import (
+    ClassroomOrchestrator,
+    ClassroomFocusMode,
+    get_classroom_orchestrator
+)
+from server.enterprise.soar_playbook_engine import (
+    SoarPlaybookEngine,
+    get_soar_engine
+)
+from server.enterprise.scim_directory_sync import (
+    ScimDirectorySyncEngine,
+    get_scim_engine
+)
+from server.enterprise.saml_oidc_authenticator import (
+    SamlOidcAuthenticator,
+    get_sso_authenticator
+)
+from server.enterprise.usage_metering import (
+    UsageMeteringEngine,
+    get_metering_engine
+)
+from server.enterprise.clickhouse_analytics import (
+    ClickHouseAnalyticsEngine,
+    get_clickhouse_engine
+)
 
 logger = logging.getLogger("FocusDNS.Enterprise.ApiRouter")
 
@@ -66,13 +91,25 @@ class EnterpriseApiDispatcher:
         tenants: Optional[TenantManager] = None,
         analytics: Optional[ColumnarAnalyticsEngine] = None,
         ws_hub: Optional[FleetWebSocketServer] = None,
-        siem: Optional[SiemForwarder] = None
+        siem: Optional[SiemForwarder] = None,
+        classroom: Optional[ClassroomOrchestrator] = None,
+        soar: Optional[SoarPlaybookEngine] = None,
+        scim: Optional[ScimDirectorySyncEngine] = None,
+        sso: Optional[SamlOidcAuthenticator] = None,
+        metering: Optional[UsageMeteringEngine] = None,
+        clickhouse: Optional[ClickHouseAnalyticsEngine] = None,
     ):
         self.rbac = rbac or get_rbac_engine()
         self.tenants = tenants or get_tenant_manager()
         self.analytics = analytics or get_columnar_engine()
         self.ws_hub = ws_hub or get_fleet_websocket_server()
         self.siem = siem or get_siem_forwarder()
+        self.classroom = classroom or get_classroom_orchestrator()
+        self.soar = soar or get_soar_engine()
+        self.scim = scim or get_scim_engine()
+        self.sso = sso or get_sso_authenticator()
+        self.metering = metering or get_metering_engine()
+        self.clickhouse = clickhouse or get_clickhouse_engine()
 
     def _extract_authenticated_user(self, headers: Dict[str, str]) -> Optional[EnterpriseUser]:
         auth_header = headers.get("Authorization", headers.get("authorization", ""))
@@ -221,6 +258,81 @@ class EnterpriseApiDispatcher:
         # 6. SIEM Config
         if clean_path in ("/api/v1/enterprise/siem/config", "/api/enterprise/siem/config"):
             return 200, {"success": True, "siem_config": self.siem.config.to_dict()}
+
+        # 7. Classroom & Fleet Sessions
+        if clean_path in ("/api/v1/enterprise/classroom/sessions", "/api/enterprise/classroom/sessions"):
+            org_id = params.get("org_id", [""])[0] or None
+            sessions = self.classroom.list_active_sessions(org_id)
+            return 200, {"success": True, "sessions": sessions}
+
+        if clean_path in ("/api/v1/enterprise/classroom/session", "/api/enterprise/classroom/session"):
+            session_id = params.get("session_id", [""])[0]
+            if not session_id:
+                return 400, {"success": False, "error": "Missing parameter: 'session_id'"}
+            session = self.classroom.get_session(session_id)
+            if not session:
+                return 404, {"success": False, "error": "Session not found"}
+            return 200, {"success": True, "session": session.to_dict()}
+
+        # 8. SOAR Incident Response & Telemetry
+        if clean_path in ("/api/v1/enterprise/soar/incidents", "/api/enterprise/soar/incidents"):
+            limit = int(params.get("limit", [50])[0])
+            incidents = self.soar.list_incidents(limit)
+            return 200, {"success": True, "incidents": incidents}
+
+        if clean_path in ("/api/v1/enterprise/soar/incident", "/api/enterprise/soar/incident"):
+            incident_id = params.get("incident_id", [""])[0]
+            if not incident_id:
+                return 400, {"success": False, "error": "Missing parameter: 'incident_id'"}
+            inc = self.soar.get_incident(incident_id)
+            if not inc:
+                return 404, {"success": False, "error": "Incident not found"}
+            return 200, {"success": True, "incident": inc}
+
+        if clean_path in ("/api/v1/enterprise/soar/metrics", "/api/enterprise/soar/metrics"):
+            return 200, {"success": True, "metrics": self.soar.get_metrics()}
+
+        # 9. SCIM 2.0 Directory Protocol & Logs
+        if clean_path in ("/api/v1/enterprise/scim/v2/ServiceProviderConfig", "/scim/v2/ServiceProviderConfig"):
+            return 200, self.scim.get_service_provider_config()
+
+        if clean_path in ("/api/v1/enterprise/scim/v2/Users", "/scim/v2/Users"):
+            start_idx = int(params.get("startIndex", [1])[0])
+            count = int(params.get("count", [50])[0])
+            return 200, self.scim.list_users(start_idx, count)
+
+        if clean_path in ("/api/v1/enterprise/scim/v2/Groups", "/scim/v2/Groups"):
+            start_idx = int(params.get("startIndex", [1])[0])
+            count = int(params.get("count", [50])[0])
+            return 200, self.scim.list_groups(start_idx, count)
+
+        if clean_path in ("/api/v1/enterprise/scim/logs", "/api/enterprise/scim/logs"):
+            limit = int(params.get("limit", [50])[0])
+            logs = self.scim.get_provisioning_logs(limit)
+            return 200, {"success": True, "logs": logs}
+
+        # 10. Commercial Metering & Invoicing
+        if clean_path in ("/api/v1/enterprise/metering/invoice", "/api/enterprise/metering/invoice"):
+            org_id = params.get("org_id", [""])[0]
+            if not org_id:
+                return 400, {"success": False, "error": "Missing parameter: 'org_id'"}
+            cycle = params.get("billing_cycle", [""])[0] or None
+            try:
+                inv = self.metering.generate_signed_invoice(org_id, cycle)
+                return 200, {"success": True, "invoice": inv}
+            except KeyError as e:
+                return 404, {"success": False, "error": str(e)}
+
+        if clean_path in ("/api/v1/enterprise/metering/usage", "/api/enterprise/metering/usage"):
+            org_id = params.get("org_id", [""])[0]
+            if not org_id:
+                return 400, {"success": False, "error": "Missing parameter: 'org_id'"}
+            usage = self.metering.get_current_usage(org_id)
+            return 200, {"success": True, "usage": usage}
+
+        # 11. ClickHouse Analytics Stats
+        if clean_path in ("/api/v1/enterprise/clickhouse/stats", "/api/enterprise/clickhouse/stats"):
+            return 200, {"success": True, "stats": self.clickhouse.get_metrics()}
 
         return None
 
@@ -391,6 +503,140 @@ class EnterpriseApiDispatcher:
         if clean_path in ("/api/v1/enterprise/siem/test", "/api/enterprise/siem/test"):
             success, msg = self.siem.test_connection()
             return 200 if success else 502, {"success": success, "message": msg}
+
+        # 8. Classroom Session Management
+        if clean_path in ("/api/v1/enterprise/classroom/start", "/api/enterprise/classroom/start"):
+            org_id = payload.get("org_id", "")
+            unit_id = payload.get("unit_id", "")
+            fleet_id = payload.get("fleet_id", "")
+            classroom_name = payload.get("classroom_name", "Focus Classroom")
+            duration_sec = int(payload.get("duration_seconds", 2700))
+            mode_str = payload.get("mode", "NORMAL_PROTECTION")
+            try:
+                mode = ClassroomFocusMode(mode_str)
+            except ValueError:
+                mode = ClassroomFocusMode.NORMAL_PROTECTION
+
+            allowed = payload.get("allowed_exam_domains")
+            allowed_set = set(allowed) if allowed else None
+
+            session = self.classroom.start_session(
+                org_id=org_id,
+                unit_id=unit_id,
+                fleet_id=fleet_id,
+                classroom_name=classroom_name,
+                teacher_user_id=payload.get("teacher_user_id", "teacher_admin"),
+                mode=mode,
+                duration_seconds=duration_sec,
+                allowed_exam_domains=allowed_set,
+            )
+            return 200, {"success": True, "session": session.to_dict()}
+
+        if clean_path in ("/api/v1/enterprise/classroom/end", "/api/enterprise/classroom/end"):
+            session_id = payload.get("session_id", "")
+            if not session_id:
+                return 400, {"success": False, "error": "Missing 'session_id'"}
+            session = self.classroom.end_session(session_id)
+            if not session:
+                return 404, {"success": False, "error": "Session not found"}
+            return 200, {"success": True, "session": session.to_dict()}
+
+        if clean_path in ("/api/v1/enterprise/classroom/mode", "/api/enterprise/classroom/mode"):
+            session_id = payload.get("session_id", "")
+            mode_str = payload.get("mode", "NORMAL_PROTECTION")
+            try:
+                mode = ClassroomFocusMode(mode_str)
+            except ValueError:
+                return 400, {"success": False, "error": f"Invalid mode: {mode_str}"}
+
+            ok = self.classroom.set_focus_mode(session_id, mode)
+            if not ok:
+                return 404, {"success": False, "error": "Session not active or not found"}
+            return 200, {"success": True, "mode": mode.value}
+
+        # Conditional Whitelisting Law: Classroom Whitelist Mutation Enforcement
+        if clean_path in ("/api/v1/enterprise/classroom/whitelist", "/api/enterprise/classroom/whitelist"):
+            session_id = payload.get("session_id", "")
+            domain = payload.get("domain", "").strip()
+            if not session_id or not domain:
+                return 400, {"success": False, "error": "Missing 'session_id' or 'domain'"}
+
+            try:
+                self.classroom.request_whitelist_domain(session_id, domain)
+                return 200, {"success": True, "domain": domain}
+            except PermissionError as e:
+                # STRICT MODE BARRIER: Return HTTP 403 with ERROR_ACCESS_DENIED (5)
+                return 403, {
+                    "success": False,
+                    "error": str(e),
+                    "code": "ERROR_ACCESS_DENIED",
+                    "errno": 5
+                }
+
+        if clean_path in ("/api/v1/enterprise/classroom/record-query", "/api/enterprise/classroom/record-query"):
+            device_id = payload.get("device_id", "")
+            domain = payload.get("domain", "")
+            action = payload.get("action", "ALLOWED")
+            allowed, reason = self.classroom.record_student_query(device_id, domain, action)
+            return 200, {"allowed": allowed, "reason": reason}
+
+        # 9. SOAR Playbook Execution & Incident Control
+        if clean_path in ("/api/v1/enterprise/soar/trigger", "/api/enterprise/soar/trigger"):
+            tenant_id = payload.get("tenant_id", "default")
+            device_id = payload.get("device_id", "")
+            domain = payload.get("domain", "")
+            threat_type = payload.get("threat_type", "PHISHING")
+            risk_score = float(payload.get("risk_score", 90.0))
+            metadata = payload.get("metadata", {})
+
+            inc = self.soar.evaluate_threat_event(
+                tenant_id=tenant_id,
+                device_id=device_id,
+                domain=domain,
+                threat_type=threat_type,
+                risk_score=risk_score,
+                metadata=metadata
+            )
+            if not inc:
+                return 200, {"success": False, "message": "No playbook triggered for threat event."}
+            return 200, {"success": True, "incident": inc.to_dict()}
+
+        if clean_path in ("/api/v1/enterprise/soar/lift-quarantine", "/api/enterprise/soar/lift-quarantine"):
+            device_id = payload.get("device_id", "")
+            if not device_id:
+                return 400, {"success": False, "error": "Missing 'device_id'"}
+            ok = self.soar.lift_quarantine(device_id)
+            return 200 if ok else 404, {"success": ok, "device_id": device_id}
+
+        # 10. SCIM 2.0 User & Group Provisioning (RFC 7644)
+        if clean_path in ("/api/v1/enterprise/scim/v2/Users", "/scim/v2/Users"):
+            status_code, res = self.scim.create_user(payload)
+            return status_code, res
+
+        if clean_path in ("/api/v1/enterprise/scim/v2/Groups", "/scim/v2/Groups"):
+            status_code, res = self.scim.create_group(payload)
+            return status_code, res
+
+        # 11. Usage Metering Billable Record
+        if clean_path in ("/api/v1/enterprise/metering/record", "/api/enterprise/metering/record"):
+            org_id = payload.get("org_id", "")
+            if not org_id:
+                return 400, {"success": False, "error": "Missing 'org_id'"}
+            query_count = int(payload.get("queries", 1))
+            device_id = payload.get("device_id")
+            instant_qps = float(payload.get("instant_qps", 0.0))
+            storage_bytes = int(payload.get("storage_bytes", 0))
+            siem_bytes = int(payload.get("siem_bytes", 0))
+
+            warnings = self.metering.record_query_usage(
+                org_id=org_id,
+                query_count=query_count,
+                device_id=device_id,
+                instant_qps=instant_qps,
+                storage_bytes=storage_bytes,
+                siem_bytes=siem_bytes
+            )
+            return 200, {"success": True, "quota_warnings": warnings}
 
         return None
 

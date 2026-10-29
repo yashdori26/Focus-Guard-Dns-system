@@ -9,6 +9,8 @@ import 'enterprise_tenants_screen.dart';
 import 'enterprise_fleet_screen.dart';
 import 'enterprise_rbac_screen.dart';
 import 'enterprise_siem_screen.dart';
+import 'enterprise_classroom_screen.dart';
+import 'enterprise_scim_sso_screen.dart';
 
 class EnterpriseAnalyticsDashboardScreen extends StatefulWidget {
   final String tenantId;
@@ -81,9 +83,12 @@ class _EnterpriseAnalyticsDashboardScreenState
           children: [
             const Icon(Icons.analytics_outlined, color: Color(0xFF64B5F6), size: 22),
             const SizedBox(width: 10),
-            const Text(
-              'Enterprise Big Data Analytics',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            const Expanded(
+              child: Text(
+                'Enterprise Big Data Analytics',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -119,6 +124,20 @@ class _EnterpriseAnalyticsDashboardScreenState
             tooltip: 'SIEM Settings',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => EnterpriseSiemScreen(service: _service)),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.school_outlined, color: Color(0xFFFFD54F)),
+            tooltip: 'Classroom & Exam Fleet',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => EnterpriseClassroomScreen(service: _service)),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.vpn_key_outlined, color: Color(0xFF80CBC4)),
+            tooltip: 'Directory Federation & SCIM/SSO',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => EnterpriseScimSsoScreen(service: _service)),
             ),
           ),
         ],

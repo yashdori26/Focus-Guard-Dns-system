@@ -225,6 +225,7 @@ class RbacEngine:
         self.secret_key = secret_key or secrets.token_hex(32)
         self._lock = threading.RLock()
         self._users: Dict[str, EnterpriseUser] = {}
+        self._active_sessions: Dict[str, EnterpriseUser] = {}
         self._audit_chain: List[AuditLogEntry] = []
         self._latest_hash = self.GENESIS_HASH
 
@@ -253,44 +254,59 @@ class RbacEngine:
         self,
         username: str,
         email: str,
-        password: str,
-        role: RoleTier,
-        tenant_id: str,
+        password: Optional[str] = None,
+        role: RoleTier = RoleTier.TEAM_LEAD,
+        tenant_id: str = "default",
         sub_tenant_ids: Optional[List[str]] = None,
-        actor_user_id: str = "system"
+        actor_user_id: str = "system",
+        user_id: Optional[str] = None,
     ) -> EnterpriseUser:
         with self._lock:
+            clean_email = email.lower().strip()
             # Check duplicates
             for u in self._users.values():
-                if u.username == username or u.email == email.lower():
+                if u.username == username or u.email == clean_email:
                     raise ValueError(f"User with username '{username}' or email '{email}' already exists.")
 
             salt = secrets.token_hex(16)
-            pwd_hash = self.hash_password(password, salt)
-            user_id = f"usr_{secrets.token_hex(8)}"
+            effective_pwd = password or secrets.token_hex(20)
+            pwd_hash = self.hash_password(effective_pwd, salt)
+            effective_user_id = user_id or f"usr_{secrets.token_hex(8)}"
 
             new_user = EnterpriseUser(
-                user_id=user_id,
+                user_id=effective_user_id,
                 username=username,
-                email=email,
+                email=clean_email,
                 role=role,
                 tenant_id=tenant_id,
                 sub_tenant_ids=sub_tenant_ids,
                 password_hash=pwd_hash,
                 salt=salt
             )
-            self._users[user_id] = new_user
+            self._users[effective_user_id] = new_user
 
             self.record_audit_event(
                 actor_user_id=actor_user_id,
                 actor_role="ADMIN",
                 tenant_id=tenant_id,
                 action="USER_REGISTER",
-                resource=f"user/{user_id}",
+                resource=f"user/{effective_user_id}",
                 details={"username": username, "role": role.value, "tenant_id": tenant_id},
                 status="SUCCESS"
             )
             return new_user
+
+    def get_user(self, user_id: str) -> Optional[EnterpriseUser]:
+        with self._lock:
+            return self._users.get(user_id)
+
+    def get_user_by_email(self, email: str) -> Optional[EnterpriseUser]:
+        clean = email.strip().lower()
+        with self._lock:
+            for u in self._users.values():
+                if u.email == clean:
+                    return u
+            return None
 
     def authenticate(self, username_or_email: str, password: str) -> Optional[Tuple[EnterpriseUser, str]]:
         """Verifies credentials and issues a cryptographic session token."""
@@ -347,11 +363,18 @@ class RbacEngine:
             encoded_payload.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
-        return f"{encoded_payload}.{sig}"
+        token = f"{encoded_payload}.{sig}"
+        with self._lock:
+            self._active_sessions[token] = user
+        return token
 
     def verify_session_token(self, token_str: str) -> Optional[EnterpriseUser]:
         """Validates signature and expiration of a session token."""
         try:
+            with self._lock:
+                if token_str not in self._active_sessions:
+                    return None
+
             parts = token_str.rsplit(".", 1)
             if len(parts) != 2:
                 return None
@@ -378,6 +401,19 @@ class RbacEngine:
             return None
         except Exception:
             return None
+
+    def revoke_user_sessions(self, user_id: str) -> int:
+        """Purges active sessions and deactivates account upon deprovisioning."""
+        with self._lock:
+            user = self._users.get(user_id)
+            if user:
+                user.is_active = False
+            revoked_count = 0
+            for token, u in list(self._active_sessions.items()):
+                if u.user_id == user_id:
+                    del self._active_sessions[token]
+                    revoked_count += 1
+            return revoked_count
 
     def authorize(
         self,
