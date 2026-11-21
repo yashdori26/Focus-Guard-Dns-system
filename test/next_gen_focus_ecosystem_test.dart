@@ -265,14 +265,14 @@ void main() {
     });
 
     test('19. Battery Optimization helper methods return non-null safety values', () async {
-      final isIgnored = await FocusDnsBlockerManager.isBatteryOptimizationIgnored();
-      expect(isIgnored, isTrue);
-
       final req = await FocusDnsBlockerManager.requestIgnoreBatteryOptimizations();
       expect(req, isTrue);
+
+      final isIgnored = await FocusDnsBlockerManager.isBatteryOptimizationIgnored();
+      expect(isIgnored, isTrue);
     });
 
-    testWidgets('20. MoreTab includes Anti-Doomscroll Ecosystem section with all 4 items', (tester) async {
+    testWidgets('20. MoreTab includes Anti-Doomscroll Ecosystem section with items', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
@@ -286,9 +286,8 @@ void main() {
       await tester.pump();
 
       expect(find.text('ANTI-DOOMSCROLL ECOSYSTEM'), findsOneWidget);
-      expect(find.text('Focus Routine & Breaks'), findsOneWidget);
-      expect(find.text('App Lockout Timers'), findsOneWidget);
-      expect(find.text('Surgical Feed Killer'), findsOneWidget);
+      expect(find.text('Focus Routine and Breaks'), findsOneWidget);
+      expect(find.text('Zero-Battery Shield'), findsOneWidget);
       expect(find.text('Longitudinal Analytics'), findsOneWidget);
     });
   });

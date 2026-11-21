@@ -82,7 +82,7 @@ class PerAppTimersNotifier extends StateNotifier<Map<String, AppBlockTimer>> {
   Timer? _ticker;
   final bool enableTicker;
 
-  PerAppTimersNotifier({this.enableTicker = true}) : super(const {}) {
+  PerAppTimersNotifier({this.enableTicker = true}) : super(defaultPresets) {
     _initPersistence();
   }
 
