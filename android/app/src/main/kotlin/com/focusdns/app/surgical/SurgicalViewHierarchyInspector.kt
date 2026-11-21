@@ -32,6 +32,11 @@ class SurgicalViewHierarchyInspector(private val service: AccessibilityService) 
         const val PKG_LINKEDIN = "com.linkedin.android"
         const val PKG_SNAPCHAT = "com.snapchat.android"
         const val PKG_FACEBOOK = "com.facebook.katana"
+        // Known messaging/chat patterns to exempt from interception
+        private val EXEMPT_DM_PATTERNS = listOf(
+            "direct_thread", "direct_inbox", "direct_message", "thread_fragment",
+            "message_composer", "chat_thread", "direct_story_reply", "inbox_tab"
+        )
     }
 
     data class InspectionTarget(
@@ -66,27 +71,32 @@ class SurgicalViewHierarchyInspector(private val service: AccessibilityService) 
      * Registers default built-in view node signatures for leading social platforms.
      */
     private fun registerDefaultBuiltInTargets() {
-        // Instagram Reels
+        // Instagram Reels (Surgical: blocks vertical video reels, permits home feed and direct messages)
         registerTarget(
             InspectionTarget(
                 targetId = "ig_reels_tab",
                 packageName = PKG_INSTAGRAM,
                 subfeature = "reelsOrShorts",
-                resourceIdPatterns = listOf("clips_viewer", "tab_reels", "clips_video_container", "clips_viewer_container"),
-                contentDescriptionPatterns = listOf("Reels", "Reels tab", "Clips"),
+                resourceIdPatterns = listOf(
+                    "clips_viewer", "tab_reels", "clips_video_container", "clips_viewer_container",
+                    "reel_viewer_container", "reels_tab", "clips_swipe_refresh_container",
+                    "clips_item_layout", "reel_video_view", "clips_root_container",
+                    "reels_tray_container", "clips_media_item"
+                ),
+                contentDescriptionPatterns = listOf("Reels", "Reels tab", "Clips", "Reels camera", "Watch Reels"),
                 textPatterns = listOf("Reels"),
                 defaultAction = "navigateBack",
                 description = "Instagram Reels vertical video viewer"
             )
         )
 
-        // Instagram Explore
+        // Instagram Explore (Surgical: blocks algorithmic discovery grid)
         registerTarget(
             InspectionTarget(
                 targetId = "ig_explore_tab",
                 packageName = PKG_INSTAGRAM,
                 subfeature = "explore",
-                resourceIdPatterns = listOf("explore_tab", "search_tab", "explore_recycler_view"),
+                resourceIdPatterns = listOf("explore_tab", "search_tab", "explore_recycler_view", "explore_grid"),
                 contentDescriptionPatterns = listOf("Explore", "Search and explore", "Explore tab"),
                 textPatterns = emptyList(),
                 defaultAction = "navigateBack",
@@ -94,14 +104,19 @@ class SurgicalViewHierarchyInspector(private val service: AccessibilityService) 
             )
         )
 
-        // YouTube Shorts
+        // YouTube Shorts (Surgical: blocks vertical player, permits search & long-form video)
         registerTarget(
             InspectionTarget(
                 targetId = "yt_shorts_tab",
                 packageName = PKG_YOUTUBE,
                 subfeature = "reelsOrShorts",
-                resourceIdPatterns = listOf("reel_recycler", "reel_player_fragment", "pivot_shorts", "reel_video_view"),
-                contentDescriptionPatterns = listOf("Shorts", "Shorts tab", "YouTube Shorts"),
+                resourceIdPatterns = listOf(
+                    "reel_recycler", "reel_player_fragment", "pivot_shorts", "reel_video_view",
+                    "shorts_container", "shorts_player_fragment", "reel_watch_fragment",
+                    "reel_player_page", "reel_item_layout", "shorts_shelf", "pivot_bar_shorts",
+                    "reel_root"
+                ),
+                contentDescriptionPatterns = listOf("Shorts", "Shorts tab", "YouTube Shorts", "Create a Short"),
                 textPatterns = listOf("Shorts"),
                 defaultAction = "navigateBack",
                 description = "YouTube Shorts vertical player"
@@ -196,6 +211,11 @@ class SurgicalViewHierarchyInspector(private val service: AccessibilityService) 
         val resId = node.viewIdResourceName?.lowercase()
         val desc = node.contentDescription?.toString()?.lowercase()
         val text = node.text?.toString()?.lowercase()
+
+        // Explicit exemption: never intercept Direct Messages or chat views
+        if (resId != null && EXEMPT_DM_PATTERNS.any { resId.contains(it) }) {
+            return
+        }
 
         for (target in targets) {
             if (!isSubfeatureBlocked(pkg, target.subfeature)) {

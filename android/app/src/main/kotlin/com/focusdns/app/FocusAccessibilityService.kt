@@ -12,6 +12,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.focusdns.app.surgical.SurgicalViewHierarchyInspector
 
 /**
  * FocusAccessibilityService monitors foreground window state and dynamic content changes
@@ -29,6 +30,9 @@ class FocusAccessibilityService : AccessibilityService() {
 
         @Volatile
         var instance: FocusAccessibilityService? = null
+            private set
+
+        var surgicalInspector: SurgicalViewHierarchyInspector? = null
             private set
 
         var onStateChangeListener: ((Boolean) -> Unit)? = null
@@ -102,6 +106,7 @@ class FocusAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         isRunning = true
         instance = this
+        surgicalInspector = SurgicalViewHierarchyInspector(this)
         onStateChangeListener?.invoke(true)
         registerVpnNetworkCallback()
         Log.i(TAG, "FocusDNS Accessibility Service connected and active.")
@@ -113,6 +118,14 @@ class FocusAccessibilityService : AccessibilityService() {
         val eventType = event.eventType
         val pkg = event.packageName?.toString() ?: return
         val className = event.className?.toString()
+
+        // 0. Surgical Feed Blocker: intercept subfeature feeds (YouTube Shorts, Instagram Reels, etc.)
+        if (pkg == SurgicalViewHierarchyInspector.PKG_INSTAGRAM ||
+            pkg == SurgicalViewHierarchyInspector.PKG_YOUTUBE ||
+            pkg == SurgicalViewHierarchyInspector.PKG_REDDIT ||
+            pkg == SurgicalViewHierarchyInspector.PKG_TIKTOK) {
+            surgicalInspector?.onAccessibilityEvent(event)
+        }
 
         if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             pendingContentRunnable?.let { handler.removeCallbacks(it) }
@@ -411,6 +424,8 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         isRunning = false
         instance = null
+        surgicalInspector?.clearAll()
+        surgicalInspector = null
         onStateChangeListener?.invoke(false)
         pendingContentRunnable?.let { handler.removeCallbacks(it) }
         pendingVpnDialogRunnable?.let { handler.removeCallbacks(it) }
@@ -422,6 +437,8 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         isRunning = false
         instance = null
+        surgicalInspector?.clearAll()
+        surgicalInspector = null
         onStateChangeListener?.invoke(false)
         pendingContentRunnable?.let { handler.removeCallbacks(it) }
         pendingVpnDialogRunnable?.let { handler.removeCallbacks(it) }

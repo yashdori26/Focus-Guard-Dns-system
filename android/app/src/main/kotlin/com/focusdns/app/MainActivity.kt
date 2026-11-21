@@ -18,6 +18,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import kotlin.concurrent.thread
+import com.focusdns.app.surgical.SurgicalMethodChannelHandler
 
 class MainActivity: FlutterActivity() {
 
@@ -504,6 +505,18 @@ class MainActivity: FlutterActivity() {
                 }
             }
         })
+
+        // --- Surgical Feed & Subfeature Channel ---
+        try {
+            SurgicalMethodChannelHandler.registerWith(
+                flutterEngine.dartExecutor.binaryMessenger,
+                this@MainActivity,
+                FocusAccessibilityService.surgicalInspector,
+                null
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Failed registering SurgicalMethodChannel: ${e.message}")
+        }
     }
 
     private fun checkAccessibilityEnabled(): Boolean {
