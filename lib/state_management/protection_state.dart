@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../backend/blocker_service.dart';
 import '../repositories/settings_repository.dart';
 import '../repositories/http_settings_repository.dart';
+import 'deep_focus_state.dart';
+import 'vpn_state.dart';
+import 'setup_state.dart';
 
 final settingsRepoProvider = Provider<SettingsRepository>((ref) {
   return HttpSettingsRepository();
@@ -10,11 +13,18 @@ final settingsRepoProvider = Provider<SettingsRepository>((ref) {
 
 class ProtectionNotifier extends StateNotifier<bool> {
   final SettingsRepository _repo;
-  ProtectionNotifier(this._repo) : super(true) {
+  ProtectionNotifier(this._repo) : super(false) {
     _init();
   }
 
-  Future<void> _init() async => state = await _repo.isProtectionOn();
+  /// Restores persistent protection state from repository on startup.
+  Future<void> _init() async {
+    try {
+      final isOn = await _repo.isProtectionOn();
+      if (!mounted) return;
+      state = isOn;
+    } catch (_) {}
+  }
 
   Future<void> toggle() async {
     final newState = !state;
@@ -61,19 +71,40 @@ class StrictModeState {
 
 class StrictModeNotifier extends StateNotifier<StrictModeState> {
   final SettingsRepository _repo;
+  final Future<void> Function()? onActivate;
+  final Future<void> Function()? onExpire;
   Timer? _countdownTimer;
 
-  StrictModeNotifier(this._repo) : super(const StrictModeState(isStrict: false)) {
+  StrictModeNotifier(
+    this._repo, {
+    this.onActivate,
+    this.onExpire,
+  }) : super(const StrictModeState(isStrict: false)) {
     _init();
   }
 
   Future<void> _init() async {
     final isStrict = await _repo.isStrictMode();
     final rem = await _repo.getStrictRemainingSeconds();
+    if (!mounted) return;
+    // Guard against overwriting state if set() was called while _init was resolving
+    if (state.isStrict && (!isStrict || rem <= 0)) {
+      return;
+    }
+    if (isStrict && rem <= 0) {
+      await _autoExpire();
+      return;
+    }
     final until = (isStrict && rem > 0) ? DateTime.now().add(Duration(seconds: rem)) : null;
     state = StrictModeState(isStrict: isStrict, remainingSeconds: rem, strictUntil: until);
     await FocusDnsBlockerManager.setStrictMode(isStrict, durationMinutes: (rem > 0) ? (rem / 60).ceil() : null);
+    if (!mounted) return;
     if (state.isLocked && state.remainingSeconds > 0) {
+      if (onActivate != null) {
+        try {
+          await onActivate!();
+        } catch (_) {}
+      }
       _startCountdown();
     }
   }
@@ -105,10 +136,13 @@ class StrictModeNotifier extends StateNotifier<StrictModeState> {
     state = const StrictModeState(isStrict: false, remainingSeconds: 0, strictUntil: null);
     try {
       await _repo.setStrictMode(false);
+      await _repo.setProtectionOn(false);
       await FocusDnsBlockerManager.syncRules(
-        packages: [],
         isStrictMode: false,
       );
+      if (onExpire != null) {
+        await onExpire!();
+      }
     } catch (_) {}
   }
 
@@ -131,12 +165,25 @@ class StrictModeNotifier extends StateNotifier<StrictModeState> {
     }
 
     try {
-      await _repo.setStrictMode(value, durationMinutes: durationMinutes);
-      await FocusDnsBlockerManager.syncRules(
-        packages: [],
-        isStrictMode: value,
-        durationMinutes: durationMinutes,
-      );
+      if (value) {
+        if (onActivate != null) {
+          await onActivate!();
+        }
+        await _repo.setStrictMode(value, durationMinutes: durationMinutes);
+        await FocusDnsBlockerManager.syncRules(
+          isStrictMode: value,
+          durationMinutes: durationMinutes,
+        );
+      } else {
+        await _repo.setStrictMode(false);
+        await _repo.setProtectionOn(false);
+        await FocusDnsBlockerManager.syncRules(
+          isStrictMode: false,
+        );
+        if (onExpire != null) {
+          await onExpire!();
+        }
+      }
     } catch (_) {}
     return true;
   }
@@ -150,5 +197,29 @@ class StrictModeNotifier extends StateNotifier<StrictModeState> {
 
 final strictModeProvider =
     StateNotifierProvider<StrictModeNotifier, StrictModeState>((ref) {
-  return StrictModeNotifier(ref.watch(settingsRepoProvider));
+  return StrictModeNotifier(
+    ref.watch(settingsRepoProvider),
+    onActivate: () async {
+      await ref.read(protectionProvider.notifier).set(true);
+      try {
+        ref.read(deepFocusProvider.notifier).syncWithBlocker();
+      } catch (_) {}
+      try {
+        final vpnState = ref.read(vpnProvider);
+        if (!vpnState.isRunning) {
+          final profileId = ref.read(setupProvider).profileId;
+          await ref.read(vpnProvider.notifier).start(profileId: profileId);
+        }
+      } catch (_) {}
+    },
+    onExpire: () async {
+      await ref.read(protectionProvider.notifier).set(false);
+      try {
+        final vpnState = ref.read(vpnProvider);
+        if (vpnState.isRunning) {
+          await ref.read(vpnProvider.notifier).stop();
+        }
+      } catch (_) {}
+    },
+  );
 });

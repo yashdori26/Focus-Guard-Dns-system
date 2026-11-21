@@ -170,6 +170,23 @@ class FocusMdmManager {
     return false;
   }
 
+  /// Deactivates Device Administrator privileges and prompts system uninstallation.
+  /// Only succeeds if Protection Mode is OFF and Focus Countdown Timer is at 0.
+  static Future<Map<String, dynamic>> deactivateAndUninstall() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final res = await _channel.invokeMethod<Map>('deactivateAndUninstall');
+        return Map<String, dynamic>.from(res ?? {});
+      } catch (e) {
+        return {'success': false, 'reason': e.toString()};
+      }
+    }
+    _simulatedAdmin = false;
+    _notifySimulatedState();
+    return {'success': true};
+  }
+
+
   /// Checks if the application can currently be uninstalled.
   /// Returns TRUE if both Protection Mode is OFF and Strict Timer is 0.
   static Future<bool> canUninstall() async {
@@ -345,6 +362,42 @@ class FocusMdmManager {
         appName: 'YONO SBI',
         isSystemApp: false,
         isSelected: _simulatedSplitApps.contains('com.sbi.lotusintouch'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.google.android.youtube',
+        appName: 'YouTube',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.google.android.youtube'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.reddit.frontpage',
+        appName: 'Reddit',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.reddit.frontpage'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.instagram.android',
+        appName: 'Instagram',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.instagram.android'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.zhiliaoapp.musically',
+        appName: 'TikTok',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.zhiliaoapp.musically'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.whatsapp',
+        appName: 'WhatsApp',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.whatsapp'),
+      ),
+      SplitTunnelAppItem(
+        packageName: 'com.netflix.mediaclient',
+        appName: 'Netflix',
+        isSystemApp: false,
+        isSelected: _simulatedSplitApps.contains('com.netflix.mediaclient'),
       ),
       SplitTunnelAppItem(
         packageName: 'com.android.chrome',

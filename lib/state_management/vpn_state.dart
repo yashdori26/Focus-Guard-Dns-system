@@ -17,7 +17,7 @@ class VpnState {
     this.isBackendReachable = true,
     this.errorMessage,
     this.dnsServerIp = '10.254.1.2',
-    this.serverUrl = 'http://127.0.0.1:8080/dns-query',
+    this.serverUrl = 'https://elevation-bufing-mel-shots.trycloudflare.com/dns-query',
   });
 
   VpnState copyWith({

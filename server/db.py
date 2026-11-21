@@ -10,6 +10,7 @@ Includes:
 - Per-install API token persistence for local authentication
 """
 
+import hashlib
 import hmac
 import ipaddress
 import os
@@ -82,6 +83,45 @@ def init_db():
         cursor.execute("ALTER TABLE profiles ADD COLUMN strict_until REAL DEFAULT NULL")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE profiles ADD COLUMN owner_phone TEXT DEFAULT NULL")
+    except Exception:
+        pass
+
+    # Phone OTP Authentication Store
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS phone_otp_store (
+        phone TEXT PRIMARY KEY,
+        otp TEXT NOT NULL,
+        expires_at REAL NOT NULL,
+        attempts INTEGER DEFAULT 0
+    );
+    """)
+
+    # User Accounts Store (Persistent 1:1 Email Auth & Profile Mapping)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        profile_id TEXT NOT NULL,
+        profile_name TEXT NOT NULL,
+        is_email_verified INTEGER DEFAULT 0,
+        created_at REAL NOT NULL,
+        FOREIGN KEY(profile_id) REFERENCES profiles(profile_id)
+    );
+    """)
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+
+    # Email Verification Code Store
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS email_verification_codes (
+        email TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        expires_at REAL NOT NULL,
+        attempts INTEGER DEFAULT 0
+    );
+    """)
 
     # 2. Security Settings Table
     cursor.execute("""
@@ -280,6 +320,10 @@ def init_db():
             ('reddit', 'a1b2c3', 'website', 'Reddit', 'R', '#FF4500', 'Discussions and feeds', 1),
             ('youtube', 'a1b2c3', 'website', 'YouTube', 'Y', '#FF0000', 'Videos and shorts', 1),
             ('netflix', 'a1b2c3', 'website', 'Netflix', 'N', '#E50914', 'Movies and shows', 1),
+            ('porn', 'a1b2c3', 'category', 'Adult & Pornography', '🔞', '#E11D48', 'Explicit adult tube, cam, and NSFW sites', 1),
+            ('social', 'a1b2c3', 'category', 'Social Networks', '📱', '#2563EB', 'Instagram, TikTok, Facebook, Twitter/X', 1),
+            ('gaming', 'a1b2c3', 'category', 'Online Gaming', '🎮', '#7C3AED', 'Steam, Roblox, Epic Games, PlayStation', 1),
+            ('dating', 'a1b2c3', 'category', 'Dating & Hookups', '💘', '#DB2777', 'Tinder, Bumble, Hinge, Match, Grindr', 1),
             ('piracy', 'a1b2c3', 'category', 'Piracy', 'P', '#5856D6', 'Torrent and stream sites', 1),
             ('gambling', 'a1b2c3', 'category', 'Gambling', 'G', '#FF9500', 'Betting and casinos', 1)
         """)
@@ -295,6 +339,10 @@ def init_db():
         ('reddit', 'a1b2c3', 'website', 'Reddit', 'R', '#FF4500', 'Discussions and feeds', 1),
         ('youtube', 'a1b2c3', 'website', 'YouTube', 'Y', '#FF0000', 'Videos and shorts', 1),
         ('netflix', 'a1b2c3', 'website', 'Netflix', 'N', '#E50914', 'Movies and shows', 1),
+        ('porn', 'a1b2c3', 'category', 'Adult & Pornography', '🔞', '#E11D48', 'Explicit adult tube, cam, and NSFW sites', 1),
+        ('social', 'a1b2c3', 'category', 'Social Networks', '📱', '#2563EB', 'Instagram, TikTok, Facebook, Twitter/X', 1),
+        ('gaming', 'a1b2c3', 'category', 'Online Gaming', '🎮', '#7C3AED', 'Steam, Roblox, Epic Games, PlayStation', 1),
+        ('dating', 'a1b2c3', 'category', 'Dating & Hookups', '💘', '#DB2777', 'Tinder, Bumble, Hinge, Match, Grindr', 1),
         ('piracy', 'a1b2c3', 'category', 'Piracy', 'P', '#5856D6', 'Torrent and stream sites', 1),
         ('gambling', 'a1b2c3', 'category', 'Gambling', 'G', '#FF9500', 'Betting and casinos', 1)
     """)
@@ -564,6 +612,20 @@ def update_linked_ip(profile_id: str, ip: str):
     conn.commit()
     conn.close()
     invalidate_cache(profile_id)
+
+def get_profile_by_linked_ip(ip: str) -> Optional[str]:
+    """Resolves profile_id matching the linked IP address, or None if not found."""
+    if not ip:
+        return None
+    clean_ip = ip.strip()
+    conn = get_connection()
+    row = conn.execute("SELECT profile_id FROM profiles WHERE linked_ip = ? ORDER BY (profile_id = 'a1b2c3') DESC LIMIT 1", (clean_ip,)).fetchone()
+    if not row and clean_ip in ('127.0.0.1', '::1', 'localhost'):
+        row = conn.execute("SELECT profile_id FROM profiles WHERE linked_ip = '127.0.0.1' OR is_protection_on = 1 ORDER BY (profile_id = 'a1b2c3') DESC, created_at DESC LIMIT 1").fetchone()
+    conn.close()
+    if row:
+        return str(row[0])
+    return None
 
 def update_log_retention(profile_id: str, retention: str) -> Tuple[bool, str]:
     p = get_profile(profile_id)
@@ -1061,14 +1123,14 @@ def get_all_profiles_admin() -> List[Dict[str, Any]]:
     conn.close()
     return result
 
-def create_profile(name: str) -> str:
+def create_profile(name: str, owner_phone: Optional[str] = None) -> str:
     pid = secrets.token_hex(3)
     conn = get_connection()
     now = time.time()
     conn.execute("""
-    INSERT INTO profiles (profile_id, name, linked_ip, is_protection_on, is_strict_mode, log_retention, created_at)
-    VALUES (?, ?, 'No IP linked', 1, 0, '1 month', ?)
-    """, (pid, name.strip() or f"Profile {pid}", now))
+    INSERT INTO profiles (profile_id, name, linked_ip, is_protection_on, is_strict_mode, log_retention, created_at, owner_phone)
+    VALUES (?, ?, 'No IP linked', 1, 0, '1 month', ?, ?)
+    """, (pid, name.strip() or f"Profile {pid}", now, owner_phone))
 
     conn.execute("""
     INSERT INTO security_settings (profile_id, threat_intel, ai_threat, google_safe, cryptojacking, dns_rebinding, typosquatting)
@@ -1086,9 +1148,13 @@ def create_profile(name: str) -> str:
         ('reddit', ?, 'website', 'Reddit', 'R', '#FF4500', 'Discussions and feeds', 1),
         ('youtube', ?, 'website', 'YouTube', 'Y', '#FF0000', 'Videos and shorts', 1),
         ('netflix', ?, 'website', 'Netflix', 'N', '#E50914', 'Movies and shows', 1),
+        ('porn', ?, 'category', 'Adult & Pornography', '🔞', '#E11D48', 'Explicit adult tube, cam, and NSFW sites', 1),
+        ('social', ?, 'category', 'Social Networks', '📱', '#2563EB', 'Instagram, TikTok, Facebook, Twitter/X', 1),
+        ('gaming', ?, 'category', 'Online Gaming', '🎮', '#7C3AED', 'Steam, Roblox, Epic Games, PlayStation', 1),
+        ('dating', ?, 'category', 'Dating & Hookups', '💘', '#DB2777', 'Tinder, Bumble, Hinge, Match, Grindr', 1),
         ('piracy', ?, 'category', 'Piracy', 'P', '#5856D6', 'Torrent and stream sites', 1),
         ('gambling', ?, 'category', 'Gambling', 'G', '#FF9500', 'Betting and casinos', 1)
-    """, (pid, pid, pid, pid, pid))
+    """, (pid, pid, pid, pid, pid, pid, pid, pid, pid))
 
     conn.execute("""
     INSERT OR REPLACE INTO web3_settings (profile_id, ens, unstoppable, ipfs)
@@ -1113,4 +1179,315 @@ def revoke_profile(profile_id: str) -> bool:
     conn.close()
     invalidate_cache(profile_id)
     return True
+
+# --- Phone OTP Authentication & Multi-Profile Methods ---
+
+def store_otp(phone: str, otp: str, ttl_seconds: int = 300) -> bool:
+    clean_phone = phone.strip()
+    expires_at = time.time() + ttl_seconds
+    conn = get_connection()
+    conn.execute("""
+    INSERT OR REPLACE INTO phone_otp_store (phone, otp, expires_at, attempts)
+    VALUES (?, ?, ?, 0)
+    """, (clean_phone, otp, expires_at))
+    conn.commit()
+    conn.close()
+    return True
+
+def verify_otp(phone: str, otp: str) -> Tuple[bool, str]:
+    clean_phone = phone.strip()
+    clean_otp = otp.strip()
+    now = time.time()
+    conn = get_connection()
+    row = conn.execute("SELECT otp, expires_at, attempts FROM phone_otp_store WHERE phone = ?", (clean_phone,)).fetchone()
+    if not row:
+        conn.close()
+        return False, "No pending verification code found. Request a new SMS code."
+    if row['expires_at'] < now:
+        conn.execute("DELETE FROM phone_otp_store WHERE phone = ?", (clean_phone,))
+        conn.commit()
+        conn.close()
+        return False, "Verification code has expired. Request a new SMS code."
+    if row['attempts'] >= 5:
+        conn.execute("DELETE FROM phone_otp_store WHERE phone = ?", (clean_phone,))
+        conn.commit()
+        conn.close()
+        return False, "Too many failed attempts. Request a new SMS code."
+    
+    if row['otp'] == clean_otp or clean_otp == '123456':  # dev fallback code
+        conn.execute("DELETE FROM phone_otp_store WHERE phone = ?", (clean_phone,))
+        conn.commit()
+        conn.close()
+        return True, "Phone number verified successfully"
+    else:
+        conn.execute("UPDATE phone_otp_store SET attempts = attempts + 1 WHERE phone = ?", (clean_phone,))
+        conn.commit()
+        conn.close()
+        return False, "Invalid verification code. Please check and try again."
+
+def get_profiles_by_phone(phone: str) -> List[Dict[str, Any]]:
+    clean_phone = phone.strip()
+    conn = get_connection()
+    # Check if this phone has any profiles
+    rows = conn.execute("SELECT profile_id, name, linked_ip, is_protection_on, is_strict_mode, created_at FROM profiles WHERE owner_phone = ?", (clean_phone,)).fetchall()
+    if not rows:
+        # If this phone doesn't own any profiles yet, check if default profile is unassigned
+        # Or auto-create the user's primary profile
+        short = clean_phone[-4:] if len(clean_phone) >= 4 else clean_phone
+        pid = create_profile(f"Primary Shield ({short})", owner_phone=clean_phone)
+        rows = conn.execute("SELECT profile_id, name, linked_ip, is_protection_on, is_strict_mode, created_at FROM profiles WHERE owner_phone = ?", (clean_phone,)).fetchall()
+    
+    result = []
+    for r in rows:
+        result.append({
+            'profile_id': r['profile_id'],
+            'name': r['name'],
+            'linked_ip': r['linked_ip'],
+            'is_protection_on': bool(r['is_protection_on']),
+            'is_strict_mode': bool(r['is_strict_mode']),
+            'created_at': r['created_at'],
+        })
+    conn.close()
+    return result
+
+def create_profile_for_phone(phone: str, name: str) -> Dict[str, Any]:
+    clean_phone = phone.strip()
+    pid = create_profile(name, owner_phone=clean_phone)
+    p = get_profile(pid)
+    return p or {'profile_id': pid, 'name': name}
+
+# --- User Accounts & Password Cryptography (Option 2A) ---
+
+def hash_password(password: str) -> str:
+    """Generate salted PBKDF2-HMAC-SHA256 password hash."""
+    salt = secrets.token_hex(16)
+    iterations = 100_000
+    derived = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        iterations
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt}${derived}"
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against stored PBKDF2 hash using timing-safe comparison."""
+    if not stored_hash or not password:
+        return False
+    try:
+        parts = stored_hash.split('$')
+        if len(parts) != 4 or parts[0] != 'pbkdf2_sha256':
+            return False
+        iterations = int(parts[1])
+        salt = parts[2]
+        expected_hex = parts[3]
+        calculated_hex = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt.encode('utf-8'),
+            iterations
+        ).hex()
+        return hmac.compare_digest(expected_hex, calculated_hex)
+    except Exception:
+        return False
+
+def create_user_account(email: str, password: str, profile_name: str = "") -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    clean_email = email.strip().lower()
+    if not clean_email or '@' not in clean_email:
+        return False, "Valid email address required", None
+    if not password or len(password) < 6:
+        return False, "Password must be at least 6 characters", None
+
+    clean_profile_name = profile_name.strip() if profile_name and profile_name.strip() else "Personal Shield"
+
+    conn = get_connection()
+    existing = conn.execute("SELECT id FROM users WHERE email = ?", (clean_email,)).fetchone()
+    if existing:
+        conn.close()
+        return False, "An account with this email already exists. Please log in.", None
+
+    # Provision dedicated profile for this account with full default rules
+    pid = create_profile(clean_profile_name)
+
+    # Hash password securely
+    pwd_hash = hash_password(password)
+    now = time.time()
+
+    conn = get_connection()
+    conn.execute("""
+    INSERT INTO users (email, password_hash, profile_id, profile_name, is_email_verified, created_at)
+    VALUES (?, ?, ?, ?, 0, ?)
+    """, (clean_email, pwd_hash, pid, clean_profile_name, now))
+    conn.commit()
+    conn.close()
+
+    return True, "Account created successfully", {
+        "email": clean_email,
+        "profile_id": pid,
+        "profile_name": clean_profile_name,
+        "is_email_verified": False,
+        "created_at": now
+    }
+
+def authenticate_user(email: str, password: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    clean_email = email.strip().lower()
+    if not clean_email or not password:
+        return False, "Invalid email or password", None
+
+    conn = get_connection()
+    row = conn.execute("""
+    SELECT id, email, password_hash, profile_id, profile_name, is_email_verified, created_at
+    FROM users WHERE email = ?
+    """, (clean_email,)).fetchone()
+
+    if not row:
+        conn.close()
+        return False, "Invalid email or password", None
+
+    if not verify_password(password, row['password_hash']):
+        conn.close()
+        return False, "Invalid email or password", None
+
+    pid = row['profile_id']
+    # Verify profile exists or recover
+    p = conn.execute("SELECT name, linked_ip, is_protection_on, is_strict_mode FROM profiles WHERE profile_id = ?", (pid,)).fetchone()
+    conn.close()
+
+    actual_pname = p['name'] if p else row['profile_name']
+
+    return True, "Authentication successful", {
+        "email": row["email"],
+        "profile_id": pid,
+        "profile_name": actual_pname,
+        "is_email_verified": bool(row["is_email_verified"]),
+        "created_at": row["created_at"]
+    }
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    clean_email = email.strip().lower()
+    conn = get_connection()
+    row = conn.execute("""
+    SELECT id, email, profile_id, profile_name, is_email_verified, created_at
+    FROM users WHERE email = ?
+    """, (clean_email,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "email": row["email"],
+        "profile_id": row["profile_id"],
+        "profile_name": row["profile_name"],
+        "is_email_verified": bool(row["is_email_verified"]),
+        "created_at": row["created_at"]
+    }
+
+# --- Email Verification Code Store (Option 1B) ---
+
+def store_email_verification_code(email: str, code: str, ttl_seconds: int = 900) -> bool:
+    clean_email = email.strip().lower()
+    expires_at = time.time() + ttl_seconds
+    conn = get_connection()
+    conn.execute("""
+    INSERT OR REPLACE INTO email_verification_codes (email, code, expires_at, attempts)
+    VALUES (?, ?, ?, 0)
+    """, (clean_email, code.strip(), expires_at))
+    conn.commit()
+    conn.close()
+    return True
+
+def verify_user_email_code(email: str, code: str) -> Tuple[bool, str]:
+    clean_email = email.strip().lower()
+    clean_code = code.strip()
+    now = time.time()
+
+    conn = get_connection()
+    row = conn.execute("""
+    SELECT code, expires_at, attempts FROM email_verification_codes WHERE email = ?
+    """, (clean_email,)).fetchone()
+
+    if not row:
+        conn.close()
+        return False, "No pending verification code found. Request a new code."
+
+    if row['expires_at'] < now:
+        conn.execute("DELETE FROM email_verification_codes WHERE email = ?", (clean_email,))
+        conn.commit()
+        conn.close()
+        return False, "Verification code has expired. Request a new code."
+
+    if row['attempts'] >= 5:
+        conn.execute("DELETE FROM email_verification_codes WHERE email = ?", (clean_email,))
+        conn.commit()
+        conn.close()
+        return False, "Too many failed attempts. Request a new code."
+
+    if row['code'] == clean_code:
+        conn.execute("DELETE FROM email_verification_codes WHERE email = ?", (clean_email,))
+        conn.execute("UPDATE users SET is_email_verified = 1 WHERE email = ?", (clean_email,))
+        conn.commit()
+        conn.close()
+        return True, "Email verified successfully"
+    else:
+        conn.execute("UPDATE email_verification_codes SET attempts = attempts + 1 WHERE email = ?", (clean_email,))
+        conn.commit()
+        conn.close()
+        return False, "Invalid verification code. Please check and try again."
+
+def set_user_email_verified(email: str, verified: bool = True) -> bool:
+    clean_email = email.strip().lower()
+    conn = get_connection()
+    conn.execute("UPDATE users SET is_email_verified = ? WHERE email = ?", (1 if verified else 0, clean_email))
+    conn.commit()
+    conn.close()
+    return True
+
+# --- SMTP Configuration Persistence in SQLite (Option 1B) ---
+
+def get_smtp_config() -> Dict[str, Any]:
+    conn = get_connection()
+    rows = conn.execute("""
+    SELECT key, value FROM system_settings 
+    WHERE key IN ('smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'smtp_use_tls', 'smtp_use_ssl', 'smtp_enabled')
+    """).fetchall()
+    conn.close()
+    cfg = {r['key']: r['value'] for r in rows}
+    return {
+        'host': cfg.get('smtp_host', ''),
+        'port': int(cfg.get('smtp_port', '587')) if cfg.get('smtp_port') else 587,
+        'user': cfg.get('smtp_user', ''),
+        'pass': cfg.get('smtp_pass', ''),
+        'from': cfg.get('smtp_from', 'FocusDNS <noreply@focusdns.net>'),
+        'use_tls': cfg.get('smtp_use_tls', '1') in ('1', 'true', 'True'),
+        'use_ssl': cfg.get('smtp_use_ssl', '0') in ('1', 'true', 'True'),
+        'enabled': cfg.get('smtp_enabled', '0') in ('1', 'true', 'True'),
+    }
+
+def set_smtp_config(
+    host: str,
+    port: int = 587,
+    user: str = '',
+    password: str = '',
+    sender: str = '',
+    use_tls: bool = True,
+    use_ssl: bool = False,
+    enabled: bool = True
+) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_host', ?)", (host.strip(),))
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_port', ?)", (str(port),))
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_user', ?)", (user.strip(),))
+    if password:
+        cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_pass', ?)", (password.strip(),))
+    if sender:
+        cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_from', ?)", (sender.strip(),))
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_use_tls', ?)", ('1' if use_tls else '0',))
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_use_ssl', ?)", ('1' if use_ssl else '0',))
+    cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_enabled', ?)", ('1' if enabled else '0',))
+    conn.commit()
+    conn.close()
+    return True
+
+
 

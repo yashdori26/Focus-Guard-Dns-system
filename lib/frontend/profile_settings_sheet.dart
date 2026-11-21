@@ -94,11 +94,7 @@ class _AllProfileSettingsSheetState
       decoration: BoxDecoration(
         color: palette.canvas,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(
-          top: BorderSide(color: palette.border, width: 1),
-          left: BorderSide(color: palette.border, width: 1),
-          right: BorderSide(color: palette.border, width: 1),
-        ),
+        border: Border.all(color: palette.border, width: 1),
       ),
       child: Column(
         children: [

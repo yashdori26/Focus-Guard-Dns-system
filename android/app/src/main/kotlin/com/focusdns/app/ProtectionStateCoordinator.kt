@@ -150,6 +150,14 @@ object ProtectionStateCoordinator {
 
         checkAndNotifyState(context)
         Log.i(TAG, "Protection active set to: $active (canUninstall: ${canUninstall(context)})")
+
+        if (!active && !isTimerActive(context)) {
+            try {
+                FocusDeviceAdminReceiver.requestDeactivate(context)
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed auto-deactivating device admin in normal mode: ${e.message}")
+            }
+        }
     }
 
     fun isProtectionActive(context: Context): Boolean {
@@ -223,6 +231,15 @@ object ProtectionStateCoordinator {
 
             checkAndNotifyState(context)
             Log.i(TAG, "Strict focus timer expired naturally. Uninstallation lock released.")
+
+            if (!protectionActive) {
+                try {
+                    FocusDeviceAdminReceiver.requestDeactivate(context)
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Failed auto-deactivating device admin on timer expiry: ${e.message}")
+                }
+            }
+
             return 0L
         }
 

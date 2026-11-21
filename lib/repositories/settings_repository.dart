@@ -16,7 +16,7 @@ abstract class SettingsRepository {
 }
 
 class InMemorySettingsRepository implements SettingsRepository {
-  bool _protection = true;
+  bool _protection = false;
   bool _strict = false;
   int _remainingSeconds = 0;
   final Map<SecurityFeature, bool> _sec = {

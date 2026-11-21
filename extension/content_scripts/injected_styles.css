@@ -1,0 +1,70 @@
+/**
+ * FocusDNS - Instant Zero-Latency Content Shield (CSS Layer)
+ * Pre-emptively suppresses addictive video shelves and algorithmic feeds before JavaScript loads.
+ */
+
+/* =========================================================================
+ * 1. YOUTUBE SELECTORS
+ * ========================================================================= */
+ytd-rich-shelf-renderer[is-shorts],
+ytd-reel-shelf-renderer,
+ytd-rich-item-renderer:has(a[href*="/shorts/"]),
+ytd-grid-video-renderer:has(a[href*="/shorts/"]),
+ytd-video-renderer:has(a[href*="/shorts/"]),
+a#endpoint[title="Shorts"],
+ytd-mini-guide-entry-renderer[aria-label="Shorts"],
+ytd-guide-entry-renderer:has(a[title="Shorts"]) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* =========================================================================
+ * 2. INSTAGRAM SELECTORS
+ * ========================================================================= */
+a[href*="/reels/"],
+a[href*="/explore/"] {
+  opacity: 0.1 !important;
+}
+
+/* Hide Reels and Explore buttons in navigation sidebar */
+div[role="listitem"]:has(a[href*="/reels/"]),
+div[role="listitem"]:has(a[href*="/explore/"]) {
+  display: none !important;
+}
+
+/* =========================================================================
+ * 3. REDDIT SELECTORS
+ * ========================================================================= */
+shreddit-ad-post,
+[data-testid="ad-post-container"],
+aside[aria-label="Popular Communities"],
+shreddit-async-loader[bundlename="frontpage_carousel"],
+#popular-carousel {
+  display: none !important;
+}
+
+/* =========================================================================
+ * 4. TWITTER / X SELECTORS
+ * ========================================================================= */
+[aria-label="Timeline: Trending now"],
+[data-testid="sidebarColumn"] aside,
+div[data-testid="trend"] {
+  display: none !important;
+}
+
+/* =========================================================================
+ * 5. LINKEDIN SELECTORS
+ * ========================================================================= */
+#feed-news-module,
+.feed-right-rail,
+.ad-banner-container {
+  display: none !important;
+}
+
+/* =========================================================================
+ * 6. TIKTOK SELECTORS
+ * ========================================================================= */
+[data-e2e="feed-live"],
+[data-e2e="nav-live"] {
+  display: none !important;
+}

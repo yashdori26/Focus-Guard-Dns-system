@@ -1,0 +1,29 @@
+[
+  {
+    "id": 501,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||v16-webapp-prime.tiktokcdn.com",
+      "resourceTypes": ["media", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 502,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||tiktok.com/@*/live",
+      "resourceTypes": ["main_frame", "sub_frame", "media"]
+    }
+  },
+  {
+    "id": 503,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||tiktok.com/messages",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  }
+]

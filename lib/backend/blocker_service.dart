@@ -8,9 +8,15 @@ class FocusDnsBlockerManager {
   static const MethodChannel _channel = MethodChannel('focus_dns/blocker');
 
   static bool _simulatedEnabled = false;
+  static bool _simulatedNotificationsGranted = false;
+  static bool _simulatedBatteryIgnored = false;
 
   /// Resets simulation state (useful for test isolation).
-  static void resetSimulation() => _simulatedEnabled = false;
+  static void resetSimulation() {
+    _simulatedEnabled = false;
+    _simulatedNotificationsGranted = false;
+    _simulatedBatteryIgnored = false;
+  }
 
   /// Checks if the FocusDNS Accessibility Service is enabled in Android settings.
   static Future<bool> isAccessibilityServiceEnabled() async {
@@ -76,6 +82,22 @@ class FocusDnsBlockerManager {
     return true;
   }
 
+  /// Synchronizes blocked categories (e.g. porn, gambling) with the native RulesStore.
+  static Future<bool> setBlockedCategories(List<String> categories) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('setBlockedCategories', {
+          'categories': categories,
+        });
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error setting blocked categories: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Synchronizes Strict Mode status with the native RulesStore.
   static Future<bool> setStrictMode(bool enabled, {int? durationMinutes}) async {
     if (!kIsWeb && Platform.isAndroid) {
@@ -109,17 +131,20 @@ class FocusDnsBlockerManager {
 
   /// Synchronizes all rules and flags atomically to native storage.
   static Future<bool> syncRules({
-    required List<String> packages,
+    List<String>? packages,
     required bool isStrictMode,
     int? durationMinutes,
   }) async {
     if (!kIsWeb && Platform.isAndroid) {
       try {
-        final bool? result = await _channel.invokeMethod<bool>('syncRules', {
-          'packages': packages,
+        final Map<String, dynamic> args = {
           'isStrictMode': isStrictMode,
           if (durationMinutes != null && durationMinutes > 0) 'durationMinutes': durationMinutes,
-        });
+        };
+        if (packages != null) {
+          args['packages'] = packages;
+        }
+        final bool? result = await _channel.invokeMethod<bool>('syncRules', args);
         return result ?? false;
       } catch (e) {
         debugPrint('[FocusDNS Blocker] Error syncing rules: $e');
@@ -128,4 +153,88 @@ class FocusDnsBlockerManager {
     }
     return true;
   }
+
+  /// Closes any active blocked foreground app by commanding native Accessibility or Intent.
+  static Future<bool> closeActiveBlockedApp() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('closeActiveBlockedApp');
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error closing active blocked app: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Checks whether FocusDNS is exempted from battery optimizations (Doze mode).
+  static Future<bool> isBatteryOptimizationIgnored() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('isBatteryOptimizationIgnored');
+        return result ?? false;
+      } on MissingPluginException {
+        return _simulatedBatteryIgnored;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error checking battery optimization: $e');
+        return _simulatedBatteryIgnored;
+      }
+    }
+    return _simulatedBatteryIgnored;
+  }
+
+  /// Requests exemption from battery optimizations (Doze mode) for zero-battery background operation.
+  static Future<bool> requestIgnoreBatteryOptimizations() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('requestIgnoreBatteryOptimizations');
+        return result ?? false;
+      } on MissingPluginException {
+        _simulatedBatteryIgnored = true;
+        return true;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error requesting battery optimization ignore: $e');
+        return false;
+      }
+    }
+    _simulatedBatteryIgnored = true;
+    return true;
+  }
+
+  /// Checks whether notification permission is granted.
+  static Future<bool> isNotificationPermissionGranted() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('isNotificationPermissionGranted');
+        return result ?? false;
+      } on MissingPluginException {
+        return _simulatedNotificationsGranted;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error checking notification permission: $e');
+        return _simulatedNotificationsGranted;
+      }
+    }
+    return _simulatedNotificationsGranted;
+  }
+
+  /// Requests notification permission from Android.
+  static Future<bool> requestNotificationPermission() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('requestNotificationPermission');
+        return result ?? false;
+      } on MissingPluginException {
+        _simulatedNotificationsGranted = true;
+        return true;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error requesting notification permission: $e');
+        return false;
+      }
+    }
+    _simulatedNotificationsGranted = true;
+    return true;
+  }
 }
+
+

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focusdns.app/schemas/rule_pack.json",
+  "title": "FocusDNS Signed Dynamic Rule Pack Schema",
+  "description": "Defines the signed dynamic rule pack payload delivered over CDN to mobile and extension engines.",
+  "type": "object",
+  "required": [
+    "packId",
+    "version",
+    "publishedAtEpochMs",
+    "signature",
+    "signerKeyId",
+    "killSwitchActive",
+    "supportedApps",
+    "subfeatureTargets",
+    "categoryDomainRules"
+  ],
+  "properties": {
+    "packId": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "publishedAtEpochMs": { "type": "integer" },
+    "signature": {
+      "type": "string",
+      "description": "Ed25519 signature of the canonical JSON representation (excluding the signature field)."
+    },
+    "signerKeyId": { "type": "string" },
+    "killSwitchActive": {
+      "type": "boolean",
+      "description": "Emergency switch to deactivate remote rule pack if a regression is reported."
+    },
+    "supportedApps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["appId", "displayName", "packageNames", "bundleIds"],
+        "properties": {
+          "appId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "packageNames": { "type": "array", "items": { "type": "string" } },
+          "bundleIds": { "type": "array", "items": { "type": "string" } },
+          "defaultDomains": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "subfeatureTargets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["targetId", "appId", "subfeature", "defaultAction", "resourceIdPatterns"],
+        "properties": {
+          "targetId": { "type": "string" },
+          "appId": { "type": "string" },
+          "subfeature": {
+            "type": "string",
+            "enum": ["feed", "reelsOrShorts", "explore", "recommendations", "stories"]
+          },
+          "resourceIdPatterns": { "type": "array", "items": { "type": "string" } },
+          "contentDescriptionPatterns": { "type": "array", "items": { "type": "string" } },
+          "textPatterns": { "type": "array", "items": { "type": "string" } },
+          "defaultAction": {
+            "type": "string",
+            "enum": ["navigateBack", "sendHome", "showShieldOverlay"]
+          }
+        }
+      }
+    },
+    "categoryDomainRules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["exactDomains", "wildcardSuffixes"],
+        "properties": {
+          "exactDomains": { "type": "array", "items": { "type": "string" } },
+          "wildcardSuffixes": { "type": "array", "items": { "type": "string" } },
+          "regexPatterns": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

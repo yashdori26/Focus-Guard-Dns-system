@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/server_config.dart';
 import '../state_management/providers.dart';
+import 'phone_auth_sheet.dart';
 import 'profile_settings_sheet.dart';
 import 'theme/wabi_sabi_theme.dart';
 
 /// Modal bottom sheet allowing 1-tap switching between DNS profiles,
-/// adding new profiles, and opening profile settings.
+/// dynamic phone SMS account management, and profile customization.
 class ProfileSwitcherSheet extends ConsumerStatefulWidget {
   const ProfileSwitcherSheet({super.key});
 
@@ -34,8 +35,17 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
 
   Future<void> _fetchProfiles() async {
     setState(() => _isLoading = true);
+    final auth = ref.read(authProvider);
     final client = ref.read(apiClientProvider);
-    final list = await client.getProfiles();
+
+    List<Map<String, dynamic>> list = [];
+    if (auth.isLoggedIn && auth.phoneNumber != null) {
+      list = await client.getUserProfiles(auth.phoneNumber!);
+    }
+    if (list.isEmpty) {
+      list = await client.getProfiles();
+    }
+
     if (mounted) {
       setState(() {
         _profiles = list;
@@ -53,7 +63,8 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
     final updated = config.copyWith(activeProfileId: profileId);
     await updated.save();
 
-    // Update setup provider & reload settings
+    // Update state providers
+    ref.read(authProvider.notifier).switchProfile(profileId, profileName);
     ref.read(setupProvider.notifier).updateServerHost(null, profileId);
     await ref.read(settingsProvider.notifier).loadSettings();
 
@@ -79,8 +90,15 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
     if (name.isEmpty) return;
 
     setState(() => _isCreating = true);
+    final auth = ref.read(authProvider);
     final client = ref.read(apiClientProvider);
-    final created = await client.createProfile(name);
+
+    Map<String, dynamic>? created;
+    if (auth.isLoggedIn && auth.phoneNumber != null) {
+      created = await client.createUserProfile(auth.phoneNumber!, name);
+    } else {
+      created = await client.createProfile(name);
+    }
 
     if (mounted) {
       setState(() => _isCreating = false);
@@ -99,8 +117,13 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = WabiSabiPalette.of(context);
-    final activeProfileId = ref.watch(setupProvider).profileId;
-    final activeProfileName = ref.watch(settingsProvider).profileName;
+    final auth = ref.watch(authProvider);
+    final activeProfileId = auth.activeProfileId.isNotEmpty
+        ? auth.activeProfileId
+        : ref.watch(setupProvider).profileId;
+    final activeProfileName = auth.activeProfileName.isNotEmpty
+        ? auth.activeProfileName
+        : ref.watch(settingsProvider).profileName;
 
     return Container(
       decoration: BoxDecoration(
@@ -157,7 +180,135 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 14),
+
+            // Account & Phone Status Card
+            if (!auth.isLoggedIn)
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const PhoneAuthSheet(),
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: palette.canvas,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: palette.ink.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(auth.detectedFlag, style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Instant Phone Login',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: palette.ink,
+                              ),
+                            ),
+                            Text(
+                              '${auth.detectedCountryCode} (${auth.detectedDialCode}) • 1-tap SMS sync across devices',
+                              style: TextStyle(fontSize: 11, color: palette.mutedInk),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: palette.ink,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Sign In',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: palette.canvas,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: palette.ink.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: palette.border),
+                ),
+                child: Row(
+                  children: [
+                    Text(auth.detectedFlag, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                auth.phoneNumber ?? '',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: palette.ink,
+                                  fontFamily: 'JetBrains Mono',
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: palette.ink.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Cloud Synced',
+                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: palette.ink),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '${_profiles.length} profile${_profiles.length == 1 ? '' : 's'} linked',
+                            style: TextStyle(fontSize: 11, color: palette.mutedInk),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        ref.read(authProvider.notifier).logout();
+                        _fetchProfiles();
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text('Sign Out', style: TextStyle(fontSize: 11, color: palette.mutedInk)),
+                    ),
+                  ],
+                ),
+              ),
 
             // Profiles List
             if (_isLoading)
@@ -260,8 +411,6 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                     controller: _newProfileController,
                     style: TextStyle(fontSize: 13, color: palette.ink),
                     decoration: InputDecoration(
-                      hintText: 'New profile name...',
-                      hintStyle: TextStyle(fontSize: 13, color: palette.mutedInk),
                       filled: true,
                       fillColor: palette.canvas,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

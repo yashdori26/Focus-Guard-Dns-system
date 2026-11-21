@@ -9,6 +9,7 @@ Runs:
 import concurrent.futures
 import os
 import socket
+import ssl
 import threading
 from typing import Tuple
 from http.server import HTTPServer
@@ -21,6 +22,26 @@ from .engine import DotServerThread, DoqServerThread, Doh3ServerThread
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+
+class ThreadedHTTPSServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+    def __init__(self, server_address, RequestHandlerClass, ssl_context=None):
+        super().__init__(server_address, RequestHandlerClass)
+        self.ssl_context = ssl_context
+
+    def get_request(self):
+        sock, addr = super().get_request()
+        if self.ssl_context:
+            try:
+                ssl_sock = self.ssl_context.wrap_socket(sock, server_side=True)
+                return ssl_sock, addr
+            except Exception:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+                raise
+        return sock, addr
 
 
 def start_udp_dns_server(host: str = '127.0.0.1', port: int = 5354, max_workers: int = 20):
@@ -41,7 +62,7 @@ def start_udp_dns_server(host: str = '127.0.0.1', port: int = 5354, max_workers:
     def _handle_packet(data: bytes, addr: Tuple[str, int]):
         try:
             # Client IP multi-profile lookup (fallback to default 'a1b2c3')
-            profile_id = 'a1b2c3'
+            profile_id = db.get_profile_by_linked_ip(addr[0]) or 'a1b2c3'
             reply_bytes, _ = resolver.resolve_wire_packet(data, profile_id, addr[0])
             if reply_bytes:
                 sock.sendto(reply_bytes, addr)
@@ -61,9 +82,24 @@ def start_http_api_server(host: str = '127.0.0.1', port: int = 8080):
     print(f"🚀 FocusDNS REST API & DoH Server active on http://{host}:{port}")
     server.serve_forever()
 
+def start_https_api_server(host: str = '127.0.0.1', port: int = 8443):
+    """Starts the multi-threaded HTTPS REST API & DoH server on 127.0.0.1:8443."""
+    cert_path = os.path.join(os.path.dirname(__file__), 'certs', 'focus_dns.crt')
+    key_path = os.path.join(os.path.dirname(__file__), 'certs', 'focus_dns.key')
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        return
+    try:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_path, key_path)
+        server = ThreadedHTTPSServer((host, port), FocusDNSApiHandler, ssl_context=context)
+        print(f"🔒 FocusDNS HTTPS REST API & DoH Server active on https://{host}:{port}")
+        server.serve_forever()
+    except Exception as e:
+        print(f"⚠️ Could not start HTTPS DoH server on {host}:{port}: {e}")
+
 def main():
-    # Default to loopback for security. In containers or VPS, set DNS_HOST=0.0.0.0
-    host = os.environ.get('DNS_HOST', os.environ.get('FOCUS_DNS_HOST', '127.0.0.1'))
+    # Default to 0.0.0.0 to enable LAN multi-device protection (other laptops, phones)
+    host = os.environ.get('DNS_HOST', os.environ.get('FOCUS_DNS_HOST', '0.0.0.0'))
     http_port = int(os.environ.get('HTTP_PORT', os.environ.get('FOCUS_DNS_HTTP_PORT', '8080')))
     udp_port = int(os.environ.get('DNS_PORT', os.environ.get('FOCUS_DNS_UDP_PORT', '5354')))
     dot_port = int(os.environ.get('DOT_PORT', os.environ.get('FOCUS_DNS_DOT_PORT', '8853')))
@@ -104,6 +140,8 @@ def main():
     )
     doq_thread.start()
 
+    https_port = int(os.environ.get('HTTPS_PORT', os.environ.get('FOCUS_DNS_HTTPS_PORT', '8443')))
+
     # 6. Launch RFC 9114 / RFC 8484 DNS-over-HTTP/3 (DoH3) Server
     doh3_thread = Doh3ServerThread(
         host=host,
@@ -111,6 +149,10 @@ def main():
         handler=lambda data, client_ip: resolver.resolve_wire_packet(data, 'a1b2c3', client_ip)
     )
     doh3_thread.start()
+
+    # 6b. Launch HTTPS REST API & RFC 8484 DoH Server (Port 8443)
+    https_thread = threading.Thread(target=start_https_api_server, args=(host, https_port), daemon=True)
+    https_thread.start()
 
     # 7. Launch HTTP REST API & DoH Server
     try:

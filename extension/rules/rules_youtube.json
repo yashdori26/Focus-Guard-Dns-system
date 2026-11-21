@@ -1,0 +1,38 @@
+[
+  {
+    "id": 201,
+    "priority": 1,
+    "action": { "type": "redirect", "redirect": { "url": "https://www.youtube.com/" } },
+    "condition": {
+      "urlFilter": "||youtube.com/shorts/",
+      "resourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 202,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||yt3.ggpht.com/shorts",
+      "resourceTypes": ["image", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 203,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||youtube.com/results*",
+      "resourceTypes": ["main_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 204,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||suggestqueries.google.com",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  }
+]

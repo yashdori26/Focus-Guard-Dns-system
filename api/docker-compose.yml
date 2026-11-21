@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: focusdns-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: focusdns
+      POSTGRES_PASSWORD: focusdns_secure_password_2026
+      POSTGRES_DB: focusdns
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./internal/storage/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U focusdns"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: focusdns-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: focusdns-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      POSTGRES_URL: "postgres://focusdns:focusdns_secure_password_2026@postgres:5432/focusdns?sslmode=disable"
+      REDIS_URL: "redis://redis:6379/0"
+      JWT_SECRET: "focusdns_jwt_production_master_secret_key_32b"
+      UPSTREAM_DOH_URL: "https://1.1.1.1/dns-query"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
+  redisdata:

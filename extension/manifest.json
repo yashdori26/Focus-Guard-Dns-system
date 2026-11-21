@@ -1,0 +1,101 @@
+{
+  "manifest_version": 3,
+  "name": "FocusDNS - Tamper-Proof Focus & Threat Shield",
+  "version": "2.0.0",
+  "description": "Cross-platform cloud-synchronized DNS blocker, anti-doomscroll feed killer, surgical content decoupler, and strict focus companion.",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
+    "declarativeNetRequestWithHostAccess",
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "*://*.instagram.com/*",
+    "*://*.youtube.com/*",
+    "*://*.reddit.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://*.linkedin.com/*",
+    "*://*.facebook.com/*",
+    "*://*.threads.net/*",
+    "*://*.twitch.tv/*",
+    "*://*.pinterest.com/*",
+    "*://*.discord.com/*",
+    "http://localhost:5354/*",
+    "ws://localhost:5354/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.instagram.com/*",
+        "*://*.reddit.com/*",
+        "*://*.twitter.com/*",
+        "*://*.x.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.facebook.com/*",
+        "*://*.threads.net/*"
+      ],
+      "js": ["content_scripts/feed_purger.js"],
+      "css": ["content_scripts/injected_styles.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "rules_instagram",
+        "enabled": true,
+        "path": "rules/rules_instagram.json"
+      },
+      {
+        "id": "rules_youtube",
+        "enabled": true,
+        "path": "rules/rules_youtube.json"
+      },
+      {
+        "id": "rules_reddit",
+        "enabled": true,
+        "path": "rules/rules_reddit.json"
+      },
+      {
+        "id": "rules_twitter",
+        "enabled": true,
+        "path": "rules/rules_twitter.json"
+      },
+      {
+        "id": "rules_tiktok",
+        "enabled": true,
+        "path": "rules/rules_tiktok.json"
+      },
+      {
+        "id": "rules_linkedin",
+        "enabled": true,
+        "path": "rules/rules_linkedin.json"
+      }
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FocusDNS Shield"
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "content_scripts/injected_styles.css"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

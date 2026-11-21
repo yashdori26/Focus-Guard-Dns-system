@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focusdns.app/schemas/session_events.json",
+  "title": "FocusDNS Session Event Sourcing and State Schema",
+  "description": "Defines the event-sourced append-only models and deterministic snapshot states for FocusDNS.",
+  "definitions": {
+    "SessionMode": {
+      "type": "string",
+      "enum": ["NORMAL", "STRICT", "CYCLES", "FEED_ONLY"]
+    },
+    "PrimaryState": {
+      "type": "string",
+      "enum": [
+        "INACTIVE",
+        "ACTIVE_NORMAL",
+        "ACTIVE_FEED",
+        "PAUSED",
+        "STRICT_RUNNING",
+        "CYCLES_RUNNING",
+        "COMPLETED"
+      ]
+    },
+    "PhaseType": {
+      "type": "string",
+      "enum": [
+        "IDLE",
+        "PREPARATION_GRACE",
+        "FOCUS_SESSION",
+        "BREAK_SESSION",
+        "BREAK_EXPIRING_GRACE",
+        "APP_TERMINATION_SWEEP",
+        "CYCLE_ADVANCE",
+        "COMPLETED"
+      ]
+    },
+    "SessionConfig": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "$ref": "#/definitions/SessionMode" },
+        "strictMinutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 480,
+          "description": "Duration for STRICT mode in minutes."
+        },
+        "focusMinutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 480,
+          "description": "Duration per focus block in CYCLES mode."
+        },
+        "breakMinutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 30,
+          "description": "Duration per break block in CYCLES mode."
+        },
+        "totalCycles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Number of focus/break cycles."
+        },
+        "autoTerminateOnBreakEnd": {
+          "type": "boolean",
+          "default": true
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "PhaseInterval": {
+      "type": "object",
+      "required": ["phaseIndex", "phaseType", "cycleNumber", "startEpochMs", "endEpochMs"],
+      "properties": {
+        "phaseIndex": { "type": "integer", "minimum": 0 },
+        "phaseType": { "$ref": "#/definitions/PhaseType" },
+        "cycleNumber": { "type": "integer", "minimum": 1 },
+        "startEpochMs": { "type": "integer", "minimum": 0 },
+        "endEpochMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SessionSnapshot": {
+      "type": "object",
+      "required": [
+        "sessionId",
+        "primaryState",
+        "activePhase",
+        "config",
+        "wallStartEpochMs",
+        "monoStartMs",
+        "totalTargetEndEpochMs",
+        "phases",
+        "activePhaseIndex",
+        "isVpnDegraded"
+      ],
+      "properties": {
+        "sessionId": { "type": "string" },
+        "primaryState": { "$ref": "#/definitions/PrimaryState" },
+        "activePhase": { "$ref": "#/definitions/PhaseType" },
+        "config": { "$ref": "#/definitions/SessionConfig" },
+        "wallStartEpochMs": { "type": "integer" },
+        "monoStartMs": { "type": "integer" },
+        "totalTargetEndEpochMs": { "type": "integer" },
+        "phases": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/PhaseInterval" }
+        },
+        "activePhaseIndex": { "type": "integer", "minimum": 0 },
+        "isVpnDegraded": { "type": "boolean", "default": false },
+        "pauseEndEpochMs": { "type": ["integer", "null"] },
+        "lastMonotonicTickMs": { "type": "integer" },
+        "totalInterventionKills": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SessionEvent": {
+      "type": "object",
+      "required": [
+        "eventId",
+        "sessionId",
+        "sequenceNumber",
+        "eventType",
+        "timestampEpochMs",
+        "monoTimestampMs",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "eventId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "sequenceNumber": { "type": "integer", "minimum": 1 },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "SessionCreated",
+            "SessionStarted",
+            "SessionPaused",
+            "SessionResumed",
+            "PhaseAdvanced",
+            "AppTerminationSweepTriggered",
+            "SessionCompleted",
+            "SessionAborted",
+            "TamperDetected"
+          ]
+        },
+        "timestampEpochMs": { "type": "integer" },
+        "monoTimestampMs": { "type": "integer" },
+        "idempotencyKey": { "type": "string" },
+        "payload": { "type": "object" }
+      }
+    }
+  }
+}

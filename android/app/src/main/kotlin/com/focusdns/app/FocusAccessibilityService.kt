@@ -27,7 +27,69 @@ class FocusAccessibilityService : AccessibilityService() {
         var isRunning: Boolean = false
             private set
 
+        @Volatile
+        var instance: FocusAccessibilityService? = null
+            private set
+
         var onStateChangeListener: ((Boolean) -> Unit)? = null
+
+        fun closeForegroundApp(): Boolean {
+            val s = instance ?: return false
+            return s.performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+
+        val KNOWN_BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.brave.browser",
+            "com.sec.android.app.sbrowser",
+            "org.mozilla.firefox",
+            "org.mozilla.fenix",
+            "org.mozilla.firefox_beta",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.opera.gx",
+            "com.microsoft.emmx",
+            "com.duckduckgo.mobile.android",
+            "com.kiwibrowser.browser",
+            "com.vivaldi.browser",
+            "com.UCMobile.intl",
+            "com.uc.browser.en",
+            "com.yandex.browser",
+            "mark.via.gp",
+            "org.torproject.torbrowser",
+            "org.torproject.torbrowser_alpha"
+        )
+
+        val ADULT_SEARCH_PATTERNS = listOf(
+            "porn", "desi porn", "desihub", "desipapa", "desikahani", "desixx", "desisex", "indian porn", "hindisex",
+            "tamilsex", "bhabhi", "choot", "xxx", "xvideos", "xnxx", "xhamster", "pornhub",
+            "sex video", "sex vid", "hardcore sex", "free porn", "erome", "spankbang", "redtube",
+            "stripchat", "chaturbate", "onlyfans", "fapello", "brazzers", "hentai", "nude video",
+            "javhd", "adult video", "rule34", "naked video", "desi sex", "indian sex", "antarrvasna",
+            "antarvasna", "desiaunty", "auntysex", "mallusex", "chutland", "masaladesi", "chudaimaza",
+            "kamababa", "savita bhabhi", "velamma", "fsiblog", "tamilkama"
+        )
+
+        val GAMBLING_SEARCH_PATTERNS = listOf(
+            "satta", "matka", "kalyan matka", "dpboss", "satta king", "disawar",
+            "gali satta", "online casino", "live casino", "bet365", "1xbet", "parimatch",
+            "dafabet", "stake casino", "aviator game", "teen patti real cash", "rummy for cash",
+            "winzo", "play rummy online", "online gambling", "sports betting", "cricket betting",
+            "tiranga game", "bdg game", "daman games", "91club", "okwin", "tc lottery", "color trading", "fastwin"
+        )
+
+        val PIRACY_SEARCH_PATTERNS = listOf(
+            "tamilrockers", "ibomma", "movierulz", "filmyzilla", "bolly4u", "vegamovies",
+            "katmoviehd", "hdhub4u", "pagalworld", "mp4moviez", "download movie torrent",
+            "free movie download", "full movie download hd", "torrent download", "1337x",
+            "pirate bay", "fitgirl repack", "cracked software", "yts movies", "tamilblasters", "tamilmv"
+        )
+
+        val DATING_SEARCH_PATTERNS = listOf(
+            "call girls", "call girl", "escort service", "escorts in", "skokka", "locanto dating",
+            "local hookup", "casual encounters", "casual sex", "adult dating", "sugar daddy",
+            "meet local singles"
+        )
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -39,6 +101,7 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         isRunning = true
+        instance = this
         onStateChangeListener?.invoke(true)
         registerVpnNetworkCallback()
         Log.i(TAG, "FocusDNS Accessibility Service connected and active.")
@@ -58,30 +121,112 @@ class FocusAccessibilityService : AccessibilityService() {
             pendingVpnDialogRunnable = null
             handleWindowCheck(event, pkg, className)
         } else if (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            // Only inspect content changes in Strict Mode and when targeting sensitive packages
-            if (!RulesStore.isStrictMode(this)) return
-
+            val isBrowser = KNOWN_BROWSER_PACKAGES.contains(pkg)
+            val isStrict = RulesStore.isStrictMode(this)
             val isGuardedTarget = pkg == "com.android.vpndialogs" ||
                 RulesStore.KNOWN_SETTINGS_PACKAGES.contains(pkg) ||
                 RulesStore.KNOWN_INSTALLER_PACKAGES.contains(pkg)
 
-            if (!isGuardedTarget) return
+            if (!isBrowser && (!isStrict || !isGuardedTarget)) return
 
             pendingContentRunnable?.let { handler.removeCallbacks(it) }
+            val delay = if (isBrowser) 150L else 250L
             val runnable = Runnable {
                 handleWindowCheck(event, pkg, className)
             }
             pendingContentRunnable = runnable
-            handler.postDelayed(runnable, 250L)
+            handler.postDelayed(runnable, delay)
         }
+    }
+
+    private fun findBlockedCategoryContent(texts: List<String>, activeCategories: Set<String>): Pair<String, String>? {
+        for (raw in texts) {
+            val lower = raw.lowercase().trim()
+            if (lower.length < 3) continue
+            if (lower == "search" || lower == "search or type web address" || lower == "search or type url" || lower == "new tab") continue
+
+            // 1. Adult & Pornography
+            if (activeCategories.contains("porn")) {
+                for (pattern in ADULT_SEARCH_PATTERNS) {
+                    if (lower.contains(pattern)) {
+                        return Pair("Adult & Pornography", pattern)
+                    }
+                }
+            }
+
+            // 2. Gambling & Betting
+            if (activeCategories.contains("gambling")) {
+                for (pattern in GAMBLING_SEARCH_PATTERNS) {
+                    if (lower.contains(pattern)) {
+                        return Pair("Gambling & Betting", pattern)
+                    }
+                }
+            }
+
+            // 3. Piracy & Torrents
+            if (activeCategories.contains("piracy")) {
+                for (pattern in PIRACY_SEARCH_PATTERNS) {
+                    if (lower.contains(pattern)) {
+                        return Pair("Piracy & Torrents", pattern)
+                    }
+                }
+            }
+
+            // 4. Dating & Escorts
+            if (activeCategories.contains("dating")) {
+                for (pattern in DATING_SEARCH_PATTERNS) {
+                    if (lower.contains(pattern)) {
+                        return Pair("Dating & Escorts", pattern)
+                    }
+                }
+            }
+
+            // 5. Omnibox domain / URL direct evaluation against zero-day category heuristics
+            if (lower.contains(".") && !lower.contains(" ")) {
+                val candidateDomain = lower.substringBefore("/").substringBefore("?").substringBefore(":")
+                for (category in activeCategories) {
+                    if (RulesStore.isDomainInCategory(category, candidateDomain)) {
+                        val catName = category.replaceFirstChar { it.uppercase() }
+                        return Pair(catName, candidateDomain)
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun handleWindowCheck(event: AccessibilityEvent?, pkg: String, className: String?) {
         // 1. Never intercept FocusDNS's own activities
         if (pkg == packageName) return
 
+        // 1b. Immediately block Tor Browser and foreign VPN apps whenever Protection is active
+        val isProtection = ProtectionStateCoordinator.isProtectionActive(this) || FocusDnsVpnService.isRunning
+        val isStrict = RulesStore.isStrictMode(this)
+        if ((isStrict || isProtection) && (RulesStore.isVpnApp(pkg) || pkg == "org.torproject.torbrowser" || pkg == "org.torproject.torbrowser_alpha")) {
+            Log.w(TAG, "Circumvention Shield: Blocked Tor/VPN app in foreground: $pkg")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            launchBlockedScreen(pkg, "Tor Browser & VPN Circumvention Blocked")
+            return
+        }
+
+        // 1c. Universal Real-Time Browser Omnibox & Search Content Shield (Active Categories)
+        if (KNOWN_BROWSER_PACKAGES.contains(pkg)) {
+            val activeCategories = RulesStore.getBlockedCategories(this)
+            if (activeCategories.isNotEmpty()) {
+                val texts = extractWindowTexts(event)
+                val match = findBlockedCategoryContent(texts, activeCategories)
+                if (match != null) {
+                    val (categoryName, term) = match
+                    Log.w(TAG, "Blocked category content '$term' ($categoryName) detected in browser ($pkg)")
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    launchBlockedScreen(pkg, "$categoryName Blocked")
+                    return
+                }
+            }
+        }
+
         // 2. Strict Mode Protection for VPN Dialogs, Installer, & Settings
-        if (RulesStore.isStrictMode(this) || !ProtectionStateCoordinator.canUninstall(this)) {
+        if (isStrict || !ProtectionStateCoordinator.canUninstall(this)) {
             val isGuardedTarget = pkg == "com.android.vpndialogs" ||
                 RulesStore.KNOWN_SETTINGS_PACKAGES.contains(pkg) ||
                 RulesStore.KNOWN_INSTALLER_PACKAGES.contains(pkg) ||
@@ -150,7 +295,7 @@ class FocusAccessibilityService : AccessibilityService() {
             performGlobalAction(GLOBAL_ACTION_HOME)
             val reason = when {
                 RulesStore.isVpnLost(this) -> "FocusDNS VPN Lost — Internet Access Locked"
-                RulesStore.isVpnApp(pkg) -> "Third-Party VPN App Blocked in Strict Mode"
+                RulesStore.isVpnApp(pkg) -> "Tor Browser & VPN Circumvention Blocked"
                 else -> "Deep Focus App Blocked"
             }
             launchBlockedScreen(pkg, reason)
@@ -208,7 +353,7 @@ class FocusAccessibilityService : AccessibilityService() {
         RulesStore.setVpnLost(this, true)
         handler.post {
             performGlobalAction(GLOBAL_ACTION_HOME)
-            launchBlockedScreen("vpn.tunnel.detected", "Third-Party VPN Tunnel Detected in Strict Mode")
+            launchBlockedScreen("vpn.tunnel.detected", "DNS filtering paused, app blocking still on")
         }
     }
 
@@ -264,6 +409,7 @@ class FocusAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         isRunning = false
+        instance = null
         onStateChangeListener?.invoke(false)
         pendingContentRunnable?.let { handler.removeCallbacks(it) }
         pendingVpnDialogRunnable?.let { handler.removeCallbacks(it) }
@@ -274,6 +420,7 @@ class FocusAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         isRunning = false
+        instance = null
         onStateChangeListener?.invoke(false)
         pendingContentRunnable?.let { handler.removeCallbacks(it) }
         pendingVpnDialogRunnable?.let { handler.removeCallbacks(it) }

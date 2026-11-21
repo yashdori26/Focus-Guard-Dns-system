@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:focus_dns/models/enterprise_models.dart';
 import 'package:focus_dns/screens/enterprise_classroom_screen.dart';
 import 'package:focus_dns/services/enterprise_service.dart';
 

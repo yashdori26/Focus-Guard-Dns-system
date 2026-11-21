@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../state_management/live_telemetry_provider.dart';
 import 'theme/wabi_sabi_theme.dart';
 
 class QueryLogItem extends StatelessWidget {
@@ -30,14 +32,14 @@ class QueryLogItem extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(4),
               color: palette.canvas,
-              border: Border.all(color: palette.border, width: 1),
+              border: Border.all(color: palette.hairlineSoft, width: 1),
             ),
             child: Center(
               child: Text(
                 iconText,
-                style: GoogleFonts.plusJakartaSans(
+                style: GoogleFonts.inter(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                   color: palette.ink,
@@ -57,17 +59,17 @@ class QueryLogItem extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: subdomain,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.inter(
                           color: palette.mutedInk,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       TextSpan(
                         text: domain,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.inter(
                           color: palette.ink,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           fontSize: 13.5,
                           letterSpacing: -0.2,
                         ),
@@ -80,10 +82,10 @@ class QueryLogItem extends StatelessWidget {
                   children: [
                     Text(
                       timeAgo,
-                      style: GoogleFonts.plusJakartaSans(
+                      style: GoogleFonts.inter(
                         color: palette.mutedInk,
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     if (isBlocked) ...[
@@ -92,11 +94,11 @@ class QueryLogItem extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
                           color: palette.strictAccent.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           'BLOCKED',
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.inter(
                             color: palette.strictAccent,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
@@ -120,12 +122,14 @@ class AnimatedChart extends StatefulWidget {
   final String filter;
   final Color totalColor;
   final Color blockedColor;
+  final List<LiveDnsQueryItem>? queries;
 
   const AnimatedChart({
     super.key,
     required this.filter,
     required this.totalColor,
     required this.blockedColor,
+    this.queries,
   });
 
   @override
@@ -150,7 +154,7 @@ class _AnimatedChartState extends State<AnimatedChart> with SingleTickerProvider
   @override
   void didUpdateWidget(covariant AnimatedChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filter != widget.filter) {
+    if (oldWidget.filter != widget.filter || oldWidget.queries?.length != widget.queries?.length) {
       _controller.forward(from: 0.15);
     }
   }
@@ -172,6 +176,7 @@ class _AnimatedChartState extends State<AnimatedChart> with SingleTickerProvider
             progress: _animation.value,
             totalColor: widget.totalColor,
             blockedColor: widget.blockedColor,
+            queries: widget.queries,
           ),
         );
       },
@@ -184,12 +189,14 @@ class ChartPainter extends CustomPainter {
   final double progress;
   final Color? totalColor;
   final Color? blockedColor;
+  final List<LiveDnsQueryItem>? queries;
 
   ChartPainter({
     required this.filter,
     this.progress = 1.0,
     this.totalColor,
     this.blockedColor,
+    this.queries,
   });
 
   @override
@@ -213,48 +220,59 @@ class ChartPainter extends CustomPainter {
     final pathTotal = Path();
     final pathBlocked = Path();
 
-    if (filter == '24h') {
-      pathTotal.moveTo(0, morphY(size.height * 0.8));
-      pathTotal.lineTo(size.width * 0.75, morphY(size.height * 0.8));
-      pathTotal.lineTo(size.width, morphY(size.height * 0.15));
+    if (queries != null && queries!.isNotEmpty) {
+      final queryList = queries!;
+      const int segments = 8;
+      final totalCounts = List<int>.filled(segments, 0);
+      final blockedCounts = List<int>.filled(segments, 0);
 
-      pathBlocked.moveTo(0, morphY(size.height * 0.9));
-      pathBlocked.lineTo(size.width, morphY(size.height * 0.9));
-    } else if (filter == '7d') {
-      pathTotal.moveTo(0, morphY(size.height * 0.3));
-      pathTotal.quadraticBezierTo(
-        size.width * 0.2, morphY(size.height * 0.85),
-        size.width * 0.4, morphY(size.height * 0.45),
-      );
-      pathTotal.quadraticBezierTo(
-        size.width * 0.6, morphY(size.height * 0.1),
-        size.width * 0.8, morphY(size.height * 0.75),
-      );
-      pathTotal.lineTo(size.width, morphY(size.height * 0.85));
+      // Distribute queries chronologically into segments
+      for (int i = 0; i < queryList.length; i++) {
+        final bucket = ((queryList.length - 1 - i) * segments / queryList.length).floor().clamp(0, segments - 1);
+        totalCounts[bucket]++;
+        if (queryList[i].isBlocked) {
+          blockedCounts[bucket]++;
+        }
+      }
 
-      pathBlocked.moveTo(0, morphY(size.height * 0.85));
-      pathBlocked.quadraticBezierTo(
-        size.width * 0.5, morphY(size.height * 0.92),
-        size.width, morphY(size.height * 0.85),
-      );
+      int maxVal = totalCounts.reduce(math.max);
+      if (maxVal < 1) maxVal = 1;
+
+      final totalPoints = <Offset>[];
+      final blockedPoints = <Offset>[];
+
+      for (int i = 0; i < segments; i++) {
+        final x = (i / (segments - 1)) * size.width;
+        final tRatio = totalCounts[i] / maxVal;
+        final bRatio = blockedCounts[i] / maxVal;
+
+        final targetYTotal = baseline - (tRatio * (baseline - size.height * 0.15));
+        final targetYBlocked = baseline - (bRatio * (baseline - size.height * 0.15));
+
+        totalPoints.add(Offset(x, morphY(targetYTotal)));
+        blockedPoints.add(Offset(x, morphY(targetYBlocked)));
+      }
+
+      pathTotal.moveTo(totalPoints[0].dx, totalPoints[0].dy);
+      pathBlocked.moveTo(blockedPoints[0].dx, blockedPoints[0].dy);
+
+      for (int i = 0; i < segments - 1; i++) {
+        final p0 = totalPoints[i];
+        final p1 = totalPoints[i + 1];
+        final midX = (p0.dx + p1.dx) / 2;
+        pathTotal.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+
+        final b0 = blockedPoints[i];
+        final b1 = blockedPoints[i + 1];
+        final bMidX = (b0.dx + b1.dx) / 2;
+        pathBlocked.cubicTo(bMidX, b0.dy, bMidX, b1.dy, b1.dx, b1.dy);
+      }
     } else {
-      pathTotal.moveTo(0, morphY(size.height * 0.85));
-      pathTotal.quadraticBezierTo(
-        size.width * 0.2, morphY(size.height * 0.15),
-        size.width * 0.4, morphY(size.height * 0.85),
-      );
-      pathTotal.quadraticBezierTo(
-        size.width * 0.6, morphY(size.height * 0.1),
-        size.width * 0.8, morphY(size.height * 0.85),
-      );
-      pathTotal.lineTo(size.width, morphY(size.height * 0.85));
+      pathTotal.moveTo(0, morphY(baseline));
+      pathTotal.lineTo(size.width, morphY(baseline));
 
-      pathBlocked.moveTo(0, morphY(size.height * 0.9));
-      pathBlocked.quadraticBezierTo(
-        size.width * 0.3, morphY(size.height * 0.82),
-        size.width * 0.6, morphY(size.height * 0.86),
-      );
-      pathBlocked.lineTo(size.width, morphY(size.height * 0.9));
+      pathBlocked.moveTo(0, morphY(baseline));
+      pathBlocked.lineTo(size.width, morphY(baseline));
     }
 
     // Gradient fill under total path

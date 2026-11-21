@@ -10,6 +10,8 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.content.Context
+import android.os.PowerManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -113,8 +115,28 @@ class MainActivity: FlutterActivity() {
                     "isBackendReachable" -> {
                         result.success(FocusDnsVpnService.isBackendReachable)
                     }
+                    "getLiveTelemetry" -> {
+                        result.success(DnsTelemetryManager.getTelemetryMap())
+                    }
+                    "updateDnsRules" -> {
+                        val blockedDomains = call.argument<List<String>>("blockedDomains") ?: emptyList()
+                        val allowedDomains = call.argument<List<String>>("allowedDomains") ?: emptyList()
+                        val blockedCategories = call.argument<List<String>>("blockedCategories")
+                        RulesStore.setBlockedDomains(this@MainActivity, blockedDomains)
+                        RulesStore.setAllowedDomains(this@MainActivity, allowedDomains)
+                        if (blockedCategories != null) {
+                            RulesStore.setBlockedCategories(this@MainActivity, blockedCategories)
+                        }
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
+            }
+        }
+
+        DnsTelemetryManager.onQueryRecorded = { entry ->
+            runOnUiThread {
+                vpnMethodChannel?.invokeMethod("onLiveQuery", entry.toMap())
             }
         }
 
@@ -154,11 +176,30 @@ class MainActivity: FlutterActivity() {
                         RulesStore.setBlockedPackages(this@MainActivity, packages)
                         result.success(true)
                     }
+                    "setBlockedCategories" -> {
+                        val categories = call.argument<List<String>>("categories") ?: emptyList()
+                        RulesStore.setBlockedCategories(this@MainActivity, categories)
+                        result.success(true)
+                    }
                     "setStrictMode" -> {
                         val enabled = call.argument<Boolean>("enabled") ?: false
                         val durationMinutes = call.argument<Int>("durationMinutes")
                         if (enabled && durationMinutes != null && durationMinutes > 0) {
                             RulesStore.setTimedStrictMode(this@MainActivity, durationMinutes)
+                            ProtectionStateCoordinator.setStrictTimer(this@MainActivity, durationMinutes * 60L)
+                            ProtectionStateCoordinator.setProtectionActive(this@MainActivity, true)
+                            if (!FocusDnsVpnService.isRunning) {
+                                startFocusDnsVpn()
+                            }
+                        } else if (!enabled) {
+                            RulesStore.setStrictMode(this@MainActivity, false)
+                            RulesStore.setTimedStrictMode(this@MainActivity, 0)
+                            ProtectionStateCoordinator.setStrictTimer(this@MainActivity, 0L)
+                            ProtectionStateCoordinator.setProtectionActive(this@MainActivity, false)
+                            val stopIntent = Intent(this@MainActivity, FocusDnsVpnService::class.java).apply {
+                                action = FocusDnsVpnService.ACTION_STOP
+                            }
+                            startService(stopIntent)
                         } else {
                             RulesStore.setStrictMode(this@MainActivity, enabled)
                         }
@@ -167,6 +208,55 @@ class MainActivity: FlutterActivity() {
                     "getStrictRemainingSeconds" -> {
                         result.success(RulesStore.getStrictRemainingSeconds(this@MainActivity))
                     }
+                    "closeActiveBlockedApp" -> {
+                        val closed = FocusAccessibilityService.closeForegroundApp()
+                        if (!closed) {
+                            // Fallback to sending HOME intent
+                            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_HOME)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(homeIntent)
+                        }
+                        result.success(true)
+                    }
+                    "isBatteryOptimizationIgnored" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                            result.success(pm?.isIgnoringBatteryOptimizations(packageName) ?: true)
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    "requestIgnoreBatteryOptimizations" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            try {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:$packageName")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(intent)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                val oemSuccess = MultiOemBatteryOptimizer.openOemBatterySettings(this@MainActivity)
+                                result.success(oemSuccess)
+                            }
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    "isNotificationPermissionGranted" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val granted = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                            result.success(granted)
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    "requestNotificationPermission" -> {
+                        requestNotificationPermissionIfNeeded()
+                        result.success(true)
+                    }
                     "syncRules" -> {
                         val packages = call.argument<List<String>>("packages")
                         val isStrictMode = call.argument<Boolean>("isStrictMode")
@@ -174,12 +264,31 @@ class MainActivity: FlutterActivity() {
 
                         // Apply rules off the main thread
                         thread {
-                            if (packages != null) {
+                            if (packages != null && packages.isNotEmpty()) {
                                 RulesStore.setBlockedPackages(this@MainActivity, packages)
                             }
                             if (isStrictMode != null) {
                                 if (isStrictMode && durationMinutes != null && durationMinutes > 0) {
                                     RulesStore.setTimedStrictMode(this@MainActivity, durationMinutes)
+                                    ProtectionStateCoordinator.setStrictTimer(this@MainActivity, durationMinutes * 60L)
+                                    ProtectionStateCoordinator.setProtectionActive(this@MainActivity, true)
+                                    if (!FocusDnsVpnService.isRunning) {
+                                        startFocusDnsVpn()
+                                    }
+                                    if (!FocusDeviceAdminReceiver.isDeviceAdminActive(this@MainActivity)) {
+                                        val intent = FocusDeviceAdminReceiver.createAddDeviceAdminIntent(this@MainActivity)
+                                        startActivity(intent)
+                                    }
+                                } else if (!isStrictMode) {
+                                    RulesStore.setStrictMode(this@MainActivity, false)
+                                    RulesStore.setTimedStrictMode(this@MainActivity, 0)
+                                    ProtectionStateCoordinator.setStrictTimer(this@MainActivity, 0L)
+                                    ProtectionStateCoordinator.setProtectionActive(this@MainActivity, false)
+                                    FocusDeviceAdminReceiver.requestDeactivate(this@MainActivity)
+                                    val stopIntent = Intent(this@MainActivity, FocusDnsVpnService::class.java).apply {
+                                        action = FocusDnsVpnService.ACTION_STOP
+                                    }
+                                    startService(stopIntent)
                                 } else {
                                     RulesStore.setStrictMode(this@MainActivity, isStrictMode)
                                 }
@@ -217,6 +326,26 @@ class MainActivity: FlutterActivity() {
                     "deactivateDeviceAdmin" -> {
                         val deactivated = FocusDeviceAdminReceiver.requestDeactivate(this@MainActivity)
                         result.success(deactivated)
+                    }
+                    "deactivateAndUninstall" -> {
+                        val canUninstall = ProtectionStateCoordinator.canUninstall(this@MainActivity)
+                        if (!canUninstall) {
+                            val remainingSec = ProtectionStateCoordinator.getRemainingTimerSeconds(this@MainActivity)
+                            result.success(mapOf(
+                                "success" to false,
+                                "reason" to "Focus lock active! Cannot uninstall until timer reaches 00:00 ($remainingSec seconds remaining)."
+                            ))
+                        } else {
+                            // 1. Deactivate Device Administrator cleanly
+                            FocusDeviceAdminReceiver.requestDeactivate(this@MainActivity)
+                            // 2. Launch Android package uninstaller dialog
+                            val uninstallIntent = Intent(Intent.ACTION_DELETE).apply {
+                                data = Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(uninstallIntent)
+                            result.success(mapOf("success" to true))
+                        }
                     }
                     "canUninstall" -> {
                         result.success(ProtectionStateCoordinator.canUninstall(this@MainActivity))
@@ -342,6 +471,27 @@ class MainActivity: FlutterActivity() {
             }
         }
 
+        // Audit Scanner Channel for 1-Tap Distraction Audit
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "focus_dns/audit_scanner").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "scanDeviceApps" -> {
+                    thread {
+                        try {
+                            val auditReport = AppAuditScannerManager.scanDeviceApps(this@MainActivity)
+                            runOnUiThread {
+                                result.success(auditReport)
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("SCAN_ERROR", e.message, null)
+                            }
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         ProtectionStateCoordinator.registerListener(object : ProtectionStateCoordinator.StateChangeListener {
             override fun onProtectionStateChanged(sessionState: ProtectionStateCoordinator.SessionState, canUninstall: Boolean, remainingSeconds: Long) {
                 runOnUiThread {
@@ -394,6 +544,7 @@ class MainActivity: FlutterActivity() {
     override fun onDestroy() {
         FocusDnsVpnService.onStateChangeListener = null
         FocusAccessibilityService.onStateChangeListener = null
+        DnsTelemetryManager.onQueryRecorded = null
         super.onDestroy()
     }
 }

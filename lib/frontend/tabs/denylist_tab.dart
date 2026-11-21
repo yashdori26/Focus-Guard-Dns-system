@@ -143,29 +143,27 @@ class _DenylistTabState extends ConsumerState<DenylistTab> {
                           color: palette.ink,
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: palette.mutedInk, size: 16),
-                        onPressed: () {
-                          if (strictState.isStrict) {
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            final mins = (strictState.remainingSeconds / 60).ceil();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  strictState.remainingSeconds > 0
-                                      ? '🔒 Strict Mode active ($mins min remaining). Cannot remove domains from denylist until timer expires.'
-                                      : '🔒 Strict Mode active. Cannot remove domains from denylist until session ends.',
-                                ),
-                                backgroundColor: palette.surface,
-                              ),
-                            );
-                            return;
-                          }
-                          ref.read(denylistProvider.notifier).remove(domain);
-                        },
-                        constraints: const BoxConstraints(),
-                        padding: const EdgeInsets.all(4),
-                      ),
+                      if (strictState.isStrict)
+                        Tooltip(
+                          message: 'Locked during Strict Mode',
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.lock_outline_rounded,
+                              color: palette.mutedInk.withOpacity(0.4),
+                              size: 14,
+                            ),
+                          ),
+                        )
+                      else
+                        IconButton(
+                          icon: Icon(Icons.close, color: palette.mutedInk, size: 16),
+                          onPressed: () {
+                            ref.read(denylistProvider.notifier).remove(domain);
+                          },
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(4),
+                        ),
                     ],
                   ),
                 );

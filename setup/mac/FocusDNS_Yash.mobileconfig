@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadDisplayName</key>
+    <string>FocusDNS Shield (Yash)</string>
+    <key>PayloadDescription</key>
+    <string>System-Wide Encrypted DNS Protection for Profile Yash (dce22d)</string>
+    <key>PayloadIdentifier</key>
+    <string>org.focusdns.profile.dce22d</string>
+    <key>PayloadOrganization</key>
+    <string>FocusDNS Security Authority</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>84354DAF-1523-4AA3-BB6E-1268B2AAA022</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadContent</key>
+    <array>
+        <!-- Root Certificate Authority -->
+        <dict>
+            <key>PayloadCertificateFileName</key>
+            <string>focus_dns.crt</string>
+            <key>PayloadContent</key>
+            <data>
+MIIDrDCCApSgAwIBAgIUX3GVLTK3LPBlx18YolqXx0AaHCowDQYJKoZIhvcNAQELBQAwTjELMAkGA1UEBhMCVVMxJDAiBgNVBAoMG0ZvY3VzRE5TIFNlY3VyaXR5IEF1dGhvcml0eTEZMBcGA1UEAwwQRm9jdXNETlMgUm9vdCBDQTAeFw0yNjExMTcxMTQ4MDJaFw0zNjExMTQxMTUzMDJaME4xCzAJBgNVBAYTAlVTMSQwIgYDVQQKDBtGb2N1c0ROUyBTZWN1cml0eSBBdXRob3JpdHkxGTAXBgNVBAMMEEZvY3VzRE5TIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCxc/462bL9WYv+jaNpSdEhpN4kPdkxg8zkflOJT3r25KCWV62rB8pIZkD8UnnS405ImT0zobOo+x3j6snEIWzX/wP8dNnkOGyxhcQZ4ZT2W6Li6SA+BU9Qj/+uVVhxjZ5CC9fBRFasqrRI0XmWFdGSOPWZpkuHURy3QWN2O/Ug78gS1TRYVzTcDP6zdHq+AdPZaY5l6+4to1e25DrsTL4YKqUASCdQV9VAYoT6oqeyRKCG5UXv7xaQp7DldZz6tlXaBGHu3+Sgi67A9mBlCBy3Spr+LRfoOk/4v5E/m/XUWYsr6n9QRHiceF65JIb42qDUYZeD1PbYL48pUyBSbSEnAgMBAAGjgYEwfzA9BgNVHREENjA0gglsb2NhbGhvc3SHBH8AAAGHEAAAAAAAAAAAAAAAAAAAAAGHBMCoAGaCCWFyY2hsaW51eDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBpjAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDQYJKoZIhvcNAQELBQADggEBAGWKTPs6BN6ppmp5jnbfP32bSfjUSnGhJqewf9BtPKVB47G16ikuVTk9QiaPvDKwQN+/Xz0BHNXsL+Fpw2BYWr4N9ecWnUN7/YunQRYCHFCCALA4hJ1/0xBc4J8DLukOMP1Y3dmhNW1DzA0ndEnnAVbojf8q7cvk0HBDunY3A2Ia6f6ix0l6qDf/l9lUlp7cJxWs1X3SX5oLD71m7RY1mVRd4V0qRUNzgkze1Mh+JyseOfpepzRsH/wrgecwahiXuwOMmyey+6Jz0ZPtxdRT80jQoDCHyEsTixWhrmKhS1wI9BGXq/31Yoddke49VbxgasPY8aI0C0CZ1vVQ1bzQIpM=
+            </data>
+            <key>PayloadDescription</key>
+            <string>FocusDNS Root Certificate Authority</string>
+            <key>PayloadDisplayName</key>
+            <string>FocusDNS Root CA</string>
+            <key>PayloadIdentifier</key>
+            <string>org.focusdns.rootca</string>
+            <key>PayloadType</key>
+            <string>com.apple.security.root</string>
+            <key>PayloadUUID</key>
+            <string>04D5AE7A-FDB6-4AE2-BFAB-8EE9CB66F50A</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+        </dict>
+        <!-- Encrypted DNS Settings (DoH) -->
+        <dict>
+            <key>DNSSettings</key>
+            <dict>
+                <key>DNSProtocol</key>
+                <string>HTTPS</string>
+                <key>ServerURL</key>
+                <string>https://192.168.0.102:8443/dns-query/dce22d</string>
+                <key>ServerAddresses</key>
+                <array>
+                    <string>192.168.0.102</string>
+                </array>
+                <key>SupplementalMatchDomains</key>
+                <array>
+                    <string></string>
+                </array>
+            </dict>
+            <key>PayloadDescription</key>
+            <string>FocusDNS Encrypted DNS over HTTPS Settings</string>
+            <key>PayloadDisplayName</key>
+            <string>FocusDNS DoH Engine</string>
+            <key>PayloadIdentifier</key>
+            <string>org.focusdns.dnssettings.dce22d</string>
+            <key>PayloadType</key>
+            <string>com.apple.dnsSettings.managed</string>
+            <key>PayloadUUID</key>
+            <string>C1B3D076-5D76-4CE1-8DD2-4417D0627F05</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+        </dict>
+    </array>
+</dict>
+</plist>

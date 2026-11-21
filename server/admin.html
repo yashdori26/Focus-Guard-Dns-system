@@ -642,6 +642,7 @@
       document.write('<style>#auth-screen { display: none !important; } #dashboard-screen { display: flex !important; }</style>');
     }
   </script>
+  <link rel="stylesheet" href="/admin/assets/admin_ext.css">
 </head>
 <body>
 
@@ -1368,8 +1369,8 @@
             <td><strong>${p.name}</strong></td>
             <td>${modeBadge}</td>
             <td class="mono">${p.queries_today.toLocaleString()}</td>
-            <td style="white-space:nowrap;">
               <a href="/api/profile/${p.profile_id}/apple.mobileconfig" class="btn btn-subtle btn-sm" download style="text-decoration:none; margin-right:6px;" title="Download Apple iOS / macOS DNS Profile">🍏 Apple Config</a>
+              <a href="/focusdns.apk" class="btn btn-subtle btn-sm" download style="text-decoration:none; margin-right:6px;" title="Download Android APK">🤖 Android APK</a>
               ${p.profile_id !== 'a1b2c3' ? `<button class="btn btn-danger btn-sm" onclick="revokeProfile('${p.profile_id}', '${p.name}')">Revoke</button>` : `<span style="font-size:11px;color:var(--dimmed)">DEFAULT</span>`}
             </td>
           `;
@@ -1512,5 +1513,9 @@
       }
     }
   </script>
+  <script src="/admin/assets/admin_ext.js"></script>
+  <link rel="stylesheet" href="/admin_assets/css/admin_theme.css">
+  <script src="/admin_assets/js/fleet_controller.js"></script>
+  <script src="/admin_assets/js/analytics_dashboard.js"></script>
 </body>
 </html>

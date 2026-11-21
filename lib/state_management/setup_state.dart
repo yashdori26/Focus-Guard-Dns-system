@@ -132,6 +132,18 @@ class SetupNotifier extends StateNotifier<SetupState> {
         ipv6Endpoints: ipv6,
         appleMobileConfigUrl: serverApple,
       );
+
+      // Auto-sync client IP silently in background so the user never needs to manually refresh in Setup
+      if (serverClientIp != null &&
+          serverClientIp.isNotEmpty &&
+          serverClientIp != 'No IP linked' &&
+          (serverLinkedIp == null || serverLinkedIp.isEmpty || serverLinkedIp == 'No IP linked' || serverLinkedIp != serverClientIp)) {
+        _client.linkIp(serverClientIp).then((newLinked) {
+          if (mounted && newLinked != null && newLinked.isNotEmpty) {
+            state = state.copyWith(linkedIp: newLinked);
+          }
+        }).catchError((_) {});
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
@@ -167,6 +179,26 @@ class SetupNotifier extends StateNotifier<SetupState> {
 
     state = state.copyWith(isUpdatingIp: false);
     return false;
+  }
+
+  /// Automatically syncs and links network IP in background without blocking UI
+  Future<void> autoSyncAndLinkIp() async {
+    try {
+      final detectedIp = await _client.detectClientIp();
+      final ipToLink = (detectedIp != null && detectedIp.isNotEmpty && detectedIp != 'No IP linked')
+          ? detectedIp
+          : state.currentClientIp;
+
+      if (ipToLink != null && ipToLink.isNotEmpty && ipToLink != 'No IP linked') {
+        state = state.copyWith(currentClientIp: ipToLink);
+        final newLinked = await _client.linkIp(ipToLink);
+        if (mounted && newLinked != null && newLinked.isNotEmpty) {
+          state = state.copyWith(linkedIp: newLinked);
+        } else if (mounted) {
+          state = state.copyWith(linkedIp: ipToLink);
+        }
+      }
+    } catch (_) {}
   }
 }
 

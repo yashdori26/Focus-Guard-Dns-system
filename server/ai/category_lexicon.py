@@ -72,7 +72,12 @@ CATEGORY_VOCABULARY: Dict[str, Dict[str, float]] = {
         "cam": 4.0, "erotic": 5.0, "nsfw": 5.0, "dating": 3.5, "hookup": 4.5,
         "strip": 4.5, "escort": 5.0, "mature": 3.5, "sensual": 4.0, "webcam": 4.0,
         "livecam": 4.5, "fetish": 5.0, "kink": 4.5, "bdsm": 5.0, "nudist": 4.5,
-        "onlyfans": 5.0, "fansly": 5.0, "chaturbate": 5.0, "pornhub": 5.0, "xvideos": 5.0
+        "onlyfans": 5.0, "fansly": 5.0, "chaturbate": 5.0, "pornhub": 5.0, "xvideos": 5.0,
+        "desihub": 5.0, "desipapa": 5.0, "desikahani": 5.0, "desisex": 5.0, "desiaunty": 5.0,
+        "auntysex": 5.0, "mallusex": 5.0, "chutland": 5.0, "masaladesi": 5.0, "antarvasna": 5.0,
+        "chudaimaza": 5.0, "chudai": 5.0, "choot": 5.0, "gaand": 5.0, "bhabhi": 5.0,
+        "savita": 5.0, "velamma": 5.0, "kamasutra": 5.0, "kamababa": 5.0, "malluporn": 5.0,
+        "randi": 5.0, "suhagraat": 5.0, "fsiblog": 5.0, "nude": 4.5, "naked": 4.5, "dildo": 5.0
     },
 
     CAT_PRODUCTIVITY: {
@@ -110,7 +115,10 @@ CATEGORY_VOCABULARY: Dict[str, Dict[str, float]] = {
         "poker": 5.0, "slots": 5.0, "roulette": 5.0, "jackpot": 5.0, "wager": 4.5,
         "lotto": 5.0, "lottery": 5.0, "crypto": 4.0, "btc": 4.0, "eth": 4.0,
         "token": 3.5, "swap": 3.5, "dex": 4.0, "defi": 4.0, "nft": 4.0,
-        "gamble": 5.0, "sportsbook": 5.0, "1xbet": 5.0, "bovada": 5.0, "pinnacle": 5.0
+        "gamble": 5.0, "sportsbook": 5.0, "1xbet": 5.0, "bovada": 5.0, "pinnacle": 5.0,
+        "satta": 5.0, "matka": 5.0, "kalyan": 5.0, "dpboss": 5.0, "disawar": 5.0,
+        "tiranga": 5.0, "bdggame": 5.0, "damangame": 5.0, "91club": 5.0, "okwin": 5.0,
+        "teenpatti": 5.0, "rummy": 5.0, "aviator": 5.0, "winzo": 5.0, "fastwin": 5.0
     },
 
     CAT_MALWARE: {

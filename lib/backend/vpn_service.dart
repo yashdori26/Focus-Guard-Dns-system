@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,12 @@ class FocusDnsVpnManager {
   static const MethodChannel _channel = MethodChannel('focus_dns/vpn');
 
   static bool _simulatedRunning = false;
+  static final StreamController<Map<String, dynamic>> _liveQueryStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  static Stream<Map<String, dynamic>> get liveQueryStream =>
+      _liveQueryStreamController.stream;
+
 
   /// Requests VPN permission from the Android system.
   /// Returns `true` if permission is granted, `false` if user denied or pending.
@@ -112,7 +119,52 @@ class FocusDnsVpnManager {
     return true;
   }
 
-  /// Sets up a listener for real-time VPN and backend connectivity state changes.
+  /// Retrieves real-time DNS telemetry from the native engine.
+  static Future<Map<String, dynamic>> getLiveTelemetry() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final res = await _channel.invokeMethod<Map>('getLiveTelemetry');
+        if (res != null) {
+          return Map<String, dynamic>.from(res);
+        }
+      } catch (e) {
+        debugPrint('[FocusDNS VPN] Error getting live telemetry: $e');
+      }
+    }
+    return {
+      'totalQueries': 0,
+      'blockedQueries': 0,
+      'blockedPercentage': '0.0%',
+      'threatRatio': 0.0,
+      'averageLatencyMs': 0,
+      'recentQueries': <Map<String, dynamic>>[],
+    };
+  }
+
+  /// Synchronizes dynamic blocked and allowed domain lists to the local VPN engine.
+  static Future<bool> updateDnsRules({
+    required List<String> blockedDomains,
+    required List<String> allowedDomains,
+    List<String> blockedCategories = const [],
+  }) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? res = await _channel.invokeMethod<bool>('updateDnsRules', {
+          'blockedDomains': blockedDomains,
+          'allowedDomains': allowedDomains,
+          'blockedCategories': blockedCategories,
+        });
+        return res ?? true;
+      } catch (e) {
+        debugPrint('[FocusDNS VPN] Error updating DNS rules: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Sets up a listener for real-time VPN and backend connectivity state changes,
+  /// as well as incoming live query stream events.
   static void registerStateListener(void Function(bool isRunning, bool isBackendReachable) onStateChange) {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onVpnStateChanged') {
@@ -120,7 +172,13 @@ class FocusDnsVpnManager {
         final running = args?['isRunning'] as bool? ?? false;
         final reachable = args?['isBackendReachable'] as bool? ?? true;
         onStateChange(running, reachable);
+      } else if (call.method == 'onLiveQuery') {
+        final args = call.arguments as Map<dynamic, dynamic>?;
+        if (args != null) {
+          _liveQueryStreamController.add(Map<String, dynamic>.from(args));
+        }
       }
     });
   }
 }
+

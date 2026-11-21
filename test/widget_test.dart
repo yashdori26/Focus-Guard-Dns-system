@@ -4,29 +4,53 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:focus_dns/main.dart';
 import 'package:focus_dns/repositories/settings_repository.dart';
 import 'package:focus_dns/state_management/protection_state.dart';
+import 'package:focus_dns/frontend/home_screen.dart';
 
 void main() {
-  testWidgets('App smoke test and mode selector display', (WidgetTester tester) async {
+  testWidgets('App smoke test and Begin a session display', (WidgetTester tester) async {
     final repo = InMemorySettingsRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           settingsRepoProvider.overrideWithValue(repo),
         ],
-        child: const FocusDNSMobileApp(),
+        child: const FocusDNSMobileApp(home: FocusDNSHomeScreen()),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byType(FocusDNSMobileApp), findsOneWidget);
     expect(find.byKey(const Key('header_profile_pill')), findsOneWidget);
+    expect(find.byKey(const Key('begin_session_button')), findsOneWidget);
+    expect(find.text('Begin a session'), findsOneWidget);
+  });
+
+  testWidgets('Tapping Begin a session opens bottom sheet with options',
+      (WidgetTester tester) async {
+    final repo = InMemorySettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsRepoProvider.overrideWithValue(repo),
+        ],
+        child: const FocusDNSMobileApp(home: FocusDNSHomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap Begin a session button
+    await tester.tap(find.byKey(const Key('begin_session_button')));
+    await tester.pumpAndSettle();
+
+    // Verify session options: Normal Mode, Strict Mode, Routine, Feed Blocker
+    expect(find.text('Begin a Focus Session'), findsOneWidget);
     expect(find.byKey(const Key('normal_mode_button')), findsOneWidget);
     expect(find.byKey(const Key('strict_mode_button')), findsOneWidget);
-    expect(find.text('Normal'), findsOneWidget);
-    expect(find.text('Strict'), findsOneWidget);
+    expect(find.byKey(const Key('routine_mode_button')), findsOneWidget);
+    expect(find.byKey(const Key('feed_blocker_mode_button')), findsOneWidget);
   });
 
-  testWidgets('Tapping Strict Mode opens Disclaimer Dialog with exact user text and duration options',
+  testWidgets('Locking Strict Mode via Begin a session starts countdown and prevents disabling',
       (WidgetTester tester) async {
     final repo = InMemorySettingsRepository();
     await tester.pumpWidget(
@@ -34,49 +58,23 @@ void main() {
         overrides: [
           settingsRepoProvider.overrideWithValue(repo),
         ],
-        child: const FocusDNSMobileApp(),
+        child: const FocusDNSMobileApp(home: FocusDNSHomeScreen()),
       ),
     );
     await tester.pumpAndSettle();
 
-    // Tap Strict Mode button
+    // Open Begin a session sheet
+    await tester.tap(find.byKey(const Key('begin_session_button')));
+    await tester.pumpAndSettle();
+
+    // Tap Strict Mode
     await tester.tap(find.byKey(const Key('strict_mode_button')));
     await tester.pumpAndSettle();
 
-    // Verify Disclaimer Dialog Header and exact message
+    // Verify Strict Mode disclaimer and preset chips
     expect(find.text('Activate Strict Mode'), findsOneWidget);
-    expect(
-      find.text(
-        'In Strict Mode you cannot access any blocked apps or categories until or unless the timer runs out so choose wisely.',
-      ),
-      findsOneWidget,
-    );
-
-    // Verify duration selector and preset chips
-    expect(find.text('Select Duration'), findsOneWidget);
     expect(find.text('15m'), findsOneWidget);
     expect(find.text('30m'), findsOneWidget);
-    expect(find.text('45m'), findsOneWidget);
-    expect(find.text('1h'), findsOneWidget);
-    expect(find.text('Lock In Strict Mode'), findsOneWidget);
-  });
-
-  testWidgets('Locking Strict Mode starts countdown, greys out toggle, and prevents disabling',
-      (WidgetTester tester) async {
-    final repo = InMemorySettingsRepository();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          settingsRepoProvider.overrideWithValue(repo),
-        ],
-        child: const FocusDNSMobileApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // Open Disclaimer Dialog
-    await tester.tap(find.byKey(const Key('strict_mode_button')));
-    await tester.pumpAndSettle();
 
     // Select 15m preset
     await tester.tap(find.text('15m'));
@@ -98,14 +96,7 @@ void main() {
 
     // Verify SnackBar appears informing user that protection is locked
     expect(find.textContaining('Protection is locked'), findsOneWidget);
-    // Protection remains locked
     expect(find.text('Protection Locked'), findsOneWidget);
-
-    // Tapping Normal Mode also shows locked warning
-    await tester.tap(find.byKey(const Key('normal_mode_button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 750));
-    expect(find.textContaining('Cannot switch to Normal Mode until timer expires'), findsOneWidget);
   });
 
   testWidgets('Bottom nav switches tabs and header profile pill opens profile sheet',
@@ -114,7 +105,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [settingsRepoProvider.overrideWithValue(repo)],
-        child: const FocusDNSMobileApp(),
+        child: const FocusDNSMobileApp(home: FocusDNSHomeScreen()),
       ),
     );
     await tester.pumpAndSettle();

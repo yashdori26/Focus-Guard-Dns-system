@@ -1,0 +1,4 @@
+<resources>
+    <string name="device_admin_label">FocusDNS Anti-Tamper Shield</string>
+    <string name="device_admin_description">Guards uninstallation and system settings tampering during strict focus routines.</string>
+</resources>

@@ -1,0 +1,29 @@
+[
+  {
+    "id": 601,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||media.licdn.com/dms/video",
+      "resourceTypes": ["media", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 602,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||linkedin.com/messaging",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  },
+  {
+    "id": 603,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||linkedin.com/jobs",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest"]
+    }
+  }
+]

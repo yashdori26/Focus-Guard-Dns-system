@@ -409,24 +409,62 @@ APP_PACKAGES = {
 
 # Known category domain targets (strictly matched by domain suffix)
 CATEGORY_DOMAINS = {
+    'porn': {
+        'pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'stripchat.com',
+        'chaturbate.com', 'onlyfans.com', 'redtube.com', 'youporn.com', 'spankbang.com',
+        'erome.com', 'livejasmin.com', 'camsoda.com', 'brazzers.com', 'beeg.com',
+        'eporner.com', 'hqporner.com', 'txxx.com', 'tube8.com', 'adultfriendfinder.com',
+        'bonga.com', 'bongacams.com', 'fapello.com', 'cam4.com', 'rule34.xxx',
+        'gelbooru.com', 'danbooru.donmai.us', 'e-hentai.org', 'nhentai.net',
+        'tnaflix.com', 'redgifs.com', 'desihub.net', 'desihub.com', 'desipapa.com',
+        'desikahani.net', 'desiaunty.com', 'auntysex.com', 'mallusex.net',
+        'chutland.com', 'masaladesi.com', 'antarvasna.com', 'antarrvasna.com',
+        'chudaimaza.com', 'tamilkamakathaikal.com', 'fsiblog.com', 'kamababa.com',
+        'malluporn.com', 'fansly.com', 'coomer.party', 'kemono.party', 'simpcity.su',
+        'thothub.to', 'erothots.co', 'faphero.com'
+    },
+    'dating': {
+        'tinder.com', 'bumble.com', 'hinge.co', 'match.com', 'okcupid.com',
+        'badoo.com', 'grindr.com', 'pure.app', 'pof.com', 'zoosk.com',
+        'skokka.com', 'locanto.com', 'adultfriendfinder.com', 'fetlife.com',
+        'ashleymadison.com', 'seeking.com', 'sugarbaby.com'
+    },
     'piracy': {
         'thepiratebay.org', '1337x.to', 'rarbg.to', 'yts.mx', 'fmoviesz.to',
-        'fitgirl-repacks.site', 'torrentfreak.com', 'nyaa.si', 'rutracker.org'
+        'fitgirl-repacks.site', 'torrentfreak.com', 'nyaa.si', 'rutracker.org',
+        'tamilrockers.ws', 'ibomma.bar', 'movierulz.vpn', 'filmyzilla.com',
+        'bolly4u.org', 'vegamovies.vip', 'katmoviehd.eu', 'hdhub4u.tv',
+        'tamilblasters.cam', 'tamilmv.app', 'extramovies.vip'
     },
     'gambling': {
         'bet365.com', 'draftkings.com', 'pokerstars.com', 'stake.com',
-        'casino.com', '1xbet.com', 'betway.com', 'bovada.lv', 'betfair.com'
+        'casino.com', '1xbet.com', 'betway.com', 'bovada.lv', 'betfair.com',
+        'parimatch.com', 'dafabet.com', 'melbet.com', 'fairplay.club',
+        'tiranga.games', 'bdggame.com', 'damangames.net', '91club.com',
+        'okwin.games', 'tc-lottery.com', 'dpboss.net', 'sattaking.com',
+        'kalyanmatka.com', 'winzo.com', 'mpl.live', 'aviator.game'
     },
     'social': {
-        'facebook.com', 'fbcdn.net', 'twitter.com', 'x.com', 'snapchat.com',
-        'threads.net', 'linkedin.com', 'pinterest.com'
+        'facebook.com', 'fbcdn.net', 'fbsbx.com', 'fb.me', 'fb.com', 'messenger.com', 'meta.com',
+        'twitter.com', 'x.com', 'twimg.com', 't.co', 'periscope.tv', 'pscp.tv',
+        'instagram.com', 'cdninstagram.com', 'ig.me', 'threads.net', 'threads.com',
+        'tiktok.com', 'tiktokv.com', 'tiktokcdn.com', 'tiktokcdn-us.com', 'byteoversea.com', 'ibytedtos.com', 'musical.ly',
+        'snapchat.com', 'sc-cdn.net', 'snapkit.com',
+        'reddit.com', 'redd.it', 'redditmedia.com', 'redditstatic.com',
+        'discord.com', 'discordapp.com', 'discord.gg', 'discord.media',
+        'whatsapp.com', 'whatsapp.net', 'wa.me',
+        'linkedin.com', 'licdn.com', 'pinterest.com', 'pinimg.com', 'tumblr.com'
     },
     'gaming': {
-        'roblox.com', 'epicgames.com', 'ea.com', 'riotgames.com', 'ubisoft.com',
-        'playstation.com', 'nintendo.com'
+        'roblox.com', 'rbxcdn.com', 'epicgames.com', 'ea.com', 'riotgames.com', 'ubisoft.com',
+        'playstation.com', 'nintendo.com', 'steampowered.com', 'steamcommunity.com', 'steamgames.com',
+        'steamstatic.com', 'steamcontent.com', 'battle.net', 'blizzard.com', 'xbox.com', 'xboxlive.com'
     },
     'video': {
-        'twitch.tv', 'dailymotion.com', 'disneyplus.com', 'primevideo.com'
+        'youtube.com', 'youtu.be', 'googlevideo.com', 'ytimg.com', 'yt.be',
+        'netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxext.com', 'nflxso.net',
+        'twitch.tv', 'ttvnw.net', 'jtvnw.net', 'twitchcdn.net',
+        'dailymotion.com', 'disneyplus.com', 'primevideo.com', 'kick.com', 'hulu.com', 'vimeo.com'
     },
 }
 
@@ -538,6 +576,262 @@ def is_local_zone(fqdn: str) -> bool:
     """Checks if a domain belongs to a standard local or home network zone."""
     local_suffixes = ('.local', '.lan', '.home.arpa', '.internal', '.localhost')
     return any(fqdn.endswith(s) or fqdn == s[1:] for s in local_suffixes)
+
+LIFE_SAFETY_DOMAINS = {
+    '911.gov', '112.gov', 'emergency.gov', 'play.googleapis.com',
+    'update.microsoft.com', 'push.apple.com'
+}
+
+ADULT_SUBSTRINGS = (
+    'porn', 'xxx', 'desihub', 'desixx', 'xvideo', 'xnxx', 'xhamster', 'pornhub',
+    'erome', 'spankbang', 'redtube', 'stripchat', 'chaturbate', 'onlyfans',
+    'fapello', 'brazzers', 'beeg', 'eporner', 'hqporner', 'txxx', 'tube8',
+    'adultfriendfinder', 'bongacams', 'bonga', 'tnaflix', 'redgifs', 'cam4',
+    'camsoda', 'livejasmin', 'rule34', 'gelbooru', 'hentai', 'nhentai',
+    'javhd', 'javcensored', 'javporn', 'desisex', 'hindisex', 'tamilsex',
+    'telugusex', 'bengalisex', 'marathisex', 'punjabisex', 'bhabhi', 'choot',
+    'gaand', 'chudai', 'chudayi', 'boobs', 'milf', 'incest', 'fetish', 'dildo',
+    'masturbat', 'orgasm', 'cumshot', 'creampie', 'shemale', 'fapvid',
+    'hardcoresex', 'freeporn', 'sexvid', 'sexporn', 'adultweb', 'adultsite',
+    'nudevid', 'nakedvid', 'antarrvasna', 'antarvasna', 'savita', 'velamma',
+    'luststories', 'youjizz', 'heavy-r', 'daftsex', 'motherless', 'x-art', 'nuvid',
+    'porn555', 'kamababa', 'malluporn', 'randi', 'suhagraat', 'kamasutra',
+    'desipapa', 'desikahani', 'desiaunty', 'desimamas', 'desimature', 'masaladesi',
+    'chudaimaza', 'auntysex', 'mallusex', 'tamilkama', 'telugusex', 'chutland',
+    'fsiblog', 'kamabhabhi', 'kamakathai', 'kambikathakal', 'kambi', 'rasika',
+    'bhabhixxx', 'desibhabhi', 'fansly', 'camgirls', 'webcams', 'camwhores',
+    'leakgirls', 'coomer', 'kemono', 'thothub', 'erothots', 'faphero', 'simpcity',
+    'porndude', 'slutmesh'
+)
+ADULT_TLDS = ('.xxx', '.adult', '.porn', '.cam', '.sex', '.tube', '.fetish', '.erotica')
+EXPLICIT_ADULT_TOKENS = {
+    'sex', 'sexx', 'sexy', 'sexi', 'nude', 'nudes', 'naked', 'erotic', 'erotica',
+    'fetish', 'dildo', 'fap', 'boobs', 'milf', 'incest', 'choot', 'chudai', 'gaand',
+    'bhabhi', 'randi', 'savita', 'aunty', 'masturbate', 'orgasm', 'cumshot', 'creampie'
+}
+
+SAFE_SEX_EXCEPTIONS = (
+    'sussex', 'essex', 'middlesex', 'wessex', 'unisex', 'section', 'sextant',
+    'sexton', 'asexual', 'intersex', 'bisexual'
+)
+
+REGIONAL_ADULT_INDICATORS = (
+    'desi', 'indian', 'hindi', 'tamil', 'telugu', 'mallu', 'kannada',
+    'bengali', 'marathi', 'punjabi', 'pakistani', 'bangla', 'bhojpuri'
+)
+REGIONAL_ADULT_ASSOCIATES = (
+    'hub', 'papa', 'kahani', 'katha', 'aunty', 'bhabhi', 'chudai', 'chut',
+    'mamas', 'mature', 'hot', 'video', 'tube', 'clip', 'leak', 'scandal',
+    'mms', 'lust', 'scene', 'mal', 'maal', 'rasika', 'pataka', 'sex', 'porn',
+    'xxx', 'kama', 'kambi', 'nude', 'naked', 'viral', 'actress', 'model',
+    'strip', 'cam', 'cams', 'adult', 'erotic', 'dirty', 'romance', 'bazaar'
+)
+
+GAMBLING_SUBSTRINGS = (
+    'satta', 'matka', 'kalyan', 'dpboss', 'disawar', 'gali-satta', 'galidisawar',
+    'casino', 'poker', 'roulette', 'blackjack', 'slots', 'jackpot',
+    'teenpatti', 'rummy', 'aviator', 'winzo', 'mpl',
+    'parimatch', '1xbet', 'dafabet', 'melbet', 'betway', 'bet365',
+    'stake', 'fairplay', 'lottery', 'bookmaker', 'bovada', 'paddypower',
+    'fanduel', 'draftkings', 'unibet', 'betsson', 'betonline', 'bwin',
+    'sportsbet', 'betfair', 'betwinner', 'mostbet', '4rabet', 'linebet',
+    # Colour prediction, lottery clubs & Indian real money games
+    'tiranga', 'bdggame', 'bdg', 'damangame', 'daman', '91club', 'okwin',
+    '51game', 'tc-lottery', 'tclottery', 'jaldi5', 'fastwin', 'fiewin',
+    'mantrimall', 'colorprediction', 'colourtrading', 'colorpredictiongame',
+    'cricketbet', 'iplbet', 'rajdhani', 'milan-day', 'milan-night', 'timebazar'
+)
+GAMBLING_TLDS = ('.bet', '.casino', '.poker', '.lotto', '.bingo')
+EXPLICIT_BET_TOKENS = {'bet', 'bets', 'betting', 'wager', 'wagers', 'gambling', 'gamble'}
+
+GAMBLING_INDICATORS = ('tiranga', 'bdg', 'daman', '91', 'okwin', '51', 'tc', 'color', 'fastwin', 'fiewin', 'jaldi')
+GAMBLING_ASSOCIATES = ('game', 'games', 'club', 'lottery', 'win', 'play', 'bet')
+
+PIRACY_SUBSTRINGS = (
+    'tamilrockers', 'ibomma', 'movierulz', 'filmyzilla', 'bolly4u', 'katmoviehd',
+    'vegamovies', 'hdhub4u', 'pagalworld', 'mp4moviez', 'warez',
+    'repack', 'yts', '1337x', 'piratebay', 'magnetdl', 'keygen', 'crack',
+    'fitgirl', 'rutracker', 'rarbg', 'fmovies', 'soap2day', 'putlocker',
+    'streamio', 'crazyhd', 'limetorrents', 'eztv', 'kickasstorrents',
+    'torrentfreak', 'thepiratebay', 'uwatchfree', 'skymovieshd', 'cinemavilla',
+    'tamilblasters', 'tamilmv', 'todaypk', 'extramovies', 'filmywap', 'skymovies'
+)
+PIRACY_TLDS = ('.torrent', '.rip')
+EXPLICIT_PIRACY_TOKENS = {'torrent', 'torrents', 'pirate', 'warez', 'cracked', 'keygen'}
+
+DATING_SUBSTRINGS = (
+    'tinder', 'bumble', 'hinge', 'grindr', 'badoo', 'okcupid', 'skokka',
+    'locanto', 'escort', 'callgirl', 'hookup', 'casualsex', 'casualencounters',
+    'adultfriendfinder', 'sugarbaby', 'sugardaddy', 'fetlife', 'ashleymadison',
+    'seekingarrangement', 'datehookup'
+)
+DATING_TLDS = ('.dating', '.singles')
+EXPLICIT_DATING_TOKENS = {'dating', 'hookup', 'hookups', 'escorts', 'singles', 'matchmaker', 'callgirl', 'escort'}
+
+def is_life_safety(domain: str) -> bool:
+    clean = domain.lower().strip().rstrip('.')
+    if any(clean == s or clean.endswith('.' + s) for s in LIFE_SAFETY_DOMAINS):
+        return True
+    if clean.endswith('.gov') or clean.endswith('.mil') or clean.endswith('.edu') or clean.endswith('.ac.uk'):
+        return True
+    return False
+
+def is_adult_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    if any(clean.endswith(tld) for tld in ADULT_TLDS):
+        return True
+    for sub in ADULT_SUBSTRINGS:
+        if sub in clean:
+            return True
+    parts = re.split(r'[-_.]', clean)
+    for part in parts:
+        if part in EXPLICIT_ADULT_TOKENS:
+            return True
+
+    # Check for 'sex' token when not part of known safe educational/geographical exception
+    if 'sex' in clean:
+        filtered = clean
+        for exc in SAFE_SEX_EXCEPTIONS:
+            filtered = filtered.replace(exc, '')
+        if 'sex' in filtered:
+            return True
+
+    # Regional Desi / Asian compound adult heuristics
+    for reg in REGIONAL_ADULT_INDICATORS:
+        if reg in clean:
+            for assoc in REGIONAL_ADULT_ASSOCIATES:
+                if assoc in clean:
+                    return True
+
+    return False
+
+def is_gambling_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    if any(clean.endswith(tld) for tld in GAMBLING_TLDS):
+        return True
+    for sub in GAMBLING_SUBSTRINGS:
+        if sub in clean:
+            return True
+    parts = re.split(r'[-_.]', clean)
+    for part in parts:
+        if part in EXPLICIT_BET_TOKENS:
+            return True
+        if part.startswith('bet') and len(part) > 3 and any(part.endswith(suf) for suf in ('in', 'club', 'hub', 'win', 'vip')):
+            return True
+
+    # Indian colour prediction / trading club heuristics
+    for ind in GAMBLING_INDICATORS:
+        if ind in clean:
+            for assoc in GAMBLING_ASSOCIATES:
+                if assoc in clean:
+                    return True
+
+    return False
+
+def is_piracy_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    if any(clean.endswith(tld) for tld in PIRACY_TLDS):
+        return True
+    for sub in PIRACY_SUBSTRINGS:
+        if sub in clean:
+            return True
+    parts = re.split(r'[-_.]', clean)
+    for part in parts:
+        if part in EXPLICIT_PIRACY_TOKENS:
+            return True
+    if 'torrent' in clean and 'torrential' not in clean:
+        return True
+    return False
+
+def is_dating_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    if any(clean.endswith(tld) for tld in DATING_TLDS):
+        return True
+    for sub in DATING_SUBSTRINGS:
+        if sub in clean:
+            return True
+    parts = re.split(r'[-_.]', clean)
+    for part in parts:
+        if part in EXPLICIT_DATING_TOKENS:
+            return True
+    return False
+
+def is_social_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    social_stems = (
+        'facebook', 'fbcdn', 'instagram', 'cdninstagram', 'tiktok', 'tiktokv',
+        'twitter', 'twimg', 'snapchat', 'pinterest', 'threads.net', 'tumblr',
+        'mastodon', 'bsky.app', 'bereal'
+    )
+    for stem in social_stems:
+        if clean == stem or clean.endswith('.' + stem) or stem in clean:
+            return True
+    if clean == 'x.com' or clean.endswith('.x.com'):
+        return True
+    if clean == 'reddit.com' or clean.endswith('.reddit.com') or clean == 'redd.it':
+        return True
+    return False
+
+def is_gaming_domain(fqdn: str) -> bool:
+    clean = fqdn.lower().strip().rstrip('.')
+    if not clean or is_life_safety(clean):
+        return False
+    gaming_stems = (
+        'roblox', 'steampowered', 'steamcommunity', 'steamstatic', 'epicgames',
+        'riotgames', 'playstation', 'xboxlive', 'blizzard', 'battle.net',
+        'supercell', 'pubg', 'freefire', 'ubisoft', 'origin.com'
+    )
+    for stem in gaming_stems:
+        if stem in clean:
+            return True
+    return False
+
+def is_domain_in_category(category: str, fqdn: str) -> bool:
+    cat = (category or '').strip().lower()
+    matched = False
+    if cat == 'porn':
+        matched = is_adult_domain(fqdn)
+    elif cat == 'gambling':
+        matched = is_gambling_domain(fqdn)
+    elif cat == 'piracy':
+        matched = is_piracy_domain(fqdn)
+    elif cat == 'dating':
+        matched = is_dating_domain(fqdn)
+    elif cat == 'social':
+        matched = is_social_domain(fqdn)
+    elif cat == 'gaming':
+        matched = is_gaming_domain(fqdn)
+    if matched:
+        return True
+
+    # AI Dynamic Lexical Domain Categorizer
+    try:
+        from .ai.domain_categorizer import DomainCategorizer, CAT_ADULT, CAT_CRYPTO_GAMBLING, CAT_GAMING, CAT_SOCIAL
+        cat_map = {
+            'porn': CAT_ADULT,
+            'gambling': CAT_CRYPTO_GAMBLING,
+            'gaming': CAT_GAMING,
+            'social': CAT_SOCIAL
+        }
+        target_ai_cat = cat_map.get(cat)
+        if target_ai_cat:
+            verdict = DomainCategorizer.classify(fqdn)
+            if verdict.primary_category == target_ai_cat and verdict.confidence >= 0.25:
+                return True
+    except Exception:
+        pass
+
+    return False
 
 def _forward_tcp(query_bytes: bytes, host: str, port: int, timeout: float = 2.0) -> Optional[bytes]:
     """Relays wire query over TCP (RFC 1035 section 4.2.2)."""
@@ -731,12 +1025,15 @@ def resolve_wire_packet(query_bytes: bytes, profile_id: str = 'a1b2c3', client_i
             if domain_matches(qname, d):
                 return build_block_reply(f'Deep Focus: {site_id.capitalize()}')
 
-    # 5. Deep Focus (Categories) - Strict Suffix Matching
+    # 5. Deep Focus (Categories) - Strict Suffix Matching & Zero-Day Heuristics
     for cat_id in cache['blocked_categories']:
-        target_domains = CATEGORY_DOMAINS.get(cat_id, set())
+        cat_lower = (cat_id or '').strip().lower()
+        if is_domain_in_category(cat_lower, qname):
+            return build_block_reply(f'Category Block: {cat_lower.capitalize()} (Zero-Day Heuristic)')
+        target_domains = CATEGORY_DOMAINS.get(cat_lower, set())
         for d in target_domains:
             if domain_matches(qname, d):
-                return build_block_reply(f'Category Block: {cat_id.capitalize()}')
+                return build_block_reply(f'Category Block: {cat_lower.capitalize()}')
 
     # 6. Cybersecurity Feeds & Threat Toggles
     sec = cache['security']
@@ -780,12 +1077,13 @@ def resolve_wire_packet(query_bytes: bytes, profile_id: str = 'a1b2c3', client_i
                 return build_block_reply('Privacy: Disguised Tracker Blocklist')
 
     # 7b. SafeSearch & YouTube Restricted Mode DNS Rewriting
-    if sec.get('safesearch', False) or sec.get('youtube_restricted', False):
+    enforce_safesearch = sec.get('safesearch', False) or is_adult_blocked
+    if enforce_safesearch or sec.get('youtube_restricted', False):
         is_youtube = qname in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtubei.googleapis.com', 'youtube-nocookie.com')
-        if is_youtube and (sec.get('youtube_restricted', False) or sec.get('safesearch', False)):
+        if is_youtube and (sec.get('youtube_restricted', False) or enforce_safesearch):
             return build_safesearch_reply('216.239.38.119', '2001:4860:4806::77', 'SafeSearch: YouTube Restricted Mode Enforced')
 
-        if sec.get('safesearch', False):
+        if enforce_safesearch:
             is_google = (qname == 'google.com' or qname.startswith('www.google.') or (base_domain and base_domain.startswith('google.')))
             if is_google:
                 return build_safesearch_reply('216.239.38.120', '2001:4860:4806::78', 'SafeSearch: Google SafeSearch VIP Enforced')

@@ -14,16 +14,24 @@ class ServerConfig {
 
   const ServerConfig({
     required this.serverUrl,
-    this.activeProfileId = 'a1b2c3',
+    this.activeProfileId = 'dce22d',
   });
+
+  static const String publicTunnelUrl = 'https://elevation-bufing-mel-shots.trycloudflare.com';
 
   /// Default development fallback URL depending on platform
   static String get defaultServerUrl {
     if (kIsWeb) {
-      return 'http://127.0.0.1:8080';
+      try {
+        final origin = Uri.base.origin;
+        if (origin.isNotEmpty && origin != 'null' && !origin.startsWith('file://')) {
+          return origin;
+        }
+      } catch (_) {}
+      return publicTunnelUrl;
     }
-    // For real physical devices or emulators, default to localhost / standard port
-    return 'http://127.0.0.1:8080';
+    // For real physical devices or emulators, connect to live tunnel
+    return publicTunnelUrl;
   }
 
   /// The normalized base URL without trailing slash or path
@@ -86,14 +94,22 @@ class ServerConfig {
       final savedUrl = prefs.getString(_keyServerUrl);
       final savedProfile = prefs.getString(_keyProfileId);
 
+      var effectiveUrl = savedUrl;
+      if (effectiveUrl == null ||
+          effectiveUrl.contains('192.168.0.102') ||
+          effectiveUrl.contains('127.0.0.1') ||
+          effectiveUrl.contains('10.0.2.2')) {
+        effectiveUrl = defaultServerUrl;
+      }
+
       return ServerConfig(
-        serverUrl: savedUrl ?? defaultServerUrl,
-        activeProfileId: savedProfile ?? 'a1b2c3',
+        serverUrl: effectiveUrl,
+        activeProfileId: (savedProfile != null && savedProfile.isNotEmpty) ? savedProfile : 'dce22d',
       );
     } catch (_) {
       return ServerConfig(
         serverUrl: defaultServerUrl,
-        activeProfileId: 'a1b2c3',
+        activeProfileId: 'dce22d',
       );
     }
   }

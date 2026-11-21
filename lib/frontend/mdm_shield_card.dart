@@ -281,8 +281,126 @@ class _MdmShieldCardState extends State<MdmShieldCard> {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          const Divider(color: Color(0xFF2C2C2E), height: 1),
+          const SizedBox(height: 14),
+          // UNINSTALL / REMOVE APP BUTTON
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _confirmUninstall(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isLocked ? const Color(0xFF1E1E20) : const Color(0xFFD32F2F).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isLocked ? const Color(0xFF2C2C2E) : const Color(0xFFD32F2F).withOpacity(0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isLocked ? Icons.lock_outline : Icons.delete_forever_outlined,
+                    size: 18,
+                    color: isLocked ? const Color(0xFF888888) : const Color(0xFFE57373),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isLocked ? 'Uninstall Locked' : 'Deactivate Admin & Uninstall App',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isLocked ? const Color(0xFF888888) : const Color(0xFFFF5252),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isLocked
+                              ? 'Timer active (${_status.formattedRemainingTime}). Complete session to unlock.'
+                              : 'Deactivates Device Admin and opens Android uninstaller.',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF757575)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 13,
+                    color: isLocked ? const Color(0xFF555555) : const Color(0xFFE57373),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  Future<void> _confirmUninstall(BuildContext context) async {
+    if (!_status.canUninstall) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF2C2C2E),
+          content: Text(
+            _status.isTimerActive
+                ? 'Uninstallation is locked! Focus session is active (${_status.formattedRemainingTime} remaining).'
+                : 'Turn off Protection Mode first to allow uninstallation.',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Uninstall FocusDNS?', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'This will deactivate Device Administrator privileges and launch the Android uninstaller to completely remove FocusDNS from this device.',
+          style: TextStyle(color: Color(0xFFB0B0B0), fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD32F2F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('DEACTIVATE & UNINSTALL', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      final res = await FocusMdmManager.deactivateAndUninstall();
+      if (!context.mounted) return;
+      if (res['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF2C2C2E),
+            content: Text(
+              res['reason']?.toString() ?? 'Failed to request uninstallation',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        );
+      }
+    }
+  }
 }
+
+

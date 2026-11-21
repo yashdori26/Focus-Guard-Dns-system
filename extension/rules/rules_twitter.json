@@ -1,0 +1,47 @@
+[
+  {
+    "id": 401,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||video.twimg.com",
+      "resourceTypes": ["media", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 402,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||twitter.com/i/trends",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 403,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||x.com/i/trends",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 404,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||twitter.com/messages",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  },
+  {
+    "id": 405,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||x.com/messages",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  }
+]

@@ -1,7 +1,6 @@
 // FocusDNS Enterprise SIEM Screen - RFC 5424 Syslog & Cloud SIEM Streamer
 
 import 'package:flutter/material.dart';
-import '../models/enterprise_models.dart';
 import '../services/enterprise_service.dart';
 
 class EnterpriseSiemScreen extends StatefulWidget {
@@ -16,7 +15,6 @@ class EnterpriseSiemScreen extends StatefulWidget {
 class _EnterpriseSiemScreenState extends State<EnterpriseSiemScreen> {
   late final EnterpriseService _service;
   bool _isLoading = true;
-  SiemConfigModel? _config;
   String? _testResult;
   bool _isTesting = false;
 
@@ -26,7 +24,6 @@ class _EnterpriseSiemScreenState extends State<EnterpriseSiemScreen> {
   late final TextEditingController _indexController;
 
   String _selectedTransport = 'UDP';
-  int _minSeverity = 4;
 
   @override
   void initState() {
@@ -54,9 +51,7 @@ class _EnterpriseSiemScreenState extends State<EnterpriseSiemScreen> {
       final cfg = await _service.fetchSiemConfig();
       if (mounted) {
         setState(() {
-          _config = cfg;
           _selectedTransport = cfg.transport;
-          _minSeverity = cfg.minSeverity;
           _hostController.text = cfg.host;
           _portController.text = cfg.port.toString();
           _tokenController.text = cfg.apiToken;

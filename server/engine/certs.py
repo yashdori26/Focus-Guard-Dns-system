@@ -27,16 +27,35 @@ DEFAULT_CERT_FILE = DEFAULT_CERTS_DIR / "focus_dns.crt"
 DEFAULT_KEY_FILE = DEFAULT_CERTS_DIR / "focus_dns.key"
 
 
+def get_local_ip_addresses() -> List[str]:
+    """Auto-detects active local network IP addresses (e.g. Wi-Fi / Ethernet LAN IP)."""
+    ips = set()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ips.add(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ips.add(info[4][0])
+    except Exception:
+        pass
+    return [ip for ip in ips if ip and not ip.startswith("127.")]
+
+
 def generate_self_signed_cert(
     cert_path: Path,
     key_path: Path,
-    common_name: str = "FocusDNS Encrypted Engine",
+    common_name: str = "FocusDNS Root CA",
     san_hosts: Optional[List[str]] = None,
-    validity_days: int = 365,
+    validity_days: int = 3650,
 ) -> Tuple[str, str]:
     """
-    Generates a cryptographically strong self-signed X.509 certificate and private key.
-    Writes PEM files with restrictive permissions (0600 on key).
+    Generates a cryptographically strong self-signed Root CA X.509 certificate and private key.
+    Includes Subject Alternative Names for localhost, loopback, and all active LAN IP addresses.
     """
     cert_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -49,9 +68,7 @@ def generate_self_signed_cert(
     # 2. Build Subject and Issuer
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "California"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "FocusGuard Technologies"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Core DNS Engine"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "FocusDNS Security Authority"),
         x509.NameAttribute(NameOID.COMMON_NAME, common_name),
     ])
 
@@ -61,6 +78,13 @@ def generate_self_signed_cert(
         x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
         x509.IPAddress(ipaddress.IPv6Address("::1")),
     ]
+
+    # Add all detected local network interfaces (Wi-Fi, Ethernet)
+    for local_ip in get_local_ip_addresses():
+        try:
+            sans.append(x509.IPAddress(ipaddress.IPv4Address(local_ip)))
+        except Exception:
+            pass
 
     hostname = socket.gethostname()
     if hostname and hostname != "localhost":
@@ -97,7 +121,7 @@ def generate_self_signed_cert(
             critical=False,
         )
         .add_extension(
-            x509.BasicConstraints(ca=False, path_length=None),
+            x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
         )
         .add_extension(
@@ -107,8 +131,8 @@ def generate_self_signed_cert(
                 key_encipherment=True,
                 data_encipherment=False,
                 key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
+                key_cert_sign=True,
+                crl_sign=True,
                 encipher_only=False,
                 decipher_only=False,
             ),

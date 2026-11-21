@@ -1,0 +1,47 @@
+[
+  {
+    "id": 101,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||reels.instagram.com",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "media"]
+    }
+  },
+  {
+    "id": 102,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||instagram.com/reels/",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 103,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||instagram.com/explore/",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 104,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||direct.instagram.com",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  },
+  {
+    "id": 105,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||instagram.com/direct/",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  }
+]

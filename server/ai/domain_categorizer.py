@@ -104,7 +104,7 @@ class DomainCategorizer:
                 # 3. Sub-word dictionary scanning (e.g. 'steamcommunity' -> 'steam', 'community')
                 for cat_vocab in CATEGORY_VOCABULARY.values():
                     for kw in cat_vocab.keys():
-                        if len(kw) >= 4 and kw in sp and kw != sp:
+                        if len(kw) >= 3 and kw in sp and kw != sp:
                             weighted_tokens.append((kw, weight * 0.85))
 
         return weighted_tokens

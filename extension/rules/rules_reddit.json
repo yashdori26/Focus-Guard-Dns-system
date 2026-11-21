@@ -1,0 +1,38 @@
+[
+  {
+    "id": 301,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||v.redd.it",
+      "resourceTypes": ["media", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 302,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||gateway.reddit.com/desktopapi/v1/subreddits/all",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 303,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||chat.reddit.com",
+      "resourceTypes": ["main_frame", "sub_frame", "xmlhttprequest", "websocket"]
+    }
+  },
+  {
+    "id": 304,
+    "priority": 2,
+    "action": { "type": "allow" },
+    "condition": {
+      "urlFilter": "||sendbird.reddit.com",
+      "resourceTypes": ["xmlhttprequest", "websocket"]
+    }
+  }
+]

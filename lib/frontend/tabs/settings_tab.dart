@@ -34,6 +34,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final auth = ref.watch(authProvider);
     final palette = WabiSabiPalette.of(context);
 
     return Column(
@@ -96,6 +97,105 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+
+        // EMAIL VERIFICATION (Requested by User)
+        secCard(
+          'Email Verification',
+          'Verify your account email to protect DNS profiles, sync cloud rules and enable security recovery.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: auth.isEmailVerified
+                          ? palette.safeAccent.withOpacity(0.12)
+                          : palette.strictAccent.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      auth.isEmailVerified
+                          ? Icons.mark_email_read_rounded
+                          : Icons.mail_outline_rounded,
+                      size: 20,
+                      color: auth.isEmailVerified
+                          ? palette.safeAccent
+                          : palette.strictAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          auth.email ?? 'user@focusdns.net',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: palette.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          auth.isEmailVerified ? 'Verified account' : 'Pending verification',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: palette.mutedInk,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: auth.isEmailVerified
+                          ? palette.safeAccent.withOpacity(0.12)
+                          : palette.strictAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: auth.isEmailVerified
+                            ? palette.safeAccent.withOpacity(0.3)
+                            : palette.strictAccent.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Text(
+                      auth.isEmailVerified ? 'VERIFIED ✓' : 'UNVERIFIED',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: auth.isEmailVerified ? palette.safeAccent : palette.strictAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (!auth.isEmailVerified) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    key: const Key('verify_email_settings_button'),
+                    onPressed: () => _openVerificationModal(context, palette, auth),
+                    icon: const Icon(Icons.verified_user_outlined, size: 16),
+                    label: const Text('Verify Email Address', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: palette.ink,
+                      foregroundColor: palette.canvas,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -201,6 +301,183 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
           ),
         ),
       ],
+    );
+  }
+
+  void _openVerificationModal(BuildContext context, WabiSabiPalette palette, AuthState auth) {
+    final otpController = TextEditingController();
+    String? localError;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: palette.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (modalCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final emailDisplay = auth.email ?? 'user@focusdns.net';
+            final isLoading = ref.watch(authProvider).isLoading;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(modalCtx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Verify Email Address',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: palette.ink,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: palette.mutedInk, size: 20),
+                        onPressed: () => Navigator.pop(modalCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Enter the 4-digit code to verify $emailDisplay.',
+                    style: TextStyle(fontSize: 13, color: palette.mutedInk),
+                  ),
+                  const SizedBox(height: 18),
+
+                  if (localError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: palette.strictAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: palette.strictAccent.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        localError!,
+                        style: TextStyle(fontSize: 12, color: palette.strictAccent, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+
+                  TextFormField(
+                    key: const Key('settings_otp_input'),
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 10.0,
+                      color: palette.ink,
+                    ),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      filled: true,
+                      fillColor: palette.canvas,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: palette.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: palette.border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: palette.ink, width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      InkWell(
+                        key: const Key('settings_otp_autofill'),
+                        onTap: () {
+                          otpController.text = auth.devOtp ?? '1234';
+                          setModalState(() => localError = null);
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: palette.canvas,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: palette.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt_rounded, size: 14, color: palette.accent),
+                              const SizedBox(width: 4),
+                              Text('Auto-Fill (1234)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.ink)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        key: const Key('settings_otp_resend'),
+                        onPressed: () async {
+                          await ref.read(authProvider.notifier).sendEmailVerificationInSettings();
+                          setModalState(() => localError = null);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Verification code sent!')),
+                          );
+                        },
+                        child: Text('Resend Code', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: palette.ink)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      key: const Key('settings_otp_submit'),
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              final code = otpController.text.trim();
+                              if (code.length != 4) {
+                                setModalState(() => localError = 'Please enter the 4-digit code.');
+                                return;
+                              }
+                              final res = await ref.read(authProvider.notifier).verifyEmailInSettings(code);
+                              if (res['success'] == true) {
+                                Navigator.pop(modalCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('🎉 Email verified successfully!')),
+                                );
+                              } else {
+                                setModalState(() => localError = res['error']?.toString() ?? 'Invalid code.');
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: palette.ink,
+                        foregroundColor: palette.canvas,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: isLoading
+                          ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: palette.canvas))
+                          : const Text('Verify & Save', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

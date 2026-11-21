@@ -352,4 +352,48 @@ class RulesStoreTest {
         assertTrue("Untimed strict mode must be active", active4)
         assertEquals(0, rem4)
     }
+
+    @Test
+    fun testAppCatalogDomainUmbrellas() {
+        // Instagram umbrella must include Meta CDN (fbcdn.net) so feeds/reels cannot load
+        val instaDomains = RulesStore.APP_CATALOG_DOMAINS["com.instagram.android"]
+        assertTrue("Instagram must be present in APP_CATALOG_DOMAINS", instaDomains != null)
+        assertTrue("Instagram must contain instagram.com", instaDomains!!.contains("instagram.com"))
+        assertTrue("Instagram must contain fbcdn.net for reels and stories", instaDomains.contains("fbcdn.net"))
+        assertTrue("Instagram must contain meta.com", instaDomains.contains("meta.com"))
+        assertTrue("Instagram must contain threads.net", instaDomains.contains("threads.net"))
+
+        // Facebook umbrella
+        val fbDomains = RulesStore.APP_CATALOG_DOMAINS["com.facebook.katana"]
+        assertTrue("Facebook must be present in catalog", fbDomains != null)
+        assertTrue("Facebook must contain fbcdn.net", fbDomains!!.contains("fbcdn.net"))
+        assertTrue("Facebook must contain messenger.com", fbDomains.contains("messenger.com"))
+
+        // Snapchat umbrella
+        val snapDomains = RulesStore.APP_CATALOG_DOMAINS["com.snapchat.android"]
+        assertTrue("Snapchat must be present in catalog", snapDomains != null)
+        assertTrue("Snapchat must contain sc-cdn.net", snapDomains!!.contains("sc-cdn.net"))
+
+        // TikTok umbrella
+        val tiktokDomains = RulesStore.APP_CATALOG_DOMAINS["com.zhiliaoapp.musically"]
+        assertTrue("TikTok must be present in catalog", tiktokDomains != null)
+        assertTrue("TikTok must contain byteoversea.com", tiktokDomains!!.contains("byteoversea.com"))
+
+        // Twitter / X umbrella
+        val twitterDomains = RulesStore.APP_CATALOG_DOMAINS["com.twitter.android"]
+        assertTrue("Twitter must be present in catalog", twitterDomains != null)
+        assertTrue("Twitter must contain twimg.com", twitterDomains!!.contains("twimg.com"))
+        assertTrue("Twitter must contain x.com", twitterDomains.contains("x.com"))
+
+        // Spotify umbrella
+        val spotifyDomains = RulesStore.APP_CATALOG_DOMAINS["com.spotify.music"]
+        assertTrue("Spotify must be present in catalog", spotifyDomains != null)
+        assertTrue("Spotify must contain scdn.co", spotifyDomains!!.contains("scdn.co"))
+
+        // WhatsApp & Telegram umbrellas
+        val waDomains = RulesStore.APP_CATALOG_DOMAINS["com.whatsapp"]
+        assertTrue("WhatsApp must be in catalog", waDomains != null && waDomains.contains("whatsapp.net"))
+        val tgDomains = RulesStore.APP_CATALOG_DOMAINS["org.telegram.messenger"]
+        assertTrue("Telegram must be in catalog", tgDomains != null && tgDomains.contains("telegram.org"))
+    }
 }

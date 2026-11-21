@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FocusDNS Shield</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">🛡️</div>
+        <div>
+          <h1 class="brand-title">FocusDNS</h1>
+          <span class="brand-subtitle">Cross-Device Shield</span>
+        </div>
+      </div>
+      <div id="connection-badge" class="badge badge-online">Synced</div>
+    </header>
+
+    <!-- Master Mode Card -->
+    <section class="card mode-card">
+      <div class="timer-container">
+        <svg class="timer-svg" viewBox="0 0 120 120">
+          <circle class="timer-bg" cx="60" cy="60" r="52"></circle>
+          <circle id="timer-progress" class="timer-bar" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="timer-text-container">
+          <span id="timer-display" class="timer-time">25:00</span>
+          <span id="mode-display" class="timer-label">FOCUS SESSION</span>
+        </div>
+      </div>
+
+      <div id="strict-lock-indicator" class="lock-indicator hidden">
+        <span class="lock-icon">🔒</span>
+        <span class="lock-text">STRICT LOCK ACTIVE</span>
+      </div>
+
+      <!-- Quick Session Controls -->
+      <div id="session-launcher" class="session-launcher">
+        <button class="btn btn-primary" data-duration="25">25m Focus</button>
+        <button class="btn btn-primary" data-duration="50">50m Deep</button>
+        <button class="btn btn-accent" id="btn-custom-strict">🔒 Strict Lock</button>
+      </div>
+    </section>
+
+    <!-- Telemetry Stats Grid -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-value" id="stat-distractions">0</span>
+        <span class="stat-title">Traps Blocked</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-minutes">0m</span>
+        <span class="stat-title">Time Reclaimed</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-cycle">1/4</span>
+        <span class="stat-title">Pomodoro Cycle</span>
+      </div>
+    </section>
+
+    <!-- Surgical Quick Toggles -->
+    <section class="card toggles-card">
+      <h3 class="section-title">Surgical Decoupling</h3>
+      <div class="toggle-row">
+        <span class="toggle-label">YouTube Shorts</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-yt-shorts" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Instagram Reels & Explore</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-ig-reels" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Reddit r/all & Popular</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-reddit-all" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Emergency / Options Footer -->
+    <footer class="footer">
+      <button id="btn-emergency" class="btn btn-danger btn-sm">Emergency Unlock</button>
+      <a href="#" id="link-options" class="footer-link">Options & Pairing ⚙️</a>
+    </footer>
+
+    <!-- Emergency Modal -->
+    <div id="emergency-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Emergency Unlock Request</h3>
+        <p class="modal-desc">
+          To break an active focus lock, submit a written justification for your accountability partner or type the friction pledge oath.
+        </p>
+        <textarea id="emergency-reason" placeholder="Why do you need an emergency unblock?" rows="3"></textarea>
+        <div class="oath-box">
+          <small>Friction Oath:</small>
+          <code>I choose intentional focus over infinite distraction</code>
+          <input type="text" id="oath-input" placeholder="Type exact oath above to release">
+        </div>
+        <div class="modal-actions">
+          <button id="btn-cancel-modal" class="btn btn-secondary">Cancel</button>
+          <button id="btn-submit-oath" class="btn btn-accent">Verify Oath</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FocusDNS - Extension Options & Fleet Pairing</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header class="header">
+      <div class="brand">
+        <span class="icon">⚙️</span>
+        <div>
+          <h1>FocusDNS Configuration</h1>
+          <p>Cross-Device Browser Extension Settings</p>
+        </div>
+      </div>
+      <button id="btn-save" class="btn btn-primary">Save Changes</button>
+    </header>
+
+    <main class="grid">
+      <!-- Section 1: Fleet & Device Pairing -->
+      <section class="card">
+        <h2>📱 Device Fleet & Cloud Pairing</h2>
+        <p class="subtitle">Connect this browser extension with your mobile app and cloud account.</p>
+
+        <div class="form-group">
+          <label for="input-user-id">Account Pairing Token / User ID</label>
+          <input type="text" id="input-user-id" placeholder="e.g. usr_994a3bc19ef">
+        </div>
+
+        <div class="form-group">
+          <label for="input-device-id">Device Name / Identifier</label>
+          <input type="text" id="input-device-id" placeholder="e.g. Work Laptop (Chrome)">
+        </div>
+
+        <div class="form-group">
+          <label for="input-daemon-url">Local Daemon WebSocket URL</label>
+          <input type="text" id="input-daemon-url" placeholder="ws://localhost:5354/sync">
+        </div>
+
+        <div class="status-box" id="pairing-status">
+          <span class="status-indicator online"></span>
+          <span>Synced with Local Engine</span>
+        </div>
+      </section>
+
+      <!-- Section 2: Custom Whitelist & Blocklist -->
+      <section class="card">
+        <h2>🛡️ Domain Overrides</h2>
+        <p class="subtitle">Manage domains that bypass filters or are strictly blocked during focus mode.</p>
+
+        <div class="form-group">
+          <label for="input-whitelist">Whitelisted Domains (Always Allowed)</label>
+          <textarea id="input-whitelist" rows="3" placeholder="one per line: github.com&#10;stackoverflow.com"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="input-blacklist">Custom Blocked Domains (Severed during Focus)</label>
+          <textarea id="input-blacklist" rows="3" placeholder="one per line: news.ycombinator.com&#10;twitch.tv"></textarea>
+        </div>
+      </section>
+
+      <!-- Section 3: Accountability Partner -->
+      <section class="card">
+        <h2>👥 Accountability Partner</h2>
+        <p class="subtitle">Assign a trusted partner who can review and approve emergency unblock requests.</p>
+
+        <div class="form-group">
+          <label for="input-partner-email">Partner Email Address</label>
+          <input type="email" id="input-partner-email" placeholder="partner@example.com">
+        </div>
+
+        <div class="form-group">
+          <label for="input-partner-delay">Minimum Reflection Delay (Seconds)</label>
+          <input type="number" id="input-partner-delay" value="60" min="10" max="300">
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden">Settings Saved Successfully!</div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

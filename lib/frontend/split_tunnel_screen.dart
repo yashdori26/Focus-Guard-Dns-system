@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../backend/mdm_service.dart';
+import 'widgets/app_logo.dart';
 
 /// Fullscreen UI for managing per-app split tunneling routing.
 class SplitTunnelScreen extends StatefulWidget {
@@ -27,7 +28,6 @@ class _SplitTunnelScreenState extends State<SplitTunnelScreen> {
   Future<void> _loadApps() async {
     setState(() => _isLoading = true);
     final apps = await FocusMdmManager.getSplitTunnelApps();
-    final telemetry = await FocusMdmManager.getSplitTunnelApps();
 
     final selected = apps.where((a) => a.isSelected).map((a) => a.packageName).toSet();
 
@@ -198,12 +198,10 @@ class _SplitTunnelScreenState extends State<SplitTunnelScreen> {
 
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF2A2A2E),
-                          child: Text(
-                            app.appName.isNotEmpty ? app.appName[0].toUpperCase() : 'A',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
+                        leading: AppLogo(
+                          appName: app.appName,
+                          packageName: app.packageName,
+                          size: 36,
                         ),
                         title: Text(
                           app.appName,
@@ -212,10 +210,6 @@ class _SplitTunnelScreenState extends State<SplitTunnelScreen> {
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
-                        ),
-                        subtitle: Text(
-                          app.packageName,
-                          style: const TextStyle(color: Color(0xFF777777), fontSize: 11),
                         ),
                         trailing: Checkbox(
                           value: isSelected,

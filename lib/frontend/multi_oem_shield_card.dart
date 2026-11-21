@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../backend/attestation_service.dart';
+import 'screens/zero_battery/zero_battery_master_studio_screen.dart';
 
 /// Card showing Multi-OEM heuristic sandboxing coverage (Samsung, Xiaomi, Oppo, Vivo, Huawei, Pixel),
 /// System Alert Window overlay status, and evasion resistance mechanisms.
@@ -13,7 +14,6 @@ class MultiOemShieldCard extends StatefulWidget {
 
 class _MultiOemShieldCardState extends State<MultiOemShieldCard> {
   bool _canDrawOverlays = false;
-  bool _isLoading = false;
 
   final List<Map<String, dynamic>> _supportedOems = const [
     {'name': 'Samsung OneUI', 'pkg': 'com.samsung.android.settings', 'supported': true},
@@ -44,7 +44,6 @@ class _MultiOemShieldCardState extends State<MultiOemShieldCard> {
     if (mounted) {
       setState(() {
         _canDrawOverlays = allowed;
-        _isLoading = false;
       });
     }
   }
@@ -202,8 +201,36 @@ class _MultiOemShieldCardState extends State<MultiOemShieldCard> {
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ZeroBatteryMasterStudioScreen()),
+                );
+              },
+              icon: const Icon(Icons.bolt_rounded, size: 16, color: Color(0xFF2ECC71)),
+              label: const Text(
+                'OPEN ZERO-BATTERY DAEMON STUDIO',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF2ECC71)),
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
         ],
       ),
     );
+
   }
 }

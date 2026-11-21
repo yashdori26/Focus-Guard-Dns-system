@@ -1,0 +1,556 @@
+{
+  "$schema": "../schema/session_events.json",
+  "version": "1.0.0",
+  "suite": "FocusDNS Shared State Machine Test Vectors",
+  "generatedAt": "2026-11-20T17:45:00Z",
+  "vectors": [
+    {
+      "id": "vector_01_normal_lifecycle",
+      "description": "Validates Normal mode start, pause, resume, and manual stop",
+      "steps": [
+        {
+          "step": 1,
+          "action": "CREATE_SESSION",
+          "input": {
+            "mode": "NORMAL",
+            "label": "Casual Study"
+          },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": {
+            "primaryState": "INACTIVE"
+          }
+        },
+        {
+          "step": 2,
+          "action": "START_SESSION",
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": {
+            "primaryState": "ACTIVE_NORMAL",
+            "activePhase": "FOCUS_SESSION"
+          }
+        },
+        {
+          "step": 3,
+          "action": "PAUSE_SESSION",
+          "input": { "pauseMinutes": 15 },
+          "wallTimeMs": 1732104600000,
+          "monoTimeMs": 1600000,
+          "expectedState": {
+            "primaryState": "PAUSED",
+            "pauseEndEpochMs": 1732105500000
+          }
+        },
+        {
+          "step": 4,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": { "packageName": "com.instagram.android", "domain": "instagram.com" }
+          },
+          "wallTimeMs": 1732104700000,
+          "monoTimeMs": 1700000,
+          "expectedDecision": {
+            "isBlocked": false,
+            "reason": "Session is paused",
+            "enforcedBy": "NONE"
+          }
+        },
+        {
+          "step": 5,
+          "action": "RESUME_SESSION",
+          "wallTimeMs": 1732104800000,
+          "monoTimeMs": 1800000,
+          "expectedState": {
+            "primaryState": "ACTIVE_NORMAL",
+            "pauseEndEpochMs": null
+          }
+        },
+        {
+          "step": 6,
+          "action": "STOP_SESSION",
+          "wallTimeMs": 1732105000000,
+          "monoTimeMs": 2000000,
+          "expectedState": {
+            "primaryState": "COMPLETED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_02_feed_only_subfeature_matrix",
+      "description": "Validates Feed-Only mode surgical block decisions (Shorts/Reels blocked, Messages/Watch allowed)",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "FEED_ONLY", "label": "Social Feed Detox" },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": { "primaryState": "ACTIVE_FEED" }
+        },
+        {
+          "step": 2,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": {
+              "packageName": "com.google.android.youtube",
+              "domain": "youtube.com",
+              "subfeature": "reelsOrShorts"
+            }
+          },
+          "wallTimeMs": 1732104100000,
+          "monoTimeMs": 1100000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Feed-Only restriction: reelsOrShorts",
+            "enforcedBy": "FEED_INSPECTOR"
+          }
+        },
+        {
+          "step": 3,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": {
+              "packageName": "com.google.android.youtube",
+              "domain": "youtube.com",
+              "subfeature": "watch"
+            }
+          },
+          "wallTimeMs": 1732104150000,
+          "monoTimeMs": 1150000,
+          "expectedDecision": {
+            "isBlocked": false,
+            "reason": "Educational watch subfeature permitted in Feed-Only mode",
+            "enforcedBy": "NONE"
+          }
+        },
+        {
+          "step": 4,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": {
+              "packageName": "com.instagram.android",
+              "domain": "instagram.com",
+              "subfeature": "messages"
+            }
+          },
+          "wallTimeMs": 1732104200000,
+          "monoTimeMs": 1200000,
+          "expectedDecision": {
+            "isBlocked": false,
+            "reason": "Direct messaging permitted in Feed-Only mode",
+            "enforcedBy": "NONE"
+          }
+        },
+        {
+          "step": 5,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": {
+              "packageName": "com.instagram.android",
+              "domain": "instagram.com",
+              "subfeature": "reelsOrShorts"
+            }
+          },
+          "wallTimeMs": 1732104250000,
+          "monoTimeMs": 1250000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Feed-Only restriction: reelsOrShorts",
+            "enforcedBy": "FEED_INSPECTOR"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_03_strict_mode_ironclad_rejections",
+      "description": "Verifies that Pause, Stop, and Duration Reductions are strictly rejected under Option B Ironclad Lockout",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "STRICT", "strictMinutes": 60, "label": "Deep Work Lockout" },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": {
+            "primaryState": "STRICT_RUNNING",
+            "totalTargetEndEpochMs": 1732107600000
+          }
+        },
+        {
+          "step": 2,
+          "action": "PAUSE_SESSION",
+          "input": { "pauseMinutes": 15 },
+          "wallTimeMs": 1732104600000,
+          "monoTimeMs": 1600000,
+          "expectedError": {
+            "code": "ERR_PAUSE_NOT_ALLOWED",
+            "message": "Pausing is prohibited in Strict Lockout mode."
+          },
+          "expectedState": {
+            "primaryState": "STRICT_RUNNING"
+          }
+        },
+        {
+          "step": 3,
+          "action": "STOP_SESSION",
+          "wallTimeMs": 1732105000000,
+          "monoTimeMs": 2000000,
+          "expectedError": {
+            "code": "ERR_STRICT_LOCKOUT_ACTIVE",
+            "message": "Strict Lockout is unbreakable. Session cannot be aborted before expiration."
+          },
+          "expectedState": {
+            "primaryState": "STRICT_RUNNING"
+          }
+        },
+        {
+          "step": 4,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "wallTimeMs": 1732107601000,
+          "monoTimeMs": 4601000,
+          "expectedState": {
+            "primaryState": "COMPLETED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_04_cycles_pomodoro_timeline_and_catchup",
+      "description": "Validates Cycles timeline precomputation, Focus vs Break decisions, and missed-alarm catch-up",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": {
+            "mode": "CYCLES",
+            "focusMinutes": 25,
+            "breakMinutes": 5,
+            "totalCycles": 2,
+            "autoTerminateOnBreakEnd": true
+          },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": {
+            "primaryState": "CYCLES_RUNNING",
+            "activePhase": "PREPARATION_GRACE",
+            "phasesCount": 8,
+            "totalTargetEndEpochMs": 1732107610000
+          }
+        },
+        {
+          "step": 2,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "wallTimeMs": 1732104015000,
+          "monoTimeMs": 1015000,
+          "expectedState": {
+            "primaryState": "CYCLES_RUNNING",
+            "activePhase": "FOCUS_SESSION",
+            "activePhaseIndex": 1
+          }
+        },
+        {
+          "step": 3,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": { "packageName": "com.instagram.android", "domain": "instagram.com" }
+          },
+          "wallTimeMs": 1732104020000,
+          "monoTimeMs": 1020000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Cycle Focus Session active",
+            "enforcedBy": "SHIELD"
+          }
+        },
+        {
+          "step": 4,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "description": "Simulate jump directly into Break Session (at 26m elapsed)",
+          "wallTimeMs": 1732105570000,
+          "monoTimeMs": 2570000,
+          "expectedState": {
+            "primaryState": "CYCLES_RUNNING",
+            "activePhase": "BREAK_SESSION",
+            "activePhaseIndex": 2
+          }
+        },
+        {
+          "step": 5,
+          "action": "EVALUATE_IS_BLOCKED",
+          "description": "During break, social apps are allowed",
+          "input": {
+            "target": { "packageName": "com.instagram.android", "domain": "instagram.com" }
+          },
+          "wallTimeMs": 1732105580000,
+          "monoTimeMs": 2580000,
+          "expectedDecision": {
+            "isBlocked": false,
+            "reason": "Micro-Break allowance active",
+            "enforcedBy": "NONE"
+          }
+        },
+        {
+          "step": 6,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "description": "Fast-forward directly past second cycle to completion",
+          "wallTimeMs": 1732107620000,
+          "monoTimeMs": 4620000,
+          "expectedState": {
+            "primaryState": "COMPLETED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_05_boundary_limit_validations",
+      "description": "Validates boundary clamps and validation failures for out-of-range configurations",
+      "steps": [
+        {
+          "step": 1,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "STRICT", "strictMinutes": 4 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_OUT_OF_BOUNDS"
+        },
+        {
+          "step": 2,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "STRICT", "strictMinutes": 481 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_OUT_OF_BOUNDS"
+        },
+        {
+          "step": 3,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "CYCLES", "focusMinutes": 25, "breakMinutes": 4, "totalCycles": 2 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_OUT_OF_BOUNDS"
+        },
+        {
+          "step": 4,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "CYCLES", "focusMinutes": 25, "breakMinutes": 31, "totalCycles": 2 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_OUT_OF_BOUNDS"
+        },
+        {
+          "step": 5,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "CYCLES", "focusMinutes": 25, "breakMinutes": 10, "totalCycles": 13 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_OUT_OF_BOUNDS"
+        },
+        {
+          "step": 6,
+          "action": "VALIDATE_CONFIG",
+          "input": { "mode": "NORMAL", "pauseMinutes": 10 },
+          "expectedValid": false,
+          "expectedErrorCode": "ERR_INVALID_PAUSE_DURATION"
+        }
+      ]
+    },
+    {
+      "id": "vector_06_anti_tamper_forward_clock_drift",
+      "description": "Validates that a forward user clock jump does not prematurely end strict sessions",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "STRICT", "strictMinutes": 60 },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": { "primaryState": "STRICT_RUNNING" }
+        },
+        {
+          "step": 2,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "description": "User shifts system clock forward 2 hours, but monotonic clock only advanced 60s",
+          "wallTimeMs": 1732111200000,
+          "monoTimeMs": 1060000,
+          "expectedTamperAlert": "CLOCK_MANIPULATION_DETECTED",
+          "expectedState": {
+            "primaryState": "STRICT_RUNNING"
+          }
+        },
+        {
+          "step": 3,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": {
+            "target": { "packageName": "com.google.android.youtube", "domain": "youtube.com" }
+          },
+          "wallTimeMs": 1732111201000,
+          "monoTimeMs": 1061000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Strict Lockout active (monotonic anchor enforced)",
+            "enforcedBy": "SHIELD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_07_anti_tamper_backward_clock_drift",
+      "description": "Validates that setting system clock backward does not corrupt monotonic anchor",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "STRICT", "strictMinutes": 30 },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": { "primaryState": "STRICT_RUNNING" }
+        },
+        {
+          "step": 2,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "description": "User sets clock back 3 hours",
+          "wallTimeMs": 1732093200000,
+          "monoTimeMs": 1900000,
+          "expectedTamperAlert": "BACKWARD_TIME_JUMP_DETECTED",
+          "expectedState": {
+            "primaryState": "STRICT_RUNNING"
+          }
+        },
+        {
+          "step": 3,
+          "action": "ADVANCE_TIME_CATCHUP",
+          "description": "Monotonic clock hits 30 minutes elapsed (1,800,000ms delta)",
+          "wallTimeMs": 1732095000000,
+          "monoTimeMs": 2801000,
+          "expectedState": {
+            "primaryState": "COMPLETED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_08_degraded_vpn_conflict",
+      "description": "Validates graceful degradation when another VPN takes over tun0 (Shields remain active)",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "NORMAL" },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": { "primaryState": "ACTIVE_NORMAL", "isVpnDegraded": false }
+        },
+        {
+          "step": 2,
+          "action": "NOTIFY_VPN_CONFLICT",
+          "wallTimeMs": 1732104100000,
+          "monoTimeMs": 1100000,
+          "expectedState": {
+            "primaryState": "ACTIVE_NORMAL",
+            "isVpnDegraded": true
+          }
+        },
+        {
+          "step": 3,
+          "action": "EVALUATE_IS_BLOCKED",
+          "description": "App shield block still enforces locally, even though VPN tun is degraded",
+          "input": {
+            "target": { "packageName": "com.google.android.youtube", "domain": "youtube.com" }
+          },
+          "wallTimeMs": 1732104110000,
+          "monoTimeMs": 1110000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "App blocked in session (degraded DNS fallback to shield)",
+            "enforcedBy": "SHIELD",
+            "allowFallback": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_09_category_and_domain_sinkhole",
+      "description": "Validates exact domain, wildcard suffix, and category rules",
+      "steps": [
+        {
+          "step": 1,
+          "action": "START_SESSION",
+          "input": { "mode": "NORMAL" },
+          "wallTimeMs": 1732104000000,
+          "monoTimeMs": 1000000,
+          "expectedState": { "primaryState": "ACTIVE_NORMAL" }
+        },
+        {
+          "step": 2,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": { "target": { "domain": "pornhub.com", "category": "porn" } },
+          "wallTimeMs": 1732104010000,
+          "monoTimeMs": 1010000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Blocked category: Adult & Pornography",
+            "enforcedBy": "DNS"
+          }
+        },
+        {
+          "step": 3,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": { "target": { "domain": "stake.com", "category": "gambling" } },
+          "wallTimeMs": 1732104020000,
+          "monoTimeMs": 1020000,
+          "expectedDecision": {
+            "isBlocked": true,
+            "reason": "Blocked category: Gambling",
+            "enforcedBy": "DNS"
+          }
+        },
+        {
+          "step": 4,
+          "action": "EVALUATE_IS_BLOCKED",
+          "input": { "target": { "domain": "wikipedia.org" } },
+          "wallTimeMs": 1732104030000,
+          "monoTimeMs": 1030000,
+          "expectedDecision": {
+            "isBlocked": false,
+            "reason": "Allowed clean domain",
+            "enforcedBy": "NONE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "vector_10_idempotent_event_replay",
+      "description": "Verifies that replaying duplicate events yields identical idempotent state",
+      "steps": [
+        {
+          "step": 1,
+          "action": "APPLY_EVENT",
+          "input": {
+            "eventId": "evt_test_01",
+            "sessionId": "ses_01",
+            "sequenceNumber": 1,
+            "eventType": "SessionStarted",
+            "timestampEpochMs": 1732104000000,
+            "monoTimestampMs": 1000000,
+            "idempotencyKey": "idem_start_01",
+            "payload": { "mode": "NORMAL" }
+          },
+          "expectedState": { "primaryState": "ACTIVE_NORMAL" }
+        },
+        {
+          "step": 2,
+          "action": "APPLY_EVENT",
+          "description": "Replay identical event",
+          "input": {
+            "eventId": "evt_test_01",
+            "sessionId": "ses_01",
+            "sequenceNumber": 1,
+            "eventType": "SessionStarted",
+            "timestampEpochMs": 1732104000000,
+            "monoTimestampMs": 1000000,
+            "idempotencyKey": "idem_start_01",
+            "payload": { "mode": "NORMAL" }
+          },
+          "expectedState": { "primaryState": "ACTIVE_NORMAL" }
+        }
+      ]
+    }
+  ]
+}

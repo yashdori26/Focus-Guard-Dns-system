@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../backend/vpn_service.dart';
 import '../models/app_models.dart';
+import 'live_telemetry_provider.dart';
 
 class LogsState {
   final String searchQuery;
@@ -29,67 +32,63 @@ class LogsState {
 }
 
 class LogsNotifier extends StateNotifier<LogsState> {
-  LogsNotifier()
-      : super(const LogsState(
-          searchQuery: '',
-          logs: [
-            QueryLog(
-              id: '1',
-              subdomain: 'w3-reporting.',
-              domain: 'reddit.com',
-              time: '5 mins ago',
-              icon: 'r/',
-            ),
-            QueryLog(
-              id: '2',
-              subdomain: 'pi.',
-              domain: 'reddit.com',
-              time: '6 mins ago',
-              icon: 'r/',
-            ),
-            QueryLog(
-              id: '3',
-              subdomain: 'gql-realtime.',
-              domain: 'reddit.com',
-              time: '10 mins ago',
-              icon: 'r/',
-            ),
-            QueryLog(
-              id: '4',
-              subdomain: 'www.',
-              domain: 'reddit.com',
-              time: '12 mins ago',
-              icon: 'r/',
-            ),
-            QueryLog(
-              id: '5',
-              subdomain: '...m7.cdn-settings.',
-              domain: 'appsflyersdk.com',
-              time: '15 mins ago',
-              icon: 'A',
-            ),
-            QueryLog(
-              id: '6',
-              subdomain: 'telemetry.',
-              domain: 'tiktokv.com',
-              time: '20 mins ago',
-              icon: 't',
-            ),
-            QueryLog(
-              id: '7',
-              subdomain: 'api.',
-              domain: 'segment.io',
-              time: '30 mins ago',
-              icon: 'S',
-            ),
-          ],
-        ));
+
+  StreamSubscription<Map<String, dynamic>>? _sub;
+
+  LogsNotifier() : super(const LogsState(searchQuery: '', logs: [])) {
+    _initLiveLogs();
+  }
+
+  Future<void> _initLiveLogs() async {
+    // 1. Load initial telemetry logs from local VPN engine
+    try {
+      final telemetry = await FocusDnsVpnManager.getLiveTelemetry();
+      final rawList = telemetry['recentQueries'] as List<dynamic>? ?? [];
+      final initialLogs = rawList.map((e) {
+        final item = LiveDnsQueryItem.fromMap(Map<String, dynamic>.from(e as Map));
+        return QueryLog(
+          id: item.id,
+          subdomain: item.subdomain,
+          domain: item.rootDomain,
+          time: item.timeAgo,
+          icon: item.iconText,
+          isBlocked: item.isBlocked,
+        );
+      }).toList();
+      if (mounted) {
+        state = state.copyWith(logs: initialLogs);
+      }
+    } catch (_) {}
+
+    // 2. Subscribe to incoming live query stream
+    _sub = FocusDnsVpnManager.liveQueryStream.listen((data) {
+      final item = LiveDnsQueryItem.fromMap(data);
+      final log = QueryLog(
+        id: item.id,
+        subdomain: item.subdomain,
+        domain: item.rootDomain,
+        time: item.timeAgo,
+        icon: item.iconText,
+        isBlocked: item.isBlocked,
+      );
+      if (mounted) {
+        state = state.copyWith(logs: [log, ...state.logs.take(99)]);
+      }
+    });
+  }
 
   void setSearchQuery(String query) {
     state = state.copyWith(searchQuery: query);
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 }
 
 final logsProvider = StateNotifierProvider<LogsNotifier, LogsState>((ref) {
   return LogsNotifier();
 });
+
