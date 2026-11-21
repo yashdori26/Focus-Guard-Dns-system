@@ -17,7 +17,7 @@ class ServerConfig {
     this.activeProfileId = 'dce22d',
   });
 
-  static const String publicTunnelUrl = 'https://elevation-bufing-mel-shots.trycloudflare.com';
+  static const String publicTunnelUrl = 'https://wichita-mid-understood-investing.trycloudflare.com';
 
   /// Default development fallback URL depending on platform
   static String get defaultServerUrl {

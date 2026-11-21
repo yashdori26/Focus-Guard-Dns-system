@@ -918,6 +918,54 @@ object RulesStore {
         return KNOWN_VPN_PACKAGES.contains(packageName)
     }
 
+    fun isPackageInCategory(activeCategories: Set<String>, packageName: String): Boolean {
+        if (activeCategories.isEmpty()) return false
+        val p = packageName.lowercase()
+        for (cat in activeCategories) {
+            when (cat.lowercase()) {
+                "social" -> {
+                    if (p.contains("instagram") || p.contains("tiktok") || p.contains("musically") ||
+                        p.contains("facebook") || p.contains("katana") || p.contains("twitter") ||
+                        p.contains("snapchat") || p.contains("reddit") || p.contains("pinterest") ||
+                        p.contains("threads") || p.contains("tumblr") || p.contains("bsky") ||
+                        p.contains("bereal")) return true
+                }
+                "gaming" -> {
+                    if (p.contains("roblox") || p.contains("epicgames") || p.contains("steam") ||
+                        p.contains("supercell") || p.contains("clashofclans") || p.contains("brawlstars") ||
+                        p.contains("pubg") || p.contains("freefire") || p.contains("tencent.ig") ||
+                        p.contains("riotgames") || p.contains("playstation") || p.contains("xbox") ||
+                        p.contains("blizzard") || p.contains("games.") || p.contains(".game")) return true
+                }
+                "dating" -> {
+                    if (p.contains("tinder") || p.contains("bumble") || p.contains("hinge") ||
+                        p.contains("okcupid") || p.contains("grindr") || p.contains("badoo") ||
+                        p.contains("dating") || p.contains("match.")) return true
+                }
+                "video" -> {
+                    if (p.contains("youtube") || p.contains("netflix") || p.contains("twitch") ||
+                        p.contains("disneyplus") || p.contains("primevideo") || p.contains("hulu") ||
+                        p.contains("hotstar")) return true
+                }
+                "gambling" -> {
+                    if (p.contains("casino") || p.contains("bet365") || p.contains("1xbet") ||
+                        p.contains("parimatch") || p.contains("winzo") || p.contains("mpl") ||
+                        p.contains("rummy") || p.contains("teenpatti") || p.contains("poker") ||
+                        p.contains("betting") || p.contains("lottery")) return true
+                }
+                "piracy" -> {
+                    if (p.contains("torrent") || p.contains("utorrent") || p.contains("bittorrent") ||
+                        p.contains("deluge")) return true
+                }
+                "porn" -> {
+                    if (p.contains("porn") || p.contains("xxx") || p.contains("erotic") ||
+                        p.contains("hentai")) return true
+                }
+            }
+        }
+        return false
+    }
+
     /**
      * Determines whether [packageName] should be intercepted and covered.
      */
@@ -930,7 +978,8 @@ object RulesStore {
             isVpnLost = isVpnLost(context),
             isOurApp = (packageName == context.packageName),
             isSystemWhitelisted = isSystemWhitelisted(context, packageName),
-            isProtectionActive = isProtection
+            isProtectionActive = isProtection,
+            activeCategories = getBlockedCategories(context)
         )
     }
 
@@ -941,7 +990,8 @@ object RulesStore {
         isVpnLost: Boolean,
         isOurApp: Boolean = false,
         isSystemWhitelisted: Boolean = false,
-        isProtectionActive: Boolean = false
+        isProtectionActive: Boolean = false,
+        activeCategories: Set<String> = emptySet()
     ): Boolean {
         if (isOurApp) return false
         if (isTemporaryPassActive(packageName)) return false
@@ -949,6 +999,7 @@ object RulesStore {
             if (!isSystemWhitelisted) return true
         }
         if (blockedPackages.contains(packageName)) return true
+        if (activeCategories.isNotEmpty() && isPackageInCategory(activeCategories, packageName)) return true
         // Tor and 3rd-party VPN apps are blocked whenever Strict Mode OR FocusDNS Protection is active
         if ((isStrict || isProtectionActive) && isVpnApp(packageName)) return true
         return false

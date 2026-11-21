@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../backend/vpn_service.dart';
 import '../services/app_storage_service.dart';
 
 class DenylistNotifier extends StateNotifier<List<String>> {
@@ -12,6 +13,14 @@ class DenylistNotifier extends StateNotifier<List<String>> {
     if (saved != null) {
       state = saved;
     }
+    _syncToVpn();
+  }
+
+  void _syncToVpn() {
+    FocusDnsVpnManager.updateDnsRules(
+      blockedDomains: state,
+      allowedDomains: [],
+    );
   }
 
   void add(String domain) {
@@ -19,12 +28,14 @@ class DenylistNotifier extends StateNotifier<List<String>> {
     if (clean.isNotEmpty && !state.contains(clean)) {
       state = [...state, clean];
       AppStorageService.saveDenylist(state);
+      _syncToVpn();
     }
   }
 
   void remove(String domain) {
     state = state.where((d) => d != domain).toList();
     AppStorageService.saveDenylist(state);
+    _syncToVpn();
   }
 }
 

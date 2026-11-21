@@ -1160,6 +1160,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                             if (!kIsWeb) {
                               final profileId = ref.read(setupProvider).profileId;
                               if (willBeOn) {
+                                try {
+                                  ref.read(deepFocusProvider.notifier).syncWithBlocker();
+                                } catch (_) {}
                                 await ref.read(vpnProvider.notifier).start(profileId: profileId);
                                 ref.read(setupProvider.notifier).autoSyncAndLinkIp();
                               } else {

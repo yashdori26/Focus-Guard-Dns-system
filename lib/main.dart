@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:focus_dns/models/app_models.dart';
-import 'frontend/auth/auth_gateway.dart';
+import 'frontend/home_screen.dart';
 import 'frontend/theme/wabi_sabi_theme.dart';
 import 'state_management/providers.dart';
 
@@ -25,7 +25,7 @@ class FocusDNSMobileApp extends ConsumerWidget {
       theme: WabiSabiTheme.lightTheme,
       darkTheme: WabiSabiTheme.darkTheme,
       themeMode: themeMode,
-      home: home ?? const AuthGateway(),
+      home: home ?? const FocusDNSHomeScreen(),
     );
   }
 }

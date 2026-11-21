@@ -296,6 +296,7 @@ class FocusAccessibilityService : AccessibilityService() {
             val reason = when {
                 RulesStore.isVpnLost(this) -> "FocusDNS VPN Lost — Internet Access Locked"
                 RulesStore.isVpnApp(pkg) -> "Tor Browser & VPN Circumvention Blocked"
+                RulesStore.isPackageInCategory(RulesStore.getBlockedCategories(this), pkg) -> "Category Blocked App"
                 else -> "Deep Focus App Blocked"
             }
             launchBlockedScreen(pkg, reason)

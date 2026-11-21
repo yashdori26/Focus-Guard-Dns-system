@@ -7,7 +7,7 @@ class FocusDnsApiClient {
   String? apiKey;
 
   FocusDnsApiClient({
-    this.baseUrl = 'https://elevation-bufing-mel-shots.trycloudflare.com',
+    this.baseUrl = 'https://wichita-mid-understood-investing.trycloudflare.com',
     this.profileId = 'dce22d',
     this.apiKey,
   });
