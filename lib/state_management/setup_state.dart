@@ -1,0 +1,211 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../backend/api_client.dart';
+
+class SetupState {
+  final String profileId;
+  final String linkedIp;
+  final String? currentClientIp;
+  final String dohUrl;
+  final String dotHostname;
+  final List<String> ipv4Endpoints;
+  final List<String> ipv6Endpoints;
+  final String? appleMobileConfigUrl;
+  final bool isLoading;
+  final bool isUpdatingIp;
+  final String? errorMessage;
+
+  const SetupState({
+    required this.profileId,
+    required this.linkedIp,
+    this.currentClientIp,
+    required this.dohUrl,
+    required this.dotHostname,
+    required this.ipv4Endpoints,
+    required this.ipv6Endpoints,
+    this.appleMobileConfigUrl,
+    this.isLoading = false,
+    this.isUpdatingIp = false,
+    this.errorMessage,
+  });
+
+  bool get isMatched =>
+      currentClientIp != null &&
+      currentClientIp!.isNotEmpty &&
+      currentClientIp == linkedIp;
+
+  SetupState copyWith({
+    String? profileId,
+    String? linkedIp,
+    String? currentClientIp,
+    String? dohUrl,
+    String? dotHostname,
+    List<String>? ipv4Endpoints,
+    List<String>? ipv6Endpoints,
+    String? appleMobileConfigUrl,
+    bool? isLoading,
+    bool? isUpdatingIp,
+    String? errorMessage,
+  }) {
+    return SetupState(
+      profileId: profileId ?? this.profileId,
+      linkedIp: linkedIp ?? this.linkedIp,
+      currentClientIp: currentClientIp ?? this.currentClientIp,
+      dohUrl: dohUrl ?? this.dohUrl,
+      dotHostname: dotHostname ?? this.dotHostname,
+      ipv4Endpoints: ipv4Endpoints ?? this.ipv4Endpoints,
+      ipv6Endpoints: ipv6Endpoints ?? this.ipv6Endpoints,
+      appleMobileConfigUrl: appleMobileConfigUrl ?? this.appleMobileConfigUrl,
+      isLoading: isLoading ?? this.isLoading,
+      isUpdatingIp: isUpdatingIp ?? this.isUpdatingIp,
+      errorMessage: errorMessage,
+    );
+  }
+}
+
+class SetupNotifier extends StateNotifier<SetupState> {
+  final FocusDnsApiClient _client;
+
+  SetupNotifier({FocusDnsApiClient? client})
+      : _client = client ?? FocusDnsApiClient(),
+        super(const SetupState(
+          profileId: 'local',
+          linkedIp: '127.0.0.1 (Local)',
+          currentClientIp: '127.0.0.1',
+          dohUrl: 'http://127.0.0.1:53',
+          dotHostname: 'local.focusdns',
+          ipv4Endpoints: ['10.254.1.2'],
+          ipv6Endpoints: ['fd00::2'],
+          appleMobileConfigUrl: null,
+          isLoading: false,
+          isUpdatingIp: false,
+        )) {
+    loadSetupDetails();
+  }
+
+  Future<void> updateServerHost([String? newHost, String? profileId]) async {
+    _client.updateConfig(newBaseUrl: newHost, newProfileId: profileId);
+    if (profileId != null && profileId.isNotEmpty) {
+      state = state.copyWith(profileId: profileId);
+    }
+    await loadSetupDetails();
+  }
+
+  Future<void> loadSetupDetails() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      final results = await Future.wait([
+        _client.getSetupDetails(),
+        _client.detectClientIp(),
+      ]);
+
+      final details = results[0] as Map<String, dynamic>;
+      final detectedIp = results[1] as String?;
+
+      final serverLinkedIp = details['linked_ip']?.toString();
+      final serverProfileId = details['profile_id']?.toString() ?? state.profileId;
+      final serverClientIp = details['client_ip']?.toString() ?? detectedIp ?? state.currentClientIp;
+      final serverDoh = details['doh_endpoint']?.toString() ?? state.dohUrl;
+      final serverDot = details['dot_endpoint']?.toString() ?? state.dotHostname;
+      final serverApple = details['apple_mobileconfig_url']?.toString();
+
+      List<String> ipv4 = state.ipv4Endpoints;
+      if (details['ipv4_endpoints'] is List) {
+        final list = (details['ipv4_endpoints'] as List).map((e) => e.toString()).toList();
+        if (list.isNotEmpty) ipv4 = list;
+      }
+
+      List<String> ipv6 = state.ipv6Endpoints;
+      if (details['ipv6_endpoints'] is List) {
+        final list = (details['ipv6_endpoints'] as List).map((e) => e.toString()).toList();
+        if (list.isNotEmpty) ipv6 = list;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        profileId: serverProfileId,
+        linkedIp: (serverLinkedIp != null && serverLinkedIp.isNotEmpty) ? serverLinkedIp : state.linkedIp,
+        currentClientIp: serverClientIp,
+        dohUrl: serverDoh,
+        dotHostname: serverDot,
+        ipv4Endpoints: ipv4,
+        ipv6Endpoints: ipv6,
+        appleMobileConfigUrl: serverApple,
+      );
+
+      // Auto-sync client IP silently in background so the user never needs to manually refresh in Setup
+      if (serverClientIp != null &&
+          serverClientIp.isNotEmpty &&
+          serverClientIp != 'No IP linked' &&
+          (serverLinkedIp == null || serverLinkedIp.isEmpty || serverLinkedIp == 'No IP linked' || serverLinkedIp != serverClientIp)) {
+        _client.linkIp(serverClientIp).then((newLinked) {
+          if (mounted && newLinked != null && newLinked.isNotEmpty) {
+            state = state.copyWith(linkedIp: newLinked);
+          }
+        }).catchError((_) {});
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+    }
+  }
+
+  Future<void> refresh() async => loadSetupDetails();
+
+  Future<bool> updateLinkedIp([String? targetIp]) async {
+    state = state.copyWith(isUpdatingIp: true, errorMessage: null);
+
+    final ipToLink = targetIp ?? state.currentClientIp;
+    try {
+      final newLinkedIp = await _client.linkIp(ipToLink);
+      if (newLinkedIp != null && newLinkedIp.isNotEmpty) {
+        state = state.copyWith(
+          linkedIp: newLinkedIp,
+          currentClientIp: (ipToLink != null && ipToLink.isNotEmpty) ? ipToLink : state.currentClientIp,
+          isUpdatingIp: false,
+        );
+        return true;
+      } else if (ipToLink != null && ipToLink.isNotEmpty) {
+        // Fallback update in offline / test mode
+        state = state.copyWith(
+          linkedIp: ipToLink,
+          isUpdatingIp: false,
+        );
+        return true;
+      }
+    } catch (e) {
+      state = state.copyWith(isUpdatingIp: false, errorMessage: e.toString());
+      return false;
+    }
+
+    state = state.copyWith(isUpdatingIp: false);
+    return false;
+  }
+
+  /// Automatically syncs and links network IP in background without blocking UI
+  Future<void> autoSyncAndLinkIp() async {
+    try {
+      final detectedIp = await _client.detectClientIp();
+      final ipToLink = (detectedIp != null && detectedIp.isNotEmpty && detectedIp != 'No IP linked')
+          ? detectedIp
+          : state.currentClientIp;
+
+      if (ipToLink != null && ipToLink.isNotEmpty && ipToLink != 'No IP linked') {
+        state = state.copyWith(currentClientIp: ipToLink);
+        final newLinked = await _client.linkIp(ipToLink);
+        if (mounted && newLinked != null && newLinked.isNotEmpty) {
+          state = state.copyWith(linkedIp: newLinked);
+        } else if (mounted) {
+          state = state.copyWith(linkedIp: ipToLink);
+        }
+      }
+    } catch (_) {}
+  }
+}
+
+final apiClientProvider = Provider<FocusDnsApiClient>((ref) {
+  return FocusDnsApiClient();
+});
+
+final setupProvider = StateNotifierProvider<SetupNotifier, SetupState>((ref) {
+  return SetupNotifier(client: ref.watch(apiClientProvider));
+});

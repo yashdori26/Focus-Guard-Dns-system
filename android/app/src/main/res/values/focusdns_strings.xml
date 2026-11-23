@@ -1,0 +1,4 @@
+<resources>
+    <string name="accessibility_description">Lets FocusDNS close apps you chose to block and hide Reels/Shorts feeds. Nothing is read or sent anywhere.</string>
+    <string name="device_admin_description">Prevents accidental or impulsive uninstallation during active strict focus sessions.</string>
+</resources>
