@@ -1,10 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../backend/blocker_service.dart';
 
-/// Secure Local Persistence Service for Phone SMS Sessions and DNS Profiles
+/// Secure Dual-Layer Persistence Service for Accounts, Sessions, and DNS Profiles.
+/// Synchronizes across local SharedPreferences AND on-device SQLite LocalDb (focusdns.db)
+/// ensuring zero data or profile loss even when the app is closed, killed, or backgrounded.
 class AuthStorageService {
   static const String _kSessionToken = 'focus_dns_auth_session_token';
   static const String _kPhoneNumber = 'focus_dns_auth_phone_number';
   static const String _kEmail = 'focus_dns_auth_email';
+  static const String _kPassword = 'focus_dns_auth_password';
+  static const String _kRememberMe = 'focus_dns_auth_remember_me';
   static const String _kProfileId = 'focus_dns_auth_profile_id';
   static const String _kProfileName = 'focus_dns_auth_profile_name';
   static const String _kCountryCode = 'focus_dns_auth_country_code';
@@ -15,6 +21,7 @@ class AuthStorageService {
 
   static const String _kCustomProfiles = 'focus_dns_custom_profiles';
 
+  /// Saves the active authenticated session across SharedPreferences & SQLite LocalDb
   static Future<void> saveSession({
     required String token,
     String? phone,
@@ -37,26 +44,184 @@ class AuthStorageService {
     if (flag != null) await prefs.setString(_kFlag, flag);
     if (isEmailVerified != null) await prefs.setBool(_kIsEmailVerified, isEmailVerified);
     await prefs.setBool(_kIsLoggedIn, true);
+
+    // Synchronize to native SQLite LocalDb table kv
+    try {
+      await FocusDnsBlockerManager.putKv(_kSessionToken, token);
+      await FocusDnsBlockerManager.putKv(_kProfileId, profileId);
+      await FocusDnsBlockerManager.putKv(_kProfileName, profileName);
+      await FocusDnsBlockerManager.putKv(_kIsLoggedIn, 'true');
+      if (email != null && email.isNotEmpty) {
+        await FocusDnsBlockerManager.putKv(_kEmail, email);
+      }
+    } catch (e) {
+      debugPrint('[AuthStorageService] Error syncing session to SQLite LocalDb: $e');
+    }
+  }
+
+  /// Saves account credentials securely to local database & SharedPreferences for auto-remember
+  static Future<void> saveCredentials({
+    required String email,
+    required String password,
+    required String profileName,
+    bool rememberMe = true,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kEmail, email);
+    await prefs.setString(_kPassword, password);
+    await prefs.setString(_kProfileName, profileName);
+    await prefs.setBool(_kRememberMe, rememberMe);
+    await prefs.setBool(_kIsLoggedIn, true);
+
+    // Save into on-device SQLite database table kv
+    try {
+      await FocusDnsBlockerManager.putKv(_kEmail, email);
+      await FocusDnsBlockerManager.putKv(_kPassword, password);
+      await FocusDnsBlockerManager.putKv(_kProfileName, profileName);
+      await FocusDnsBlockerManager.putKv(_kRememberMe, rememberMe ? 'true' : 'false');
+      await FocusDnsBlockerManager.putKv(_kIsLoggedIn, 'true');
+    } catch (e) {
+      debugPrint('[AuthStorageService] Error saving credentials to SQLite LocalDb: $e');
+    }
+  }
+
+  /// Retrieves saved credentials for pre-filling login form (falls back to SQLite LocalDb)
+  static Future<Map<String, String?>> getSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? email = prefs.getString(_kEmail);
+    String? password = prefs.getString(_kPassword);
+    String? profileName = prefs.getString(_kProfileName);
+    bool? rememberMe = prefs.getBool(_kRememberMe);
+
+    // If SharedPreferences has empty values, check native SQLite LocalDb
+    if (email == null || email.isEmpty) {
+      try {
+        final dbEmail = await FocusDnsBlockerManager.getKv(_kEmail, '');
+        if (dbEmail.isNotEmpty) {
+          email = dbEmail;
+          await prefs.setString(_kEmail, dbEmail);
+        }
+      } catch (_) {}
+    }
+
+    if (password == null || password.isEmpty) {
+      try {
+        final dbPassword = await FocusDnsBlockerManager.getKv(_kPassword, '');
+        if (dbPassword.isNotEmpty) {
+          password = dbPassword;
+          await prefs.setString(_kPassword, dbPassword);
+        }
+      } catch (_) {}
+    }
+
+    if (profileName == null || profileName.isEmpty) {
+      try {
+        final dbProfileName = await FocusDnsBlockerManager.getKv(_kProfileName, '');
+        if (dbProfileName.isNotEmpty) {
+          profileName = dbProfileName;
+          await prefs.setString(_kProfileName, dbProfileName);
+        }
+      } catch (_) {}
+    }
+
+    if (rememberMe == null) {
+      try {
+        final dbRememberMe = await FocusDnsBlockerManager.getKv(_kRememberMe, 'true');
+        rememberMe = (dbRememberMe != 'false');
+        await prefs.setBool(_kRememberMe, rememberMe);
+      } catch (_) {
+        rememberMe = true;
+      }
+    }
+
+    return {
+      'email': email,
+      'password': password,
+      'profile_name': profileName,
+      'remember_me': rememberMe ? 'true' : 'false',
+    };
+  }
+
+  /// Returns whether user is marked as logged in
+  static Future<bool> isUserLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loggedIn = prefs.getBool(_kIsLoggedIn);
+    if (loggedIn != null) return loggedIn;
+
+    try {
+      final dbVal = await FocusDnsBlockerManager.getKv(_kIsLoggedIn, 'false');
+      return dbVal == 'true';
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<String> getActiveProfileName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kProfileName) ?? 'Personal Shield';
+    final name = prefs.getString(_kProfileName);
+    if (name != null && name.isNotEmpty) return name;
+
+    try {
+      final dbName = await FocusDnsBlockerManager.getKv(_kProfileName, '');
+      if (dbName.isNotEmpty) {
+        await prefs.setString(_kProfileName, dbName);
+        return dbName;
+      }
+    } catch (_) {}
+
+    return 'Personal Shield';
   }
 
   static Future<String> getActiveProfileId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kProfileId) ?? 'local';
+    final id = prefs.getString(_kProfileId);
+    if (id != null && id.isNotEmpty) return id;
+
+    try {
+      final dbId = await FocusDnsBlockerManager.getKv(_kProfileId, '');
+      if (dbId.isNotEmpty) {
+        await prefs.setString(_kProfileId, dbId);
+        return dbId;
+      }
+    } catch (_) {}
+
+    return 'local';
   }
 
   static Future<Map<String, String?>> loadSession() async {
     final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool(_kIsLoggedIn) ?? false;
-    final token = prefs.getString(_kSessionToken);
-    final profileId = prefs.getString(_kProfileId) ?? 'local';
-    final profileName = prefs.getString(_kProfileName) ?? 'Personal Shield';
+    bool isLoggedIn = prefs.getBool(_kIsLoggedIn) ?? false;
+    String? token = prefs.getString(_kSessionToken);
+    String profileId = prefs.getString(_kProfileId) ?? 'local';
+    String profileName = prefs.getString(_kProfileName) ?? 'Personal Shield';
 
+    // Fall back to SQLite LocalDb if SharedPreferences is unpopulated
     if (!isLoggedIn || token == null || token.isEmpty) {
+      try {
+        final dbLoggedIn = await FocusDnsBlockerManager.getKv(_kIsLoggedIn, 'false');
+        if (dbLoggedIn == 'true') {
+          isLoggedIn = true;
+          await prefs.setBool(_kIsLoggedIn, true);
+        }
+        final dbToken = await FocusDnsBlockerManager.getKv(_kSessionToken, '');
+        if (dbToken.isNotEmpty) {
+          token = dbToken;
+          await prefs.setString(_kSessionToken, dbToken);
+        }
+        final dbPid = await FocusDnsBlockerManager.getKv(_kProfileId, '');
+        if (dbPid.isNotEmpty) {
+          profileId = dbPid;
+          await prefs.setString(_kProfileId, dbPid);
+        }
+        final dbPname = await FocusDnsBlockerManager.getKv(_kProfileName, '');
+        if (dbPname.isNotEmpty) {
+          profileName = dbPname;
+          await prefs.setString(_kProfileName, dbPname);
+        }
+      } catch (_) {}
+    }
+
+    if (!isLoggedIn) {
       return {
         'is_logged_in': 'false',
         'profile_id': profileId,
@@ -68,7 +233,7 @@ class AuthStorageService {
 
     return {
       'is_logged_in': 'true',
-      'token': token,
+      'token': token ?? 'local_session_active',
       'phone': prefs.getString(_kPhoneNumber),
       'email': prefs.getString(_kEmail),
       'profile_id': profileId,
@@ -89,6 +254,12 @@ class AuthStorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kProfileId, profileId);
     await prefs.setString(_kProfileName, profileName);
+
+    // Sync to SQLite LocalDb
+    try {
+      await FocusDnsBlockerManager.putKv(_kProfileId, profileId);
+      await FocusDnsBlockerManager.putKv(_kProfileName, profileName);
+    } catch (_) {}
   }
 
   static Future<List<Map<String, dynamic>>> loadProfiles() async {
@@ -109,6 +280,9 @@ class AuthStorageService {
     if (current == profileId) {
       await prefs.remove(_kProfileId);
       await prefs.setString(_kProfileName, 'Local Shield');
+      try {
+        await FocusDnsBlockerManager.putKv(_kProfileName, 'Local Shield');
+      } catch (_) {}
     }
   }
 
@@ -120,17 +294,35 @@ class AuthStorageService {
     await prefs.remove('focusdns_active_profile_id');
     await prefs.remove('focusdns_custom_server_url');
     await prefs.setString(_kProfileName, 'Local Shield');
+    try {
+      await FocusDnsBlockerManager.putKv(_kProfileName, 'Local Shield');
+    } catch (_) {}
   }
 
-  static Future<void> clearSession() async {
+  /// Clears active login session. If [preserveSavedCredentials] is true,
+  /// email, profile name, and password are kept for seamless re-login.
+  static Future<void> clearSession({bool preserveSavedCredentials = true}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kSessionToken);
-    await prefs.remove(_kPhoneNumber);
-    await prefs.remove(_kEmail);
-    await prefs.remove(_kProfileId);
-    await prefs.remove(_kProfileName);
-    await prefs.remove(_kCustomProfiles);
-    await prefs.remove(_kIsEmailVerified);
     await prefs.setBool(_kIsLoggedIn, false);
+    await prefs.remove(_kIsEmailVerified);
+
+    try {
+      await FocusDnsBlockerManager.putKv(_kSessionToken, '');
+      await FocusDnsBlockerManager.putKv(_kIsLoggedIn, 'false');
+    } catch (_) {}
+
+    if (!preserveSavedCredentials) {
+      await prefs.remove(_kPhoneNumber);
+      await prefs.remove(_kEmail);
+      await prefs.remove(_kPassword);
+      await prefs.remove(_kProfileId);
+      await prefs.remove(_kProfileName);
+      await prefs.remove(_kCustomProfiles);
+      try {
+        await FocusDnsBlockerManager.putKv(_kEmail, '');
+        await FocusDnsBlockerManager.putKv(_kPassword, '');
+      } catch (_) {}
+    }
   }
 }

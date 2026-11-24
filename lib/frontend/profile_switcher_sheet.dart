@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/server_config.dart';
 import '../state_management/providers.dart';
+import 'auth/email_auth_screen.dart';
 import 'phone_auth_sheet.dart';
 import 'profile_settings_sheet.dart';
 import 'theme/wabi_sabi_theme.dart';
@@ -225,16 +226,13 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
 
             const SizedBox(height: 14),
 
-            // Account & Phone Status Card
+            // Account Status Card
             if (!auth.isLoggedIn)
               GestureDetector(
                 onTap: () {
                   Navigator.pop(context);
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const PhoneAuthSheet(),
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
                   );
                 },
                 child: Container(
@@ -247,14 +245,14 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                   ),
                   child: Row(
                     children: [
-                      Text(auth.detectedFlag, style: const TextStyle(fontSize: 22)),
+                      Icon(Icons.account_circle_outlined, size: 26, color: palette.ink),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Instant Phone Login',
+                              'Sign In or Create Account',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -262,7 +260,7 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                               ),
                             ),
                             Text(
-                              '${auth.detectedCountryCode} (${auth.detectedDialCode}) • 1-tap SMS sync across devices',
+                              'Secure email & password authentication with on-device backup',
                               style: TextStyle(fontSize: 11, color: palette.mutedInk),
                             ),
                           ],
@@ -337,9 +335,14 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {
-                        ref.read(authProvider.notifier).logout();
-                        _fetchProfiles();
+                      onPressed: () async {
+                        await ref.read(authProvider.notifier).logout();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                          );
+                        }
                       },
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

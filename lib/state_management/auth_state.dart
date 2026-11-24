@@ -193,7 +193,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (res['success'] == true) {
         final token = res['token']?.toString() ?? '';
         final pid = res['profile_id']?.toString() ?? 'local';
-        final pname = res['profile_name']?.toString() ?? 'Local Shield';
+        final savedPname = await AuthStorageService.getActiveProfileName();
+        final rawPname = res['profile_name']?.toString();
+        final pname = (rawPname != null && rawPname.isNotEmpty && rawPname != 'Local Shield')
+            ? rawPname
+            : (savedPname.isNotEmpty && savedPname != 'Local Shield' ? savedPname : 'Personal Shield');
         final rawProfiles = res['profiles'] as List<dynamic>? ?? [];
         final profiles = List<Map<String, dynamic>>.from(rawProfiles);
 
@@ -207,6 +211,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
             profileId: pid,
             profileName: pname,
             isEmailVerified: isVerified,
+          );
+          await AuthStorageService.saveCredentials(
+            email: email.trim().toLowerCase(),
+            password: password,
+            profileName: pname,
+            rememberMe: true,
           );
         }
 
@@ -243,7 +253,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (res['success'] == true) {
         final token = res['token']?.toString() ?? '';
         final pid = res['profile_id']?.toString() ?? 'local';
-        final pname = res['profile_name']?.toString() ?? (profileName ?? 'Local Shield');
+        final chosenPname = (profileName != null && profileName.trim().isNotEmpty)
+            ? profileName.trim()
+            : 'Personal Shield';
+        final rawPname = res['profile_name']?.toString();
+        final pname = (rawPname != null && rawPname.isNotEmpty && rawPname != 'Local Shield')
+            ? rawPname
+            : chosenPname;
         final rawProfiles = res['profiles'] as List<dynamic>? ?? [];
         final profiles = List<Map<String, dynamic>>.from(rawProfiles);
         final isVerified = res['is_email_verified'] == true;
@@ -257,6 +273,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
             profileId: pid,
             profileName: pname,
             isEmailVerified: isVerified,
+          );
+          await AuthStorageService.saveCredentials(
+            email: email.trim().toLowerCase(),
+            password: password,
+            profileName: pname,
+            rememberMe: true,
           );
         }
 
@@ -686,8 +708,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _apiClient.logoutSession();
-    await AuthStorageService.clearSession();
-    await AuthStorageService.clearAllProfiles();
+    await AuthStorageService.clearSession(preserveSavedCredentials: true);
+    final savedProfileName = await AuthStorageService.getActiveProfileName();
 
     state = AuthState(
       isInitialized: true,
@@ -699,7 +721,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       detectedIp: state.detectedIp,
       countries: state.countries,
       activeProfileId: 'local',
-      activeProfileName: 'Local Shield',
+      activeProfileName: savedProfileName,
     );
     _apiClient.profileId = 'local';
   }

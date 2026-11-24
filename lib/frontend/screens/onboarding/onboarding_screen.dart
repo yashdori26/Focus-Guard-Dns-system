@@ -61,6 +61,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
       final savedStep = prefs.getInt('focus_onboarding_step');
       final savedName = prefs.getString('focus_onboarding_name');
       final savedCats = prefs.getStringList('focus_onboarding_cats');
+      final authProfileName = await AuthStorageService.getActiveProfileName();
 
       if (!mounted) return;
       setState(() {
@@ -69,6 +70,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         }
         if (savedName != null && savedName.isNotEmpty) {
           _nameController.text = savedName;
+        } else if (authProfileName.isNotEmpty && authProfileName != 'Personal Shield') {
+          _nameController.text = authProfileName;
         }
         if (savedCats != null && savedCats.isNotEmpty) {
           _selectedCategories.clear();
@@ -218,6 +221,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     await prefs.remove('focus_onboarding_name');
     await prefs.remove('focus_onboarding_cats');
     await prefs.setBool('focus_onboarding_completed', true);
+
+    // Also persist completion into native SQLite LocalDb so it never resets
+    try {
+      await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '1');
+      await FocusDnsBlockerManager.putKv('focus_dns_auth_profile_name', profileName);
+    } catch (_) {}
 
     if (mounted) {
       Navigator.of(context).pushReplacement(

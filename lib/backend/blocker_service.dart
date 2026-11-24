@@ -313,6 +313,40 @@ class FocusDnsBlockerManager {
     }
     return false;
   }
+
+  /// Persists a key-value pair to the native SQLite LocalDb.
+  static Future<bool> putKv(String key, String value) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('putKv', {
+          'key': key,
+          'value': value,
+        });
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error putKv: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Retrieves a value by key from the native SQLite LocalDb.
+  static Future<String> getKv(String key, [String defaultValue = '']) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final String? result = await _channel.invokeMethod<String>('getKv', {
+          'key': key,
+          'default': defaultValue,
+        });
+        return result ?? defaultValue;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error getKv: $e');
+        return defaultValue;
+      }
+    }
+    return defaultValue;
+  }
 }
 
 

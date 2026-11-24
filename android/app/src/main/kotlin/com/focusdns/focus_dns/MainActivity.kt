@@ -318,6 +318,21 @@ class MainActivity : FlutterActivity() {
             "removeDeviceAdmin" -> {
                 result.success(FocusDeviceAdminReceiver.requestDeactivate(this))
             }
+            "putKv" -> {
+                val key = call.argument<String>("key") ?: ""
+                val value = call.argument<String>("value") ?: ""
+                if (key.isNotEmpty()) {
+                    db().putKv(key, value)
+                    result.success(true)
+                } else {
+                    result.success(false)
+                }
+            }
+            "getKv" -> {
+                val key = call.argument<String>("key") ?: ""
+                val def = call.argument<String>("default") ?: ""
+                result.success(db().getKv(key, def))
+            }
             else -> result.notImplemented()
         }
     }
