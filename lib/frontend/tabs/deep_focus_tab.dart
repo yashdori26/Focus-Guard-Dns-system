@@ -5,12 +5,7 @@ import '../../backend/mdm_service.dart';
 import '../../models/app_models.dart';
 import '../../state_management/providers.dart';
 import '../theme/wabi_sabi_theme.dart';
-import '../widgets/routine_focus_card.dart';
-import '../widgets/per_app_timer_card.dart';
-import '../widgets/surgical_filter_card.dart';
-import '../widgets/longitudinal_analytics_card.dart';
 import '../widgets/app_logo.dart';
-import '../screens/surgical_feed_studio_screen.dart';
 
 class DeepFocusTab extends ConsumerWidget {
   const DeepFocusTab({super.key});
@@ -82,8 +77,14 @@ class DeepFocusTab extends ConsumerWidget {
                     ),
                     child: Icon(Icons.apps_rounded, color: palette.ink, size: 20),
                   ),
-                  title: Text('App or Website', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink)),
-                  subtitle: Text('Block YouTube, Instagram, Reddit, games, etc.', style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk)),
+                  title: Text(
+                    'App or Website',
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink),
+                  ),
+                  subtitle: Text(
+                    'Block YouTube, Instagram, Reddit, games, etc.',
+                    style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk),
+                  ),
                   trailing: Icon(Icons.chevron_right, color: palette.mutedInk, size: 20),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -102,8 +103,14 @@ class DeepFocusTab extends ConsumerWidget {
                     ),
                     child: Icon(Icons.category_outlined, color: palette.ink, size: 20),
                   ),
-                  title: Text('Category', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink)),
-                  subtitle: Text('Block Adult, Gambling, Piracy, Social Networks, etc.', style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk)),
+                  title: Text(
+                    'Category',
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink),
+                  ),
+                  subtitle: Text(
+                    'Block Adult, Gambling, Piracy, Social Networks, etc.',
+                    style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk),
+                  ),
                   trailing: Icon(Icons.chevron_right, color: palette.mutedInk, size: 20),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -182,23 +189,34 @@ class DeepFocusTab extends ConsumerWidget {
       builder: (ctx) {
         return Container(
           padding: const EdgeInsets.all(20),
-          height: 400,
+          height: 420,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Add Category',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                    style: GoogleFonts.fraunces(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                       color: palette.ink,
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.close, color: palette.mutedInk, size: 20),
+                    icon: Icon(Icons.close_rounded, color: palette.mutedInk, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -209,61 +227,83 @@ class DeepFocusTab extends ConsumerWidget {
                     ? Center(
                         child: Text(
                           'All available categories are already added to your focus rules.',
-                          style: TextStyle(fontSize: 13, color: palette.mutedInk),
+                          style: GoogleFonts.inter(fontSize: 12.5, color: palette.mutedInk),
                         ),
                       )
-                    : ListView.builder(
+                    : ListView.separated(
                         itemCount: available.length,
+                        separatorBuilder: (_, __) => Divider(color: palette.hairlineSoft, height: 1),
                         itemBuilder: (context, i) {
                           final item = available[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text(
-                                  item.name,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: palette.ink,
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: palette.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: palette.border, width: 0.8),
+                                  ),
+                                  child: Center(
+                                    child: Text(item.icon, style: const TextStyle(fontSize: 17)),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  item.description ?? '',
-                                  style: TextStyle(fontSize: 11, color: palette.mutedInk),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.name,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: palette.ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        item.description ?? '',
+                                        style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk, height: 1.25),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    ref.read(deepFocusProvider.notifier).addCategory(item);
+                                    Navigator.pop(ctx);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: palette.ink,
+                                    foregroundColor: palette.canvas,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                    minimumSize: Size.zero,
+                                    elevation: 0,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '+ ADD',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: () {
-                              ref.read(deepFocusProvider.notifier).addCategory(item);
-                              Navigator.pop(ctx);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: palette.ink,
-                              foregroundColor: palette.canvas,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text('ADD', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -284,10 +324,10 @@ class DeepFocusTab extends ConsumerWidget {
         // EYEBROW
         Text(
           'FOCUSDNS · FOCUS',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.jetBrainsMono(
             fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.4,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.3,
             color: palette.mutedInk,
           ),
         ),
@@ -301,7 +341,7 @@ class DeepFocusTab extends ConsumerWidget {
             fontWeight: FontWeight.w700,
             color: palette.ink,
             height: 1.15,
-            letterSpacing: -0.5,
+            letterSpacing: -0.6,
           ),
         ),
         const SizedBox(height: 4),
@@ -315,14 +355,15 @@ class DeepFocusTab extends ConsumerWidget {
             height: 1.3,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
 
+        // SECTION HEADER ROW
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               'ACTIVE RESTRICTIONS',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.jetBrainsMono(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.1,
@@ -332,8 +373,11 @@ class DeepFocusTab extends ConsumerWidget {
             ElevatedButton.icon(
               key: const Key('add_restriction_button'),
               onPressed: () => _showUnifiedAddModal(context, ref),
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.add_rounded, size: 14),
+              label: Text(
+                'Add',
+                style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: palette.ink,
                 foregroundColor: palette.canvas,
@@ -341,12 +385,14 @@ class DeepFocusTab extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
+
+        // CARD 1: WEBSITES, APPS & GAMES
         _buildListCard(
           context: context,
           palette: palette,
@@ -383,6 +429,8 @@ class DeepFocusTab extends ConsumerWidget {
             );
           }).toList(),
         ),
+
+        // CARD 2: CATEGORIES
         _buildListCard(
           context: context,
           palette: palette,
@@ -393,6 +441,8 @@ class DeepFocusTab extends ConsumerWidget {
           items: state.categories.map((c) {
             return _listItem(
               palette: palette,
+              icon: c.icon,
+              iconColor: c.color,
               title: c.name,
               desc: c.description,
               isStrict: strictState.isStrict,
@@ -417,6 +467,8 @@ class DeepFocusTab extends ConsumerWidget {
             );
           }).toList(),
         ),
+
+        // BOTTOM FOOTNOTE
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Text(
@@ -426,6 +478,7 @@ class DeepFocusTab extends ConsumerWidget {
               fontSize: 11.5,
               fontStyle: FontStyle.italic,
               color: palette.mutedInk.withOpacity(0.85),
+              height: 1.4,
             ),
           ),
         ),
@@ -444,11 +497,11 @@ class DeepFocusTab extends ConsumerWidget {
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: palette.surface,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: palette.hairlineSoft, width: 1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.border, width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,23 +522,23 @@ class DeepFocusTab extends ConsumerWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                 decoration: BoxDecoration(
                   color: items.isNotEmpty
                       ? palette.strictAccent.withOpacity(0.12)
                       : palette.canvas,
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: items.isNotEmpty
                         ? palette.strictAccent.withOpacity(0.3)
-                        : palette.hairlineSoft,
-                    width: 1,
+                        : palette.border,
+                    width: 0.8,
                   ),
                 ),
                 child: Text(
                   items.isNotEmpty ? '${items.length} BLOCKED' : '0 BLOCKED',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                     color: items.isNotEmpty ? palette.strictAccent : palette.mutedInk,
@@ -494,14 +547,14 @@ class DeepFocusTab extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             desc,
             style: GoogleFonts.inter(
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w400,
               color: palette.mutedInk,
-              height: 1.45,
+              height: 1.35,
             ),
           ),
           const SizedBox(height: 14),
@@ -511,15 +564,15 @@ class DeepFocusTab extends ConsumerWidget {
               curve: Curves.easeOutCubic,
               child: Column(children: items),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
           ],
           ElevatedButton(
             onPressed: onPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: palette.ink,
               foregroundColor: palette.canvas,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               minimumSize: const Size(0, 36),
               elevation: 0,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -527,12 +580,12 @@ class DeepFocusTab extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.add_rounded, size: 16, color: palette.canvas),
+                Icon(Icons.add_rounded, size: 15, color: palette.canvas),
                 const SizedBox(width: 6),
                 Text(
                   buttonText,
                   style: GoogleFonts.inter(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.3,
                   ),
@@ -559,50 +612,38 @@ class DeepFocusTab extends ConsumerWidget {
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 11),
       decoration: BoxDecoration(
         color: palette.canvas,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: palette.border, width: 1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: palette.border, width: 0.9),
       ),
       child: Row(
         children: [
-          Container(
-            width: 3.5,
-            height: desc != null ? 34 : 24,
-            decoration: BoxDecoration(
-              color: palette.strictAccent,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 10),
           if (useAppLogo) ...[
             AppLogo(
               appName: appName ?? title,
               packageName: packageName,
-              size: 28,
+              size: 30,
             ),
-            const SizedBox(width: 12),
-          ] else if (icon != null && iconColor != null) ...[
+            const SizedBox(width: 10),
+          ] else if (icon != null) ...[
             Container(
-              width: 28,
-              height: 28,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
-                color: iconColor,
-                borderRadius: BorderRadius.circular(8),
+                color: (iconColor ?? palette.ink).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(color: (iconColor ?? palette.ink).withOpacity(0.25), width: 0.8),
               ),
               child: Center(
                 child: Text(
                   icon,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                  style: const TextStyle(fontSize: 14),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
           ],
           Expanded(
             child: Column(
@@ -610,22 +651,22 @@ class DeepFocusTab extends ConsumerWidget {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                     color: palette.ink,
-                    letterSpacing: -0.2,
+                    letterSpacing: -0.1,
                   ),
                 ),
-                if (desc != null) ...[
+                if (desc != null && desc.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     desc,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
                       fontWeight: FontWeight.w400,
                       color: palette.mutedInk,
-                      height: 1.3,
+                      height: 1.25,
                     ),
                   ),
                 ],
@@ -642,7 +683,7 @@ class DeepFocusTab extends ConsumerWidget {
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: palette.safeAccent.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(4),
@@ -655,7 +696,11 @@ class DeepFocusTab extends ConsumerWidget {
                               const SizedBox(width: 3),
                               Text(
                                 'Surgical Feeds Shielded',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: palette.safeAccent),
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: palette.safeAccent,
+                                ),
                               ),
                             ],
                           ),
@@ -681,11 +726,11 @@ class DeepFocusTab extends ConsumerWidget {
             )
           else
             IconButton(
-              icon: Icon(Icons.close_rounded, color: palette.mutedInk, size: 18),
+              icon: Icon(Icons.close_rounded, color: palette.mutedInk, size: 17),
               onPressed: onRemove,
               constraints: const BoxConstraints(),
-              padding: const EdgeInsets.all(6),
-              splashRadius: 18,
+              padding: const EdgeInsets.all(5),
+              splashRadius: 16,
             ),
         ],
       ),
@@ -855,8 +900,8 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                   children: [
                     Text(
                       'Block App or Website',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 17,
+                      style: GoogleFonts.fraunces(
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: palette.ink,
                       ),
@@ -866,8 +911,8 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                       _isLoading
                           ? 'Scanning installed applications...'
                           : 'Top ${_allInstalledApps.length} distracting apps',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
                         color: palette.mutedInk,
                       ),
                     ),
@@ -887,16 +932,16 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: palette.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: palette.border),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.border, width: 1.0),
             ),
             child: TextField(
               controller: _searchController,
-              style: TextStyle(color: palette.ink, fontSize: 13.5),
+              style: GoogleFonts.inter(color: palette.ink, fontSize: 13),
               decoration: InputDecoration(
                 icon: Icon(Icons.search_rounded, color: palette.mutedInk, size: 18),
                 hintText: 'Search apps on phone or enter domain...',
-                hintStyle: TextStyle(color: palette.mutedInk.withOpacity(0.7), fontSize: 13),
+                hintStyle: GoogleFonts.inter(color: palette.mutedInk.withOpacity(0.7), fontSize: 13),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -942,11 +987,11 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                           contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           leading: AppLogo(
                             appName: _searchQuery,
-                            size: 34,
+                            size: 32,
                           ),
                           title: Text(
                             'Block "$_searchQuery"',
-                            style: TextStyle(color: palette.ink, fontWeight: FontWeight.bold, fontSize: 13.5),
+                            style: GoogleFonts.inter(color: palette.ink, fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                           trailing: ElevatedButton(
                             onPressed: () {
@@ -970,13 +1015,17 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                               foregroundColor: palette.canvas,
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                               minimumSize: Size.zero,
+                              elevation: 0,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
                             ),
-                            child: const Text('BLOCK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              'BLOCK',
+                              style: GoogleFonts.jetBrainsMono(fontSize: 10.5, fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
-                        Divider(color: palette.border, height: 1),
+                        Divider(color: palette.hairlineSoft, height: 1),
                       ],
                       if (_filteredApps.isEmpty && _searchQuery.trim().isNotEmpty)
                         Padding(
@@ -984,7 +1033,7 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                           child: Center(
                             child: Text(
                               'No installed apps found matching "$_searchQuery"',
-                              style: TextStyle(color: palette.mutedInk, fontSize: 13),
+                              style: GoogleFonts.inter(color: palette.mutedInk, fontSize: 12.5),
                             ),
                           ),
                         )
@@ -1001,22 +1050,31 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                             leading: AppLogo(
                               appName: app.appName,
                               packageName: app.packageName,
-                              size: 34,
+                              size: 32,
                             ),
                             title: Text(
                               app.appName,
-                              style: TextStyle(
+                              style: GoogleFonts.inter(
                                 color: palette.ink,
                                 fontWeight: FontWeight.w600,
-                                fontSize: 13.5,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              app.packageName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.jetBrainsMono(
+                                color: palette.mutedInk,
+                                fontSize: 10,
                               ),
                             ),
                             trailing: isBlocked
                                 ? Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
                                     decoration: BoxDecoration(
                                       color: palette.canvas,
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                       border: Border.all(color: palette.border),
                                     ),
                                     child: Row(
@@ -1026,11 +1084,11 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                                         const SizedBox(width: 4),
                                         Text(
                                           'BLOCKED',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                          style: GoogleFonts.jetBrainsMono(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
                                             color: palette.mutedInk,
-                                            letterSpacing: 0.5,
+                                            letterSpacing: 0.4,
                                           ),
                                         ),
                                       ],
@@ -1053,10 +1111,14 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                                       foregroundColor: palette.canvas,
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                       minimumSize: Size.zero,
+                                      elevation: 0,
                                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
                                     ),
-                                    child: const Text('BLOCK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text(
+                                      'BLOCK',
+                                      style: GoogleFonts.jetBrainsMono(fontSize: 10.5, fontWeight: FontWeight.w700),
+                                    ),
                                   ),
                           );
                         }),

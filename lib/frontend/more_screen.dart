@@ -87,7 +87,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
           strictState.remainingSeconds > 0
               ? '🔒 Strict Mode is active ($mins min remaining). Cannot modify filters.'
               : '🔒 Strict Mode is active. Settings are locked until focus timer expires.',
-          style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+          style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white),
         ),
         backgroundColor: const Color(0xFF1E1E22),
         duration: const Duration(seconds: 3),
@@ -200,22 +200,27 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               children: [
                 const SizedBox(height: 12),
                 Container(
-                  width: 40,
+                  width: 36,
                   height: 4,
                   decoration: BoxDecoration(
                     color: widget.palette.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
+                const SizedBox(height: 8),
                 TabBar(
                   labelColor: widget.palette.ink,
                   unselectedLabelColor: widget.palette.mutedInk,
-                  indicatorColor: widget.palette.accent,
+                  indicatorColor: widget.palette.ink,
+                  indicatorWeight: 2.5,
+                  labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+                  unselectedLabelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
                   tabs: const [
                     Tab(text: 'Allowlist (Bypass)'),
                     Tab(text: 'Denylist (Blocked)'),
                   ],
                 ),
+                Divider(color: widget.palette.border, height: 1),
                 const Expanded(
                   child: TabBarView(
                     children: [
@@ -237,19 +242,52 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: widget.palette.surface,
-        title: Text('Clear Query Logs', style: GoogleFonts.fraunces(color: widget.palette.ink)),
-        content: Text(
-          'Delete all local DNS query history from this device?',
-          style: GoogleFonts.inter(color: widget.palette.mutedInk),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Clear Query Logs',
+          style: GoogleFonts.fraunces(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: widget.palette.ink,
+          ),
         ),
+        content: Text(
+          'Delete all local DNS query history from this device? This action cannot be undone.',
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: widget.palette.mutedInk,
+            height: 1.4,
+          ),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: TextStyle(color: widget.palette.mutedInk)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: widget.palette.mutedInk,
+              ),
+            ),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.palette.strictAccent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(
+              'Clear Logs',
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -287,6 +325,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.shield_rounded,
+                iconColor: palette.safeAccent,
                 title: 'Threat Shield',
                 subtitle: 'Blocks known malicious websites, phishing, and scam links.',
                 value: securityState[SecurityFeature.threatIntel] ?? true,
@@ -302,6 +341,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.filter_vintage_rounded,
+                iconColor: palette.ink,
                 title: 'SafeSearch Filter',
                 subtitle: 'Forces Google and Bing to hide explicit adult results.',
                 value: securityState[SecurityFeature.safesearch] ?? true,
@@ -317,6 +357,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.block_rounded,
+                iconColor: palette.strictAccent,
                 title: 'Ad & Tracker Blocker',
                 subtitle: 'Stops intrusive web ads, analytics scripts, and tracking.',
                 value: privacyState[PrivacyFeature.disguisedTrackers] ?? true,
@@ -332,6 +373,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.vpn_lock_rounded,
+                iconColor: palette.safeAccent,
                 title: 'Anti-VPN Bypass',
                 subtitle: 'Enforces site and app blocks even if another VPN connects.',
                 value: _antiVpnBypass,
@@ -350,6 +392,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.video_library_rounded,
+                iconColor: const Color(0xFFFF0000),
                 title: 'YouTube Shorts Blocker',
                 subtitle: 'Hides and intercepts short-form video feeds on YouTube.',
                 value: _youtubeShorts,
@@ -359,6 +402,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.camera_alt_rounded,
+                iconColor: const Color(0xFFE1306C),
                 title: 'Instagram Reels Blocker',
                 subtitle: 'Closes Reels immediately to stop endless video scrolling.',
                 value: _instagramReels,
@@ -367,7 +411,8 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _divider(palette),
               _toggleRow(
                 palette: palette,
-                icon: Icons.apps_rounded,
+                icon: Icons.accessibility_new_rounded,
+                iconColor: palette.safeAccent,
                 title: 'Accessibility App Blocker',
                 subtitle: 'Instantly closes restricted apps the moment they open.',
                 value: _isAccessibilityActive,
@@ -386,6 +431,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.lock_rounded,
+                iconColor: palette.strictAccent,
                 title: 'Strict Mode Lock',
                 subtitle: 'Locks filters and settings so you cannot disable them during focus.',
                 value: strictState.isStrict,
@@ -397,6 +443,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.admin_panel_settings_rounded,
+                iconColor: palette.strictAccent,
                 title: 'Anti-Uninstall Shield',
                 subtitle: 'Prevents uninstalling FocusDNS while focus sessions are active.',
                 value: _isDeviceAdminActive,
@@ -406,6 +453,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.dark_mode_rounded,
+                iconColor: palette.ink,
                 title: 'Dark Theme',
                 subtitle: 'Switches between Stone Paper and Charcoal Dark styles.',
                 value: themeMode == ThemeMode.dark,
@@ -419,6 +467,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.battery_charging_full_rounded,
+                iconColor: palette.safeAccent,
                 title: 'Battery Saver Immunity',
                 subtitle: 'Keeps filtering active in the background without Android Doze killing it.',
                 value: _isBatteryImmune,
@@ -437,6 +486,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _actionRow(
                 palette: palette,
                 icon: Icons.list_alt_rounded,
+                iconColor: palette.ink,
                 title: 'Custom Domain Rules',
                 subtitle: 'Add specific domains to your allowlist or denylist.',
                 onTap: _openCustomRulesSheet,
@@ -445,6 +495,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _actionRow(
                 palette: palette,
                 icon: Icons.delete_outline_rounded,
+                iconColor: palette.strictAccent,
                 title: 'Clear Query Logs',
                 subtitle: 'Wipe all local on-device DNS query history.',
                 onTap: _clearLogs,
@@ -453,6 +504,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _actionRow(
                 palette: palette,
                 icon: Icons.restart_alt_rounded,
+                iconColor: palette.ink,
                 title: 'Re-run Setup Walkthrough',
                 subtitle: 'Revisit the 3-step setup and local storage permissions.',
                 onTap: () {
@@ -475,7 +527,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         title,
-        style: GoogleFonts.inter(
+        style: GoogleFonts.jetBrainsMono(
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
@@ -502,8 +554,8 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   Widget _divider(WabiSabiPalette palette) {
     return Divider(
       height: 1,
-      thickness: 1,
-      indent: 52,
+      thickness: 0.8,
+      indent: 58,
       color: palette.hairlineSoft,
     );
   }
@@ -511,25 +563,26 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   Widget _toggleRow({
     required WabiSabiPalette palette,
     required IconData icon,
+    Color? iconColor,
     required String title,
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: palette.canvas,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: palette.border, width: 1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: palette.border, width: 0.9),
             ),
-            child: Icon(icon, size: 18, color: palette.accent),
+            child: Icon(icon, size: 17, color: iconColor ?? palette.accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -540,7 +593,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontSize: 14,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     color: palette.ink,
                   ),
@@ -549,7 +602,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 Text(
                   subtitle,
                   style: GoogleFonts.inter(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w400,
                     color: palette.mutedInk,
                     height: 1.25,
@@ -561,10 +614,11 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
           const SizedBox(width: 8),
           Switch(
             value: value,
-            activeColor: palette.accent,
-            activeTrackColor: palette.accent.withOpacity(0.35),
+            activeColor: palette.ink,
+            activeTrackColor: palette.ink.withOpacity(0.35),
             inactiveThumbColor: palette.mutedInk,
             inactiveTrackColor: palette.canvas,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             onChanged: onChanged,
           ),
         ],
@@ -575,6 +629,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   Widget _actionRow({
     required WabiSabiPalette palette,
     required IconData icon,
+    Color? iconColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
@@ -583,19 +638,19 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
                 color: palette.canvas,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: palette.border, width: 1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: palette.border, width: 0.9),
               ),
-              child: Icon(icon, size: 18, color: palette.accent),
+              child: Icon(icon, size: 17, color: iconColor ?? palette.accent),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -606,7 +661,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                   Text(
                     title,
                     style: GoogleFonts.inter(
-                      fontSize: 14,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w600,
                       color: palette.ink,
                     ),
@@ -615,7 +670,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                   Text(
                     subtitle,
                     style: GoogleFonts.inter(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w400,
                       color: palette.mutedInk,
                       height: 1.25,
@@ -624,7 +679,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, size: 20, color: palette.mutedInk),
+            Icon(Icons.chevron_right_rounded, size: 18, color: palette.mutedInk),
           ],
         ),
       ),

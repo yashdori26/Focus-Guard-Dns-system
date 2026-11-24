@@ -5,6 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:focus_dns/main.dart';
 import 'package:focus_dns/frontend/auth/email_auth_screen.dart';
 import 'package:focus_dns/frontend/screens/onboarding/onboarding_screen.dart';
+import 'package:focus_dns/frontend/tabs/deep_focus_tab.dart';
+import 'package:focus_dns/frontend/tabs/logs_tab.dart';
+import 'package:focus_dns/frontend/more_screen.dart';
+import 'package:focus_dns/frontend/theme/wabi_sabi_theme.dart';
 
 void main() {
   setUp(() {
@@ -212,6 +216,144 @@ void main() {
       expect(find.text('Doomscroll Accessibility'), findsOneWidget);
       expect(find.text('Doze Battery Immunity'), findsOneWidget);
       expect(find.text('Activate Shield & Launch →'), findsOneWidget);
+    });
+  });
+
+  group('DeepFocusTab Tests', () {
+    testWidgets('Renders Focus Tab with hero title, categories, and restrictions button', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: DeepFocusTab(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('FOCUSDNS · FOCUS'), findsOneWidget);
+      expect(find.text('Quiet the noise.'), findsOneWidget);
+      expect(find.text('ACTIVE RESTRICTIONS'), findsOneWidget);
+      expect(find.byKey(const Key('add_restriction_button')), findsOneWidget);
+      expect(find.text('Websites, Apps & Games'), findsOneWidget);
+      expect(find.text('Categories'), findsOneWidget);
+    });
+
+    testWidgets('Tapping add restriction button opens bottom sheet modal', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: DeepFocusTab(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('add_restriction_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Restriction'), findsOneWidget);
+      expect(find.text('App or Website'), findsOneWidget);
+      expect(find.text('Category'), findsOneWidget);
+    });
+  });
+
+  group('LogsTab Tests', () {
+    testWidgets('Renders Live Query Activity header, search field, and filter chips', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: LogsTab(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('LIVE QUERY ACTIVITY'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
+      expect(find.text('Local SQLite'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Blocked'), findsOneWidget);
+      expect(find.text('Allowed'), findsOneWidget);
+    });
+
+    testWidgets('Toggles filter chips between All, Blocked, and Allowed', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: LogsTab(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Blocked'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Allowed'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('MoreTab Tests', () {
+    testWidgets('Renders all 4 management sections cleanly', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: WabiSabiTheme.lightTheme,
+            home: Builder(
+              builder: (context) {
+                final palette = WabiSabiPalette.of(context);
+                return Scaffold(
+                  body: MoreTab(palette: palette),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('NETWORK & FILTERING'), findsOneWidget);
+      expect(find.text('Threat Shield'), findsOneWidget);
+      expect(find.text('SafeSearch Filter'), findsOneWidget);
+      expect(find.text('Ad & Tracker Blocker'), findsOneWidget);
+      expect(find.text('Anti-VPN Bypass'), findsOneWidget);
+
+      expect(find.text('DISTRACTION & FEED KILLERS'), findsOneWidget);
+      expect(find.text('YouTube Shorts Blocker'), findsOneWidget);
+      expect(find.text('Instagram Reels Blocker'), findsOneWidget);
+      expect(find.text('Accessibility App Blocker'), findsOneWidget);
+
+      expect(find.text('FOCUS & DEVICE SECURITY'), findsOneWidget);
+      expect(find.text('Strict Mode Lock'), findsOneWidget);
+      expect(find.text('Anti-Uninstall Shield'), findsOneWidget);
+      expect(find.text('Dark Theme'), findsOneWidget);
+      expect(find.text('Battery Saver Immunity'), findsOneWidget);
+
+      expect(find.text('DATA & SYSTEM MANAGEMENT'), findsOneWidget);
+      expect(find.text('Custom Domain Rules'), findsOneWidget);
+      expect(find.text('Clear Query Logs'), findsOneWidget);
+      expect(find.text('Re-run Setup Walkthrough'), findsOneWidget);
     });
   });
 }

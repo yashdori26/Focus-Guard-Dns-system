@@ -125,15 +125,13 @@ class _LogsTabState extends ConsumerState<LogsTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // SUBHEADER & SECURITY STATUS
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 4,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               'LIVE QUERY ACTIVITY',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.jetBrainsMono(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.1,
@@ -145,15 +143,54 @@ class _LogsTabState extends ConsumerState<LogsTab> {
               children: [
                 GestureDetector(
                   onTap: () => ref.read(logsProvider.notifier).refreshFromDb(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: palette.surface,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: palette.border, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 13, color: palette.mutedInk),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Refresh',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: palette.mutedInk,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: palette.border, width: 0.8),
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.refresh, size: 14, color: palette.mutedInk),
-                      const SizedBox(width: 4),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: palette.safeAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
                       Text(
-                        'Refresh History',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
+                        'Local SQLite',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: palette.mutedInk,
                         ),
@@ -161,66 +198,43 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: palette.accent,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Local SQLite DB',
-                  style: GoogleFonts.inter(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                    color: palette.mutedInk,
-                  ),
-                ),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
-        // SEARCH BAR (NEWSPAPER PAPER STYLE WITH INPUT DECORATION)
-        TextField(
-          controller: _searchController,
-          style: GoogleFonts.inter(fontSize: 13, color: palette.ink),
-          onChanged: (val) {
-            ref.read(logsProvider.notifier).setSearchQuery(val);
-            setState(() {});
-          },
-          decoration: InputDecoration(
-            hintText: 'Search queries...',
-            hintStyle: GoogleFonts.inter(color: palette.mutedInk, fontSize: 13),
-            prefixIcon: Icon(Icons.search, color: palette.mutedInk, size: 18),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: Icon(Icons.clear, color: palette.mutedInk, size: 16),
-                    onPressed: () {
-                      _searchController.clear();
-                      ref.read(logsProvider.notifier).setSearchQuery('');
-                      setState(() {});
-                    },
-                  )
-                : null,
-            filled: true,
-            fillColor: palette.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: BorderSide(color: palette.hairlineSoft, width: 1.0),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: BorderSide(color: palette.hairlineSoft, width: 1.0),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: BorderSide(color: palette.ink, width: 1.0),
+        // SEARCH BAR
+        Container(
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: palette.border, width: 1.0),
+          ),
+          child: TextField(
+            controller: _searchController,
+            style: GoogleFonts.inter(fontSize: 13, color: palette.ink),
+            onChanged: (val) {
+              ref.read(logsProvider.notifier).setSearchQuery(val);
+              setState(() {});
+            },
+            decoration: InputDecoration(
+              hintText: 'Search queries...',
+              hintStyle: GoogleFonts.inter(color: palette.mutedInk.withOpacity(0.7), fontSize: 13),
+              prefixIcon: Icon(Icons.search_rounded, color: palette.mutedInk, size: 18),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear_rounded, color: palette.mutedInk, size: 16),
+                      onPressed: () {
+                        _searchController.clear();
+                        ref.read(logsProvider.notifier).setSearchQuery('');
+                        setState(() {});
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              isDense: true,
             ),
           ),
         ),
@@ -236,20 +250,20 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4.5),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                 decoration: BoxDecoration(
-                  color: isSel ? palette.ink : Colors.transparent,
-                  borderRadius: BorderRadius.circular(3),
+                  color: isSel ? palette.ink : palette.surface,
+                  borderRadius: BorderRadius.circular(7),
                   border: Border.all(
-                    color: isSel ? palette.ink : palette.hairlineSoft,
-                    width: 1.0,
+                    color: isSel ? palette.ink : palette.border,
+                    width: 0.9,
                   ),
                 ),
                 child: Text(
                   filter,
                   style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5,
+                    fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
                     color: isSel ? palette.canvas : palette.mutedInk,
                   ),
                 ),
@@ -259,21 +273,28 @@ class _LogsTabState extends ConsumerState<LogsTab> {
         ),
         const SizedBox(height: 12),
 
-        // LOG ITEMS CARD (PAPER CONTAINER)
+        // LOG ITEMS CARD (CONTAINER)
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
             color: palette.surface,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: palette.hairlineSoft, width: 1.0),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.border, width: 1.0),
           ),
           child: displayedLogs.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 20),
                   child: Center(
-                    child: Text(
-                      'No matching DNS queries found',
-                      style: GoogleFonts.inter(color: palette.mutedInk, fontSize: 13),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search_off_rounded, size: 28, color: palette.mutedInk.withOpacity(0.5)),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No matching DNS queries found',
+                          style: GoogleFonts.inter(color: palette.mutedInk, fontSize: 13),
+                        ),
+                      ],
                     ),
                   ),
                 )
@@ -282,27 +303,27 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: displayedLogs.length,
                   separatorBuilder: (_, __) =>
-                      Divider(color: palette.hairlineSoft, height: 1, thickness: 1),
+                      Divider(color: palette.hairlineSoft, height: 1, thickness: 0.8),
                   itemBuilder: (context, index) {
                     final log = displayedLogs[index];
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       child: Row(
                         children: [
                           Container(
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
                               color: palette.canvas,
-                              border: Border.all(color: palette.hairlineSoft, width: 1.0),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: palette.border, width: 0.8),
                             ),
                             child: Center(
                               child: Text(
                                 log.icon,
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.jetBrainsMono(
                                   fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w700,
                                   color: palette.ink,
                                 ),
                               ),
@@ -320,18 +341,18 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                                     children: [
                                       TextSpan(
                                         text: log.subdomain,
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.jetBrainsMono(
                                           color: palette.mutedInk,
-                                          fontSize: 13,
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w400,
                                         ),
                                       ),
                                       TextSpan(
                                         text: log.domain,
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.jetBrainsMono(
                                           color: palette.ink,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12.5,
                                         ),
                                       ),
                                     ],
@@ -341,8 +362,8 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                                 Text(
                                   log.time,
                                   style: GoogleFonts.inter(
-                                    color: palette.subtleInk,
-                                    fontSize: 10,
+                                    color: palette.mutedInk.withOpacity(0.8),
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -351,17 +372,23 @@ class _LogsTabState extends ConsumerState<LogsTab> {
                           ),
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                             decoration: BoxDecoration(
                               color: log.isBlocked
                                   ? palette.strictAccent.withOpacity(0.12)
                                   : palette.safeAccent.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: log.isBlocked
+                                    ? palette.strictAccent.withOpacity(0.25)
+                                    : palette.safeAccent.withOpacity(0.25),
+                                width: 0.8,
+                              ),
                             ),
                             child: Text(
                               log.isBlocked ? 'BLOCKED' : 'ALLOW',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.5,
                                 color: log.isBlocked
