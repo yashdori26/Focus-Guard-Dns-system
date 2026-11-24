@@ -128,6 +128,9 @@ class MainActivity : FlutterActivity() {
                 if (VpnService.prepare(this) != null) {
                     result.success(false)
                 } else {
+                    db().putKv("protection_paused", "0")
+                    db().putKv("was_running", "1")
+                    Rules.reload(this)
                     startVpnService()
                     result.success(true)
                 }
@@ -136,6 +139,9 @@ class MainActivity : FlutterActivity() {
                 if (strictRemaining() > 0) {
                     result.success(false)   // locked by strict mode
                 } else {
+                    db().putKv("protection_paused", "1")
+                    db().putKv("was_running", "0")
+                    Rules.reload(this)
                     startService(Intent(this, FocusDnsVpnService::class.java).setAction(FocusDnsVpnService.ACTION_STOP))
                     result.success(true)
                 }
@@ -233,6 +239,24 @@ class MainActivity : FlutterActivity() {
                 db().putKv("feed_youtube_shorts", if (call.argument<Boolean>("youtubeShorts") == true) "1" else "0")
                 Rules.reload(this)
                 result.success(true)
+            }
+            "setProtectionEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: true
+                thread {
+                    db().putKv("protection_paused", if (enabled) "0" else "1")
+                    db().putKv("was_running", if (enabled) "1" else "0")
+                    Rules.reload(this)
+                    if (enabled) {
+                        if (VpnService.prepare(this) == null) {
+                            startVpnService()
+                        }
+                    } else {
+                        if (strictRemaining() == 0) {
+                            startService(Intent(this, FocusDnsVpnService::class.java).setAction(FocusDnsVpnService.ACTION_STOP))
+                        }
+                    }
+                    runOnUiThread { result.success(true) }
+                }
             }
             "setStrictMode" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false

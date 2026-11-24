@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../state_management/providers.dart';
+import '../backend/blocker_service.dart';
 import '../engine/routine/routine_state_machine.dart';
 import 'profile_settings_sheet.dart';
 import 'profile_switcher_sheet.dart';
@@ -1016,8 +1017,8 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                     strictState.isStrict
                         ? 'Protection is active and locked. Calls, maps and payments still work.'
                         : isProtectionOn
-                            ? 'Protection is active. Calls, maps and payments still work.'
-                            : 'Protection is paused. Digital noise is unblocked.',
+                            ? 'Protection is active. Blocked apps cannot be opened.'
+                            : 'Protection is paused. All apps and websites are unblocked.',
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: palette.mutedInk,
@@ -1186,17 +1187,39 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                               return;
                             }
                             final willBeOn = !isProtectionOn;
-                            await ref.read(protectionProvider.notifier).toggle();
+                            await ref.read(protectionProvider.notifier).set(willBeOn);
                             if (!kIsWeb) {
                               final profileId = ref.read(setupProvider).profileId;
                               if (willBeOn) {
+                                await FocusDnsBlockerManager.setProtectionEnabled(true);
                                 try {
                                   ref.read(deepFocusProvider.notifier).syncWithBlocker();
                                 } catch (_) {}
                                 await ref.read(vpnProvider.notifier).start(profileId: profileId);
                                 ref.read(setupProvider.notifier).autoSyncAndLinkIp();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).clearSnackBars();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('🛡️ Protection Resumed. Blocked apps & sites are strictly locked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                                      backgroundColor: const Color(0xFF1B3B2B),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
                               } else {
+                                await FocusDnsBlockerManager.setProtectionEnabled(false);
                                 await ref.read(vpnProvider.notifier).stop();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).clearSnackBars();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('⏸️ Protection Paused. Blocked apps & sites are temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                                      backgroundColor: const Color(0xFF26262B),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
                               }
                             }
                           },

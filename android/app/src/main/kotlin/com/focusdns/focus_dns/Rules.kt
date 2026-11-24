@@ -153,4 +153,31 @@ object Rules {
         }
         return Decision(false, "")
     }
+
+    fun isPackageBlocked(pkg: String): Boolean {
+        if (packages.contains(pkg)) return true
+        val p = pkg.lowercase()
+        for (pkgRule in packages) {
+            if (p == pkgRule.lowercase()) return true
+        }
+        if (categories.contains("social") || categories.contains("social_media")) {
+            val socialPkgs = setOf(
+                "com.instagram.android", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
+                "com.facebook.katana", "com.twitter.android", "com.snapchat.android",
+                "com.reddit.frontpage", "com.pinterest"
+            )
+            if (socialPkgs.contains(p)) return true
+        }
+        if (categories.contains("video") || categories.contains("youtube") || feedYoutubeShorts) {
+            if (p == "com.google.android.youtube") return true
+        }
+        if (categories.contains("porn") || categories.contains("adult")) {
+            if (p == "org.torproject.torbrowser" || p == "org.torproject.torbrowser_alpha") return true
+        }
+        if (categories.contains("gambling")) {
+            val gamblingPkgs = setOf("com.winzo.gold", "com.mpl.androidapp", "com.rummycircle.android", "com.dream11.app")
+            if (gamblingPkgs.contains(p)) return true
+        }
+        return false
+    }
 }

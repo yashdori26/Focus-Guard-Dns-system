@@ -101,9 +101,12 @@ class FocusAccessibilityService : AccessibilityService() {
         Rules.ensureLoaded(this)
 
         val db = LocalDb.get(this)
-        val wasRunning = db.getKv("was_running", "0") == "1"
         val until = db.getKv("strict_until", "0").toLongOrNull() ?: 0L
         val isStrict = (until - System.currentTimeMillis()) > 0
+        val isPaused = db.getKv("protection_paused", "0") == "1"
+        if (isPaused && !isStrict) return
+
+        val wasRunning = db.getKv("was_running", "0") == "1"
         val isAnyModeActive = wasRunning || isStrict || FocusDnsVpnService.isRunning
         if (!isAnyModeActive) return
 
@@ -114,7 +117,7 @@ class FocusAccessibilityService : AccessibilityService() {
         }
 
         // 2. Prohibited App Enforcement (works whether VPN is on or off)
-        if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg in Rules.packages) {
+        if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && Rules.isPackageBlocked(pkg)) {
             blockNow(pkg, "App locked by Focus Shield")
             return
         }

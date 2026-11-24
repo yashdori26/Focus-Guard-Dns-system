@@ -18,7 +18,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with WidgetsBindingObserver {
   int _currentStep = 0;
   final TextEditingController _nameController = TextEditingController(text: 'Personal Shield');
 
@@ -34,13 +34,66 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadSavedOnboardingState();
     _checkInitialPermissions();
+    _nameController.addListener(_saveProfileName);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _nameController.removeListener(_saveProfileName);
     _nameController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkInitialPermissions();
+    }
+  }
+
+  Future<void> _loadSavedOnboardingState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStep = prefs.getInt('focus_onboarding_step');
+      final savedName = prefs.getString('focus_onboarding_name');
+      final savedCats = prefs.getStringList('focus_onboarding_cats');
+
+      if (!mounted) return;
+      setState(() {
+        if (savedStep != null && savedStep >= 0 && savedStep <= 2) {
+          _currentStep = savedStep;
+        }
+        if (savedName != null && savedName.isNotEmpty) {
+          _nameController.text = savedName;
+        }
+        if (savedCats != null && savedCats.isNotEmpty) {
+          _selectedCategories.clear();
+          _selectedCategories.addAll(savedCats);
+        }
+      });
+    } catch (_) {}
+  }
+
+  void _saveProfileName() {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('focus_onboarding_name', _nameController.text);
+    }).catchError((_) {});
+  }
+
+  void _saveStep(int step) {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setInt('focus_onboarding_step', step);
+    }).catchError((_) {});
+  }
+
+  void _saveCategories() {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setStringList('focus_onboarding_cats', _selectedCategories.toList());
+    }).catchError((_) {});
   }
 
   Future<void> _checkInitialPermissions() async {
@@ -91,7 +144,40 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final bool blockYoutube = _selectedCategories.contains('youtube');
     final bool blockTrackers = _selectedCategories.contains('trackers');
 
+    // Packages to block directly
+    final List<String> packagesToBlock = [];
+    if (blockYoutube) {
+      packagesToBlock.add('com.google.android.youtube');
+    }
+    if (_selectedCategories.contains('social')) {
+      packagesToBlock.addAll([
+        'com.instagram.android',
+        'com.zhiliaoapp.musically',
+        'com.ss.android.ugc.trill',
+        'com.facebook.katana',
+        'com.twitter.android',
+        'com.snapchat.android',
+        'com.reddit.frontpage',
+        'com.pinterest',
+      ]);
+    }
+    if (_selectedCategories.contains('gambling')) {
+      packagesToBlock.addAll([
+        'com.winzo.gold',
+        'com.mpl.androidapp',
+        'com.rummycircle.android',
+        'com.dream11.app',
+      ]);
+    }
+    if (_selectedCategories.contains('adult')) {
+      packagesToBlock.addAll([
+        'org.torproject.torbrowser',
+        'org.torproject.torbrowser_alpha',
+      ]);
+    }
+
     // Update native blocker and database rules
+    await FocusDnsBlockerManager.setBlockedPackages(packagesToBlock, source: 'onboarding');
     await FocusDnsBlockerManager.setBlockedCategories(nativeCategories);
     await FocusDnsBlockerManager.setFeedFilters(
       instagramReels: _selectedCategories.contains('social'),
@@ -116,13 +202,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     ];
     await AppStorageService.saveBlockedCategories(blockedItems);
 
-    // 3. Start local VPN
+    // 3. Mark protection on and start local VPN
+    await FocusDnsBlockerManager.setProtectionEnabled(true);
+    await ref.read(protectionProvider.notifier).set(true);
+    try {
+      ref.read(deepFocusProvider.notifier).syncWithBlocker();
+    } catch (_) {}
     try {
       await ref.read(vpnProvider.notifier).start(profileId: 'local');
     } catch (_) {}
 
-    // 4. Mark onboarding as completed in device preferences
+    // 4. Mark onboarding as completed in device preferences & clear scratch onboarding state
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('focus_onboarding_step');
+    await prefs.remove('focus_onboarding_name');
+    await prefs.remove('focus_onboarding_cats');
     await prefs.setBool('focus_onboarding_completed', true);
 
     if (mounted) {
@@ -263,7 +357,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   if (_currentStep > 0) ...[
                     OutlinedButton(
-                      onPressed: () => setState(() => _currentStep--),
+                      onPressed: () {
+                        setState(() {
+                          _currentStep--;
+                          _saveStep(_currentStep);
+                        });
+                      },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: palette.ink,
                         side: BorderSide(color: palette.border, width: 1.2),
@@ -280,7 +379,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           ? null
                           : () {
                               if (_currentStep < 2) {
-                                setState(() => _currentStep++);
+                                setState(() {
+                                  _currentStep++;
+                                  _saveStep(_currentStep);
+                                });
                               } else {
                                 _completeOnboarding();
                               }
@@ -525,6 +627,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             _selectedCategories.add(id);
           }
         });
+        _saveCategories();
       },
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(

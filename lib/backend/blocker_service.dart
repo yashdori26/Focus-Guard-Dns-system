@@ -84,6 +84,23 @@ class FocusDnsBlockerManager {
     return true;
   }
 
+  /// Explicitly sets the protection state in the native RulesStore and Accessibility service.
+  /// When enabled=false, all app and domain blocking is paused.
+  static Future<bool> setProtectionEnabled(bool enabled) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('setProtectionEnabled', {
+          'enabled': enabled,
+        });
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error setting protection enabled: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Synchronizes blocked categories (e.g. porn, gambling) with the native RulesStore.
   /// Turns native Reels/Shorts feed blocking on/off (Accessibility service).
   static Future<bool> setFeedFilters({required bool instagramReels, required bool youtubeShorts}) async {

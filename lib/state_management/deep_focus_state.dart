@@ -378,6 +378,9 @@ class DeepFocusNotifier extends StateNotifier<DeepFocusState> {
       'com.netflix.mediaclient',
       'tv.twitch.android.app',
     ],
+    'youtube': [
+      'com.google.android.youtube',
+    ],
     'gambling': [
       'com.winzo.gold',
       'com.mpl.androidapp',
@@ -390,6 +393,10 @@ class DeepFocusNotifier extends StateNotifier<DeepFocusState> {
       'com.utorrent.client',
     ],
     'porn': [
+      'org.torproject.torbrowser',
+      'org.torproject.torbrowser_alpha',
+    ],
+    'adult': [
       'org.torproject.torbrowser',
       'org.torproject.torbrowser_alpha',
     ],

@@ -21,7 +21,7 @@ class MoreTab extends ConsumerStatefulWidget {
   ConsumerState<MoreTab> createState() => _MoreTabState();
 }
 
-class _MoreTabState extends ConsumerState<MoreTab> {
+class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   bool _antiVpnBypass = true;
   bool _youtubeShorts = false;
   bool _instagramReels = false;
@@ -33,7 +33,21 @@ class _MoreTabState extends ConsumerState<MoreTab> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadLocalStates();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadLocalStates();
+    }
   }
 
   Future<void> _loadLocalStates() async {
