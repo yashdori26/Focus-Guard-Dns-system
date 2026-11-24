@@ -33,16 +33,49 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
   final TextEditingController _insightsSearchController = TextEditingController();
   String _insightsSearchQuery = '';
   int _insightsSubTab = 0;
+  int _streakDays = 1;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSavedTab();
+    _loadStreak();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(setupProvider.notifier).autoSyncAndLinkIp();
     });
     _handleQueryParams();
+  }
+
+  Future<void> _loadStreak() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastDate = prefs.getString('focus_streak_last_date');
+      int streak = prefs.getInt('focus_streak_days') ?? 1;
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      if (lastDate == null) {
+        streak = 1;
+        await prefs.setString('focus_streak_last_date', todayStr);
+        await prefs.setInt('focus_streak_days', 1);
+      } else if (lastDate != todayStr) {
+        final last = DateTime.tryParse(lastDate);
+        if (last != null) {
+          final diffDays = now.difference(last).inDays;
+          if (diffDays == 1) {
+            streak += 1;
+          } else if (diffDays > 1) {
+            streak = 1;
+          }
+          await prefs.setString('focus_streak_last_date', todayStr);
+          await prefs.setInt('focus_streak_days', streak);
+        }
+      }
+      if (mounted) {
+        setState(() => _streakDays = streak);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSavedTab() async {
@@ -87,6 +120,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
       ref.read(vpnProvider.notifier).checkStatus();
       ref.read(liveTelemetryProvider.notifier).refresh();
       ref.read(setupProvider.notifier).autoSyncAndLinkIp();
+      _loadStreak();
     }
   }
 
@@ -1293,11 +1327,11 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                     ),
                     child: Row(
                       children: [
-                        Expanded(child: _buildMicroStat('${liveTelemetry.blockedQueries}', 'BLOCKED TODAY', palette)),
+                        Expanded(child: _buildMicroStat('${liveTelemetry.blockedQueries}', 'DISTRACTIONS STOPPED', palette)),
                         Container(height: 24, width: 1, color: palette.hairlineSoft),
-                        Expanded(child: _buildMicroStat(liveTelemetry.blockedPercentage, 'THREAT RATIO', palette)),
+                        Expanded(child: _buildMicroStat('$_streakDays ${_streakDays == 1 ? 'Day' : 'Days'}', 'MINDFUL STREAK', palette)),
                         Container(height: 24, width: 1, color: palette.hairlineSoft),
-                        Expanded(child: _buildMicroStat('${liveTelemetry.averageLatencyMs}ms', 'DOH LATENCY', palette)),
+                        Expanded(child: _buildMicroStat('${liveTelemetry.trackersBlocked}', 'TRACKERS BLOCKED', palette)),
                       ],
                     ),
                   ),
@@ -1451,25 +1485,31 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
   Widget _buildMicroStat(String value, String label, WabiSabiPalette palette) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           value,
           style: GoogleFonts.fraunces(
-            fontSize: 17,
+            fontSize: 16.5,
             fontWeight: FontWeight.w700,
             color: palette.ink,
             letterSpacing: -0.3,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: GoogleFonts.inter(
-            fontSize: 9,
+            fontSize: 8.5,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
+            letterSpacing: 0.5,
             color: palette.mutedInk,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

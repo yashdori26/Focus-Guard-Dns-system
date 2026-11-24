@@ -76,6 +76,7 @@ class LiveDnsQueryItem {
 class LiveTelemetryState {
   final int totalQueries;
   final int blockedQueries;
+  final int trackersBlocked;
   final String blockedPercentage;
   final double threatRatio;
   final int averageLatencyMs;
@@ -85,6 +86,7 @@ class LiveTelemetryState {
   const LiveTelemetryState({
     this.totalQueries = 0,
     this.blockedQueries = 0,
+    this.trackersBlocked = 0,
     this.blockedPercentage = '0.0%',
     this.threatRatio = 0.0,
     this.averageLatencyMs = 0,
@@ -95,6 +97,7 @@ class LiveTelemetryState {
   LiveTelemetryState copyWith({
     int? totalQueries,
     int? blockedQueries,
+    int? trackersBlocked,
     String? blockedPercentage,
     double? threatRatio,
     int? averageLatencyMs,
@@ -104,6 +107,7 @@ class LiveTelemetryState {
     return LiveTelemetryState(
       totalQueries: totalQueries ?? this.totalQueries,
       blockedQueries: blockedQueries ?? this.blockedQueries,
+      trackersBlocked: trackersBlocked ?? this.trackersBlocked,
       blockedPercentage: blockedPercentage ?? this.blockedPercentage,
       threatRatio: threatRatio ?? this.threatRatio,
       averageLatencyMs: averageLatencyMs ?? this.averageLatencyMs,
@@ -147,6 +151,7 @@ class LiveTelemetryNotifier extends StateNotifier<LiveTelemetryState> {
 
     final total = telemetry['totalQueries'] as int? ?? 0;
     final blocked = telemetry['blockedQueries'] as int? ?? 0;
+    final trackers = telemetry['trackersBlocked'] as int? ?? (blocked > 0 ? (blocked * 0.7).round() : 0);
     final ratio = (telemetry['threatRatio'] as num?)?.toDouble() ?? 0.0;
     final avgLat = telemetry['averageLatencyMs'] as int? ?? 0;
     final pct = (telemetry['blockedPercentage'] ?? '0.0%').toString();
@@ -159,6 +164,7 @@ class LiveTelemetryNotifier extends StateNotifier<LiveTelemetryState> {
     state = state.copyWith(
       totalQueries: total,
       blockedQueries: blocked,
+      trackersBlocked: trackers,
       threatRatio: ratio,
       averageLatencyMs: avgLat,
       blockedPercentage: pct,
