@@ -127,7 +127,7 @@ class FocusAccessibilityService : AccessibilityService() {
         }
 
         // 2. Prohibited App Enforcement (works whether VPN is on or off)
-        if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && Rules.isPackageBlocked(pkg)) {
+        if (Rules.isPackageBlocked(pkg)) {
             blockNow(pkg, "App locked by Focus Shield")
             return
         }
@@ -139,50 +139,7 @@ class FocusAccessibilityService : AccessibilityService() {
             } else if (pkg == "com.instagram.android" && Rules.feedInstagramReels) {
                 if (hasViewId(rootInActiveWindow, listOf("clips_viewer", "reel_viewer", "clips_tab_content"))) goBackFromFeed()
             }
-
-            // 4. VPN-Independent Browser Inspection (detects prohibited sites directly in browser address bar)
-            if (pkg in BROWSER_PACKAGES) {
-                inspectBrowserUrl(rootInActiveWindow, pkg)
-            }
         }
-    }
-
-    private fun inspectBrowserUrl(root: AccessibilityNodeInfo?, pkg: String) {
-        if (root == null) return
-        val rawText = findUrlInNode(root, pkg) ?: return
-        val domain = extractDomain(rawText)
-        if (domain.isNotEmpty() && domain.contains(".")) {
-            val decision = Rules.decide(this, domain)
-            if (decision.blocked) {
-                blockUrlNow(domain, decision.reason)
-            }
-        }
-    }
-
-    private fun findUrlInNode(root: AccessibilityNodeInfo, pkg: String): String? {
-        for (id in URL_BAR_IDS) {
-            val nodes = root.findAccessibilityNodeInfosByViewId("$pkg:id/$id")
-            if (!nodes.isNullOrEmpty()) {
-                for (n in nodes) {
-                    val text = n.text?.toString()
-                    if (!text.isNullOrBlank()) return text
-                }
-            }
-        }
-        return null
-    }
-
-    private fun extractDomain(raw: String): String {
-        var s = raw.trim().lowercase()
-        if (s.startsWith("http://")) s = s.substring(7)
-        if (s.startsWith("https://")) s = s.substring(8)
-        val slash = s.indexOf('/')
-        if (slash != -1) s = s.substring(0, slash)
-        val colon = s.indexOf(':')
-        if (colon != -1) s = s.substring(0, colon)
-        val q = s.indexOf('?')
-        if (q != -1) s = s.substring(0, q)
-        return s.trim()
     }
 
     private fun hasViewId(root: AccessibilityNodeInfo?, needles: List<String>): Boolean {
@@ -211,41 +168,17 @@ class FocusAccessibilityService : AccessibilityService() {
 
     private fun goBackFromFeed() {
         val now = System.currentTimeMillis()
-        if (now - lastBlockAt < 800) return
+        if (now - lastBlockAt < 500) return
         lastBlockAt = now
         performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
     private fun blockNow(pkg: String, reason: String = "App block") {
         val now = System.currentTimeMillis()
-        if (now - lastBlockAt < 800) return
+        if (now - lastBlockAt < 250) return
         lastBlockAt = now
         performGlobalAction(GLOBAL_ACTION_HOME)
-        try {
-            startActivity(
-                Intent(this, BlockedActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    .putExtra("pkg", pkg)
-                    .putExtra("reason", reason)
-            )
-        } catch (_: Exception) {}
         try { LocalDb.get(this).addLog(pkg, "BLOCKED", reason) } catch (_: Exception) {}
-    }
-
-    private fun blockUrlNow(domain: String, reason: String) {
-        val now = System.currentTimeMillis()
-        if (now - lastBlockAt < 1000) return
-        lastBlockAt = now
-        performGlobalAction(GLOBAL_ACTION_HOME)
-        try {
-            startActivity(
-                Intent(this, BlockedActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    .putExtra("domain", domain)
-                    .putExtra("reason", reason)
-            )
-        } catch (_: Exception) {}
-        try { LocalDb.get(this).addLog(domain, "BLOCKED", "VPN-Independent Guard: $reason") } catch (_: Exception) {}
     }
 
     fun goHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
