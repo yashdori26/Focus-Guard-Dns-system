@@ -23,7 +23,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
   final TextEditingController _nameController = TextEditingController(text: 'Personal Shield');
 
   // Step 2: Selected Categories and Apps
-  final Set<String> _selectedCategories = {'adult', 'youtube', 'social', 'trackers'};
+  final Set<String> _selectedCategories = {'adult', 'social', 'trackers'};
 
   // Step 3: Permission states
   bool _vpnPrepared = false;
@@ -144,14 +144,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     if (_selectedCategories.contains('social')) nativeCategories.add('social');
     if (_selectedCategories.contains('gambling')) nativeCategories.add('gambling');
 
-    final bool blockYoutube = _selectedCategories.contains('youtube');
     final bool blockTrackers = _selectedCategories.contains('trackers');
 
     // Packages to block directly
     final List<String> packagesToBlock = [];
-    if (blockYoutube) {
-      packagesToBlock.add('com.google.android.youtube');
-    }
     if (_selectedCategories.contains('social')) {
       packagesToBlock.addAll([
         'com.instagram.android',
@@ -184,7 +180,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     await FocusDnsBlockerManager.setBlockedCategories(nativeCategories);
     await FocusDnsBlockerManager.setFeedFilters(
       instagramReels: _selectedCategories.contains('social'),
-      youtubeShorts: blockYoutube,
+      youtubeShorts: false,
     );
     await FocusDnsVpnManager.updateSecuritySettings(
       safesearch: _selectedCategories.contains('adult'),
@@ -196,8 +192,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     final blockedItems = [
       if (_selectedCategories.contains('adult'))
         const BlockedItem(id: 'porn', name: 'Adult & NSFW', icon: '🔞', color: Colors.red),
-      if (_selectedCategories.contains('youtube'))
-        const BlockedItem(id: 'youtube', name: 'YouTube Shorts', icon: '🎬', color: Colors.deepOrange),
       if (_selectedCategories.contains('social'))
         const BlockedItem(id: 'social', name: 'Social Media Feeds', icon: '📱', color: Colors.purple),
       if (_selectedCategories.contains('gambling'))
@@ -576,15 +570,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
           icon: '🔞',
           title: 'Adult Content & NSFW',
           subtitle: '45,000+ porn, erotic webcam, and adult domains + SafeSearch VIP.',
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        _buildCategoryCard(
-          id: 'youtube',
-          icon: '🎬',
-          title: 'YouTube Shorts & Algorithmic Feeds',
-          subtitle: 'Instantly severs YouTube Shorts and doomscroll loops.',
           palette: palette,
         ),
         const SizedBox(height: 10),

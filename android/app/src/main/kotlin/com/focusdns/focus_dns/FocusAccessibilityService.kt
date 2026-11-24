@@ -97,12 +97,22 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val e = event ?: return
         val pkg = e.packageName?.toString() ?: return
-        if (pkg in NEVER_BLOCK) return
-        Rules.ensureLoaded(this)
-
         val db = LocalDb.get(this)
         val until = db.getKv("strict_until", "0").toLongOrNull() ?: 0L
         val isStrict = (until - System.currentTimeMillis()) > 0
+
+        // Tamper-Proof Scheduled Lock: ONLY during active strict mode countdown
+        if (isStrict && (pkg == "com.android.settings" || pkg == "com.google.android.packageinstaller" || pkg == "com.android.packageinstaller")) {
+            val root = rootInActiveWindow
+            if (root != null && containsAnyText(root, listOf("focusdns", "focus dns", "com.focusdns.focus_dns"))) {
+                blockNow(pkg, "Tamper-Proof Lock: Settings modification locked during strict focus timer")
+                return
+            }
+        }
+
+        if (pkg in NEVER_BLOCK) return
+        Rules.ensureLoaded(this)
+
         val isPaused = db.getKv("protection_paused", "0") == "1"
         if (isPaused && !isStrict) return
 
@@ -180,6 +190,21 @@ class FocusAccessibilityService : AccessibilityService() {
         for (n in needles) {
             val hits = root.findAccessibilityNodeInfosByViewId("${root.packageName}:id/$n")
             if (!hits.isNullOrEmpty()) return true
+        }
+        return false
+    }
+
+    private fun containsAnyText(node: AccessibilityNodeInfo?, targets: List<String>): Boolean {
+        if (node == null) return false
+        val text = node.text?.toString()?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+        for (target in targets) {
+            val t = target.lowercase()
+            if (text.contains(t) || desc.contains(t)) return true
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            if (containsAnyText(child, targets)) return true
         }
         return false
     }

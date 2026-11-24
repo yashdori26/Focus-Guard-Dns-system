@@ -43,8 +43,8 @@ class FocusDeviceAdminReceiver : DeviceAdminReceiver() {
             val db = LocalDb.get(context)
             val until = db.getKv("strict_until", "0").toLongOrNull() ?: 0L
             val remaining = (until - System.currentTimeMillis()) / 1000
-            if (remaining > 0 || FocusDnsVpnService.isRunning) {
-                Log.w(TAG, "Deactivation rejected: Strict mode or VPN is still active.")
+            if (remaining > 0) {
+                Log.w(TAG, "Deactivation rejected: Strict session countdown is active ($remaining s remaining).")
                 return false
             }
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
@@ -57,17 +57,14 @@ class FocusDeviceAdminReceiver : DeviceAdminReceiver() {
         val db = LocalDb.get(context)
         val until = db.getKv("strict_until", "0").toLongOrNull() ?: 0L
         val remaining = (until - System.currentTimeMillis()) / 1000
-        val isRunning = FocusDnsVpnService.isRunning
 
+        // Tamper-Proof Lock is ONLY active when Strict Mode and session countdown timer are ON
         if (remaining > 0) {
             val mins = (remaining / 60) + 1
-            return "⚠️ FOCUS SESSION IN PROGRESS ($mins min remaining)\n\n" +
-                   "Uninstallation and Device Administrator deactivation are locked until your strict timer expires."
+            return "⚠️ STRICT FOCUS SESSION IN PROGRESS ($mins min remaining)\n\n" +
+                   "Tamper-Proof Device Administrator protection is active. Uninstallation and deactivation are locked until your strict session timer reaches zero."
         }
-        if (isRunning) {
-            return "⚠️ PROTECTION ACTIVE\n\n" +
-                   "FocusDNS protection is currently running. Please turn off protection in the app first to uninstall."
-        }
+        // In normal mode (remaining <= 0), deactivation and uninstallation are fully permitted
         return null
     }
 }

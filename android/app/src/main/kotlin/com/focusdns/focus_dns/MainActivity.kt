@@ -47,13 +47,13 @@ class MainActivity : FlutterActivity() {
                 "deactivateDeviceAdmin" -> res.success(FocusDeviceAdminReceiver.requestDeactivate(this))
                 "canUninstall" -> {
                     val rem = strictRemaining()
-                    res.success(rem == 0 && !FocusDnsVpnService.isRunning)
+                    res.success(rem == 0)
                 }
                 "getLockStatus" -> {
                     val rem = strictRemaining()
                     val isRunning = FocusDnsVpnService.isRunning
                     val adminActive = FocusDeviceAdminReceiver.isDeviceAdminActive(this)
-                    val canUn = rem == 0 && !isRunning
+                    val canUn = (rem == 0)
                     val formatted = String.format("%02d:%02d", rem / 60, rem % 60)
                     res.success(mapOf(
                         "sessionState" to if (rem > 0) "STRICT_LOCKED" else if (isRunning) "ACTIVE" else "IDLE",

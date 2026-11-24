@@ -637,6 +637,15 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
           onConfirm: (selectedMinutes) async {
             Navigator.pop(ctx);
             ref.read(setupProvider.notifier).autoSyncAndLinkIp();
+
+            // Arm Tamper-Proof Device Administrator Lock
+            try {
+              final isAdmin = await FocusDnsBlockerManager.isDeviceAdminActive();
+              if (!isAdmin) {
+                await FocusDnsBlockerManager.requestDeviceAdmin();
+              }
+            } catch (_) {}
+
             final success = await ref
                 .read(strictModeProvider.notifier)
                 .set(true, durationMinutes: selectedMinutes);
@@ -645,7 +654,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                      '🔒 Strict Mode activated for $selectedMinutes minutes! Protection locked.'),
+                      '🔒 Strict Mode activated for $selectedMinutes minutes! Tamper-Proof Device Admin lock armed.'),
                   backgroundColor: palette.surface,
                   duration: const Duration(seconds: 3),
                 ),
@@ -910,75 +919,6 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                 const SizedBox(height: 2),
                                 Text(
                                   'Anti-doomscroll timer cycles. Focus session, break timer & repetitions.',
-                                  style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.chevron_right, color: palette.mutedInk),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Option 4: Feed Blocker
-                  InkWell(
-                    key: const Key('feed_blocker_mode_button'),
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () async {
-                      Navigator.pop(ctx);
-                      final surgicalState = ref.read(surgicalFilterProvider);
-                      final willBlock = !surgicalState.isAnyFeedBlocked;
-                      ref.read(surgicalFilterProvider.notifier).setAllFeedsBlocked(willBlock);
-                      await ref.read(protectionProvider.notifier).set(true);
-                      ref.read(setupProvider.notifier).autoSyncAndLinkIp();
-                      if (!kIsWeb) {
-                        final profileId = ref.read(setupProvider).profileId;
-                        await ref.read(vpnProvider.notifier).start(profileId: profileId);
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(willBlock
-                                ? '✂️ Feed Blocker active. Reels & Shorts blackholed.'
-                                : '🌿 Feed Blocker paused. Feeds unblocked.'),
-                            backgroundColor: palette.surface,
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: palette.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: palette.hairlineSoft),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: palette.accent.withOpacity(0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.content_cut_rounded, color: palette.accent, size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Feed Blocker',
-                                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: palette.ink),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Blackhole Reels, Shorts & feeds while keeping chats & DMs active.',
                                   style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
                                 ),
                               ],
@@ -1950,7 +1890,7 @@ class _StrictModeDisclaimerSheetContentState
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Pre-flight verified: Locks VPN & focus apps. Emergency calls & 2FA SMS remain reachable.',
+                      'Pre-flight verified: Tamper-Proof Device Admin lock engages for the session duration. Uninstallation and system deactivation are locked until the timer reaches zero.',
                       style: TextStyle(
                         fontSize: 11,
                         color: palette.mutedInk,
