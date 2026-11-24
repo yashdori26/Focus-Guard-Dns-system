@@ -11,6 +11,11 @@ import '../../../state_management/providers.dart';
 import '../../home_screen.dart';
 import '../../theme/wabi_sabi_theme.dart';
 
+/// Clean, Minimal, and Sovereign Onboarding Experience.
+/// Guides the user through:
+///   Step 1: Shield Identity (Profile Name)
+///   Step 2: Content Rules (Categories to sever)
+///   Step 3: Local Security & Trust (Permissions & Local SQLite Assurance)
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -113,13 +118,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
   }
 
   Future<void> _requestVpn() async {
-    final ok = await FocusDnsVpnManager.prepare();
-    if (mounted) setState(() => _vpnPrepared = ok);
+    final success = await FocusDnsVpnManager.prepare();
+    if (success && mounted) {
+      setState(() => _vpnPrepared = true);
+    }
   }
 
   Future<void> _requestAccessibility() async {
     await FocusDnsBlockerManager.openAccessibilitySettings();
-    Future.delayed(const Duration(seconds: 2), _checkInitialPermissions);
+    Future.delayed(const Duration(seconds: 1), _checkInitialPermissions);
   }
 
   Future<void> _requestBattery() async {
@@ -243,7 +250,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
       body: SafeArea(
         child: Column(
           children: [
-            // SLEEK TOP PROGRESS HEADER
+            // Minimal Header with Hairline Progress
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Column(
@@ -270,7 +277,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'FOCUSDNS · SOVEREIGN SETUP',
+                                'FOCUSDNS · SETUP',
                                 style: GoogleFonts.inter(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
@@ -281,10 +288,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                               const SizedBox(height: 1),
                               Text(
                                 _currentStep == 0
-                                    ? 'Step 1 of 3: Shield Identity'
+                                    ? 'Step 1: Shield Identity'
                                     : _currentStep == 1
-                                        ? 'Step 2 of 3: Content Rules'
-                                        : 'Step 3 of 3: Security & Trust',
+                                        ? 'Step 2: Content Rules'
+                                        : 'Step 3: Security & Trust',
                                 style: GoogleFonts.inter(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
@@ -295,16 +302,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                           ),
                         ],
                       ),
-                      // Tactile step badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: palette.surface,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: palette.border),
                         ),
                         child: Text(
-                          '${(_currentStep + 1)} / 3',
+                          '${_currentStep + 1} / 3',
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -315,11 +321,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // Smooth Animated Progress Bar
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
+                    borderRadius: BorderRadius.circular(2),
                     child: SizedBox(
-                      height: 4,
+                      height: 3,
                       child: LinearProgressIndicator(
                         value: progress,
                         backgroundColor: palette.border,
@@ -332,10 +337,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
             ),
             Divider(height: 1, thickness: 1, color: palette.hairlineSoft),
 
-            // STEP CONTENT BODY
+            // Step Content Body
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
+                duration: const Duration(milliseconds: 260),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 child: KeyedSubtree(
@@ -349,9 +354,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
               ),
             ),
 
-            // BOTTOM NAVIGATION BAR
+            // Minimalist Bottom Action Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
               decoration: BoxDecoration(
                 color: palette.surface,
                 border: Border(top: BorderSide(color: palette.border, width: 1.0)),
@@ -368,9 +373,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: palette.ink,
-                        side: BorderSide(color: palette.border, width: 1.2),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        side: BorderSide(color: palette.border, width: 1.1),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       child: Text('← Back', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
@@ -394,18 +399,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                         backgroundColor: palette.accent,
                         foregroundColor: palette.canvas,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       child: _isLaunching
                           ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2.2, color: palette.canvas),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2.0, color: palette.canvas),
                             )
                           : Text(
-                              _currentStep == 2 ? 'Activate Shield & Launch →' : 'Continue to Next Step →',
-                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: -0.2),
+                              _currentStep == 2 ? 'Activate Shield & Launch →' : 'Continue →',
+                              style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.bold, letterSpacing: -0.1),
                             ),
                     ),
                   ),
@@ -430,7 +435,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     }
   }
 
-  // --- STEP 1: NAME YOUR SHIELD PROFILE ---
+  // --- STEP 1: SHIELD IDENTITY ---
   Widget _buildStep1Profile(WabiSabiPalette palette) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,29 +443,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         Text(
           'Name Your Shield',
           style: GoogleFonts.fraunces(
-            fontSize: 29,
+            fontSize: 28,
             fontWeight: FontWeight.w700,
             color: palette.ink,
-            letterSpacing: -0.6,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
-          'Give your local filtering shield an identifiable identity on this hardware. All rules, logs, and telemetry are isolated to this device profile.',
+          'Name this device configuration. All rules, logs, and telemetry are isolated on-device.',
           style: GoogleFonts.inter(
-            fontSize: 13.5,
+            fontSize: 13,
             color: palette.mutedInk,
-            height: 1.5,
+            height: 1.45,
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
 
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: palette.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: palette.border, width: 1.2),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.border, width: 1.1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,68 +473,61 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
               Row(
                 children: [
                   Container(
-                    width: 10,
-                    height: 10,
+                    width: 8,
+                    height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: palette.safeAccent,
-                      boxShadow: [
-                        BoxShadow(
-                          color: palette.safeAccent.withOpacity(0.4),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                        ),
-                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'ON-DEVICE PROFILE IDENTITY',
+                    'LOCAL PROFILE IDENTITY',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.9,
+                      letterSpacing: 0.8,
                       color: palette.mutedInk,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TextField(
                 controller: _nameController,
                 style: GoogleFonts.inter(
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: palette.ink,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'e.g. Deep Work, Personal Shield',
-                  hintStyle: TextStyle(color: palette.mutedInk.withOpacity(0.5)),
+                  hintText: 'e.g. Personal Shield, Deep Work',
+                  hintStyle: TextStyle(color: palette.mutedInk.withOpacity(0.4)),
                   filled: true,
                   fillColor: palette.canvas,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: palette.border),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(color: palette.border),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: palette.accent, width: 1.8),
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: palette.accent, width: 1.6),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Row(
                 children: [
-                  Icon(Icons.lock_outline_rounded, size: 14, color: palette.mutedInk),
+                  Icon(Icons.lock_outline_rounded, size: 13, color: palette.mutedInk),
                   const SizedBox(width: 6),
                   Text(
-                    'Stored locally in device SQLite. Zero cloud telemetries.',
-                    style: GoogleFonts.inter(fontSize: 12, color: palette.mutedInk),
+                    'Saved locally in SQLite database. Zero external servers.',
+                    style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
                   ),
                 ],
               ),
@@ -540,7 +538,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     );
   }
 
-  // --- STEP 2: CHOOSE APPS & CATEGORIES TO BLOCK ---
+  // --- STEP 2: CONTENT RULES ---
   Widget _buildStep2Categories(WabiSabiPalette palette) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -548,19 +546,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         Text(
           'Choose What to Sever',
           style: GoogleFonts.fraunces(
-            fontSize: 29,
+            fontSize: 28,
             fontWeight: FontWeight.w700,
             color: palette.ink,
-            letterSpacing: -0.6,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
-          'Select the vices and algorithmic dopamine traps you want blocked and sinkholed on this phone.',
+          'Select the categories and dopamine sinks you want sinkholed on this device.',
           style: GoogleFonts.inter(
-            fontSize: 13.5,
+            fontSize: 13,
             color: palette.mutedInk,
-            height: 1.5,
+            height: 1.45,
           ),
         ),
         const SizedBox(height: 20),
@@ -569,7 +567,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
           id: 'adult',
           icon: '🔞',
           title: 'Adult Content & NSFW',
-          subtitle: '45,000+ porn, erotic webcam, and adult domains + SafeSearch VIP.',
+          subtitle: '45,000+ adult domains, explicit webcams & SafeSearch enforcement.',
           palette: palette,
         ),
         const SizedBox(height: 10),
@@ -587,7 +585,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
           id: 'trackers',
           icon: '🛡️',
           title: 'Surveillance & Ad Trackers',
-          subtitle: 'Kills telemetry, in-app ad SDKs, analytics, and surveillance networks.',
+          subtitle: 'In-app ad SDKs, analytics, and surveillance networks.',
           palette: palette,
         ),
         const SizedBox(height: 10),
@@ -596,7 +594,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
           id: 'gambling',
           icon: '🎰',
           title: 'Gambling & Betting',
-          subtitle: 'Casinos, sports betting portals, and high-risk speculation sites.',
+          subtitle: 'Casinos, sports betting portals, and speculative wager sites.',
           palette: palette,
         ),
       ],
@@ -623,32 +621,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         });
         _saveCategories();
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(15),
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: selected ? palette.surface : palette.canvas,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? palette.accent : palette.border,
-            width: selected ? 1.6 : 1.0,
+            width: selected ? 1.5 : 1.0,
           ),
         ),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: palette.canvas,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: palette.border, width: 1),
               ),
               alignment: Alignment.center,
-              child: Text(icon, style: const TextStyle(fontSize: 22)),
+              child: Text(icon, style: const TextStyle(fontSize: 18)),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,34 +654,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                   Text(
                     title,
                     style: GoogleFonts.inter(
-                      fontSize: 14,
+                      fontSize: 13.5,
                       fontWeight: selected ? FontWeight.bold : FontWeight.w600,
                       color: palette.ink,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk, height: 1.3),
+                    style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk, height: 1.3),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 24,
-              height: 24,
+              duration: const Duration(milliseconds: 160),
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 color: selected ? palette.accent : Colors.transparent,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? palette.accent : palette.mutedInk.withOpacity(0.4),
-                  width: 1.6,
+                  color: selected ? palette.accent : palette.mutedInk.withOpacity(0.35),
+                  width: 1.5,
                 ),
               ),
               child: selected
-                  ? Icon(Icons.check_rounded, size: 15, color: palette.canvas)
+                  ? Icon(Icons.check_rounded, size: 14, color: palette.canvas)
                   : null,
             ),
           ],
@@ -692,7 +690,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     );
   }
 
-  // --- STEP 3: PERMISSIONS & 100% LOCAL DATABASE TRUST ASSURANCE ---
+  // --- STEP 3: SECURITY & LOCAL TRUST ---
   Widget _buildStep3PermissionsAndTrust(WabiSabiPalette palette) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -700,30 +698,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         Text(
           'Local Security & Trust',
           style: GoogleFonts.fraunces(
-            fontSize: 29,
+            fontSize: 28,
             fontWeight: FontWeight.w700,
             color: palette.ink,
-            letterSpacing: -0.6,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
-          'FocusDNS operates 100% on-device. Review permissions and local database assurance below.',
+          'FocusDNS operates 100% on-device. Review permissions and local database assurance.',
           style: GoogleFonts.inter(
-            fontSize: 13.5,
+            fontSize: 13,
             color: palette.mutedInk,
-            height: 1.5,
+            height: 1.45,
           ),
         ),
         const SizedBox(height: 18),
 
         // 100% LOCAL DATABASE TRUST GUARANTEE CARD
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: palette.safeAccent.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: palette.safeAccent.withOpacity(0.35), width: 1.2),
+            color: palette.safeAccent.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.safeAccent.withOpacity(0.3), width: 1.1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,47 +729,47 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
               Row(
                 children: [
                   Container(
-                    width: 26,
-                    height: 26,
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: palette.safeAccent.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.verified_user_rounded, color: palette.safeAccent, size: 17),
+                    child: Icon(Icons.verified_user_rounded, color: palette.safeAccent, size: 15),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 9),
                   Text(
                     '100% LOCAL SQLITE ASSURANCE',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.9,
+                      letterSpacing: 0.8,
                       color: palette.safeAccent,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
-                'Every query log, telemetry record, and blocklist is saved strictly in your phone’s encrypted local SQLite database. No external servers are reached, no personal data is collected, and zero tracking occurs.',
+                'Every query log, telemetry record, and blocklist is saved strictly in your phone’s local SQLite database. No external servers are reached, and zero personal data is transmitted.',
                 style: GoogleFonts.inter(
-                  fontSize: 12.5,
+                  fontSize: 12,
                   color: palette.ink,
-                  height: 1.45,
+                  height: 1.4,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: palette.canvas,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(7),
                   border: Border.all(color: palette.border, width: 0.8),
                 ),
                 child: Text(
                   'Loopback Virtual Bind: 10.254.1.2 (IPv4) • fd00::2 (IPv6)',
                   style: GoogleFonts.jetBrainsMono(
-                    fontSize: 10.5,
+                    fontSize: 10,
                     color: palette.mutedInk,
                     fontWeight: FontWeight.w600,
                   ),
@@ -780,15 +778,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
 
         // PERMISSION 1: VPN SETUP
         _buildPermissionTile(
           icon: Icons.vpn_lock_rounded,
           title: 'Local DNS VPN Tunnel',
-          subtitle: 'Required to intercept DNS queries and sinkhole ads/traps locally.',
+          subtitle: 'Required to intercept DNS queries and sinkhole ads & distractions locally.',
           granted: _vpnPrepared,
-          actionLabel: _vpnPrepared ? 'GRANTED ✓' : 'AUTHORIZE',
+          actionLabel: _vpnPrepared ? 'ACTIVE ✓' : 'AUTHORIZE',
           onTap: _requestVpn,
           palette: palette,
         ),
@@ -798,7 +796,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         _buildPermissionTile(
           icon: Icons.accessibility_new_rounded,
           title: 'Doomscroll Accessibility',
-          subtitle: 'Enables auto-back navigation on YouTube Shorts & Instagram Reels.',
+          subtitle: 'Enables automatic closure and enforcement on restricted applications.',
           granted: _accessibilityEnabled,
           actionLabel: _accessibilityEnabled ? 'ACTIVE ✓' : 'ENABLE',
           onTap: _requestAccessibility,
@@ -810,9 +808,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         _buildPermissionTile(
           icon: Icons.battery_charging_full_rounded,
           title: 'Doze Battery Immunity',
-          subtitle: 'Prevents Android from killing the filter in deep sleep (<1.2%/day).',
+          subtitle: 'Prevents Android from stopping background protection during deep sleep.',
           granted: _batteryExempt,
-          actionLabel: _batteryExempt ? 'EXEMPT ✓' : 'ALLOW',
+          actionLabel: _batteryExempt ? 'ACTIVE ✓' : 'ALLOW',
           onTap: _requestBattery,
           palette: palette,
         ),
@@ -830,29 +828,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     required WabiSabiPalette palette,
   }) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: granted ? palette.safeAccent.withOpacity(0.4) : palette.border,
-          width: 1.1,
+          color: granted ? palette.safeAccent.withOpacity(0.35) : palette.border,
+          width: 1.0,
         ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(9),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: granted
                   ? palette.safeAccent.withOpacity(0.12)
                   : palette.canvas,
               shape: BoxShape.circle,
-              border: Border.all(color: granted ? palette.safeAccent.withOpacity(0.3) : palette.border, width: 0.8),
+              border: Border.all(color: granted ? palette.safeAccent.withOpacity(0.25) : palette.border, width: 0.8),
             ),
             child: Icon(
               icon,
-              size: 20,
+              size: 18,
               color: granted ? palette.safeAccent : palette.mutedInk,
             ),
           ),
@@ -864,7 +862,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                 Text(
                   title,
                   style: GoogleFonts.inter(
-                    fontSize: 13.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: palette.ink,
                   ),
@@ -872,29 +870,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk, height: 1.3),
+                  style: GoogleFonts.inter(fontSize: 10.5, color: palette.mutedInk, height: 1.3),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           InkWell(
             onTap: granted ? null : onTap,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(8),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
               decoration: BoxDecoration(
                 color: granted
                     ? palette.safeAccent.withOpacity(0.12)
                     : palette.accent,
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 actionLabel,
                 style: GoogleFonts.inter(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.3,
                   color: granted ? palette.safeAccent : palette.canvas,
                 ),
               ),
