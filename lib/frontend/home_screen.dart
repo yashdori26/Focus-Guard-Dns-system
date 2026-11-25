@@ -221,66 +221,15 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (_currentPage == 0)
-                    Flexible(
-                      child: GestureDetector(
-                        key: const Key('header_profile_pill'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _openProfileSwitcherSheet,
-                        onLongPress: _openAllProfileSettingsSheet,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: palette.surface,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: palette.border, width: 1.0),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isProtectionOn ? palette.safeAccent : palette.mutedInk,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (auth.isLoggedIn) ...[
-                              Text(auth.detectedFlag, style: const TextStyle(fontSize: 12)),
-                              const SizedBox(width: 4),
-                            ],
-                            Flexible(
-                              child: Text(
-                                displayProfileName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: palette.ink,
-                                  letterSpacing: -0.1,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.keyboard_arrow_down_rounded, size: 15, color: palette.mutedInk),
-                          ],
-                        ),
-                      ),
+                  Text(
+                    titles[_currentPage],
+                    style: GoogleFonts.fraunces(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: palette.ink,
+                      letterSpacing: -0.3,
                     ),
-                  )
-                  else
-                    Text(
-                      titles[_currentPage],
-                      style: GoogleFonts.fraunces(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w600,
-                        color: palette.ink,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
+                  ),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => ref.read(themeModeProvider.notifier).toggle(),

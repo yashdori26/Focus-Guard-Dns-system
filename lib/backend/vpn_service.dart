@@ -17,6 +17,20 @@ class FocusDnsVpnManager {
       _liveQueryStreamController.stream;
 
 
+  /// Checks if VPN permission is already granted by Android without launching the dialog.
+  static Future<bool> isPrepared() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('isPrepared');
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS VPN] Error checking isPrepared: $e');
+        return false;
+      }
+    }
+    return false;
+  }
+
   /// Requests VPN permission from the Android system.
   /// Returns `true` if permission is granted, `false` if user denied or pending.
   static Future<bool> prepare() async {

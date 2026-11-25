@@ -10,6 +10,8 @@ import android.net.VpnService
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -114,6 +116,13 @@ class MainActivity : FlutterActivity() {
 
     private fun handleVpn(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "isPrepared" -> {
+                val prepared = VpnService.prepare(this) == null
+                if (prepared) {
+                    db().putKv("focus_perm_vpn", "1")
+                }
+                result.success(prepared)
+            }
             "prepare" -> {
                 val intent = VpnService.prepare(this)
                 if (intent == null) {
@@ -205,9 +214,25 @@ class MainActivity : FlutterActivity() {
     private fun handleBlocker(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "isAccessibilityServiceEnabled" -> {
-                val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-                val cn = ComponentName(this, FocusAccessibilityService::class.java)
-                result.success(enabled.contains(cn.flattenToString()) || enabled.contains(cn.flattenToShortString()))
+                var isEnabled = FocusAccessibilityService.instance != null
+                if (!isEnabled) {
+                    val am = getSystemService(ACCESSIBILITY_SERVICE) as? AccessibilityManager
+                    val isServiceRunning = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC or AccessibilityServiceInfo.FEEDBACK_ALL_MASK)?.any {
+                        it.resolveInfo?.serviceInfo?.packageName == packageName
+                    } ?: false
+                    if (isServiceRunning) {
+                        isEnabled = true
+                    }
+                }
+                if (!isEnabled) {
+                    val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+                    val cn = ComponentName(this, FocusAccessibilityService::class.java)
+                    isEnabled = enabled.contains(cn.flattenToString()) || enabled.contains(cn.flattenToShortString()) || enabled.contains(packageName)
+                }
+                if (isEnabled) {
+                    db().putKv("focus_perm_a11y", "1")
+                }
+                result.success(isEnabled)
             }
             "openAccessibilitySettings" -> {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -281,7 +306,11 @@ class MainActivity : FlutterActivity() {
             "closeActiveBlockedApp" -> result.success(FocusAccessibilityService.instance?.goHome() ?: false)
             "isBatteryOptimizationIgnored" -> {
                 val pm = getSystemService(POWER_SERVICE) as PowerManager
-                result.success(pm.isIgnoringBatteryOptimizations(packageName))
+                val isIgnored = pm.isIgnoringBatteryOptimizations(packageName)
+                if (isIgnored) {
+                    db().putKv("focus_perm_battery", "1")
+                }
+                result.success(isIgnored)
             }
             "requestIgnoreBatteryOptimizations" -> {
                 try {
@@ -315,7 +344,7 @@ class MainActivity : FlutterActivity() {
                     result.success(false)
                 }
             }
-            "removeDeviceAdmin" -> {
+            "removeDeviceAdmin", "deactivateDeviceAdmin" -> {
                 result.success(FocusDeviceAdminReceiver.requestDeactivate(this))
             }
             "putKv" -> {
@@ -348,7 +377,11 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == reqVpn) {
-            pendingVpn?.success(resultCode == Activity.RESULT_OK)
+            val ok = resultCode == Activity.RESULT_OK
+            if (ok) {
+                db().putKv("focus_perm_vpn", "1")
+            }
+            pendingVpn?.success(ok)
             pendingVpn = null
             return
         }

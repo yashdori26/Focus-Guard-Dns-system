@@ -28,7 +28,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _profileNameController = TextEditingController(text: 'Personal Shield');
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -47,7 +46,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
       final creds = await AuthStorageService.getSavedCredentials();
       final email = creds['email'];
       final password = creds['password'];
-      final profileName = creds['profile_name'];
       final remember = creds['remember_me'] != 'false';
 
       if (mounted) {
@@ -59,9 +57,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
           if (password != null && password.isNotEmpty) {
             _passwordController.text = password;
           }
-          if (profileName != null && profileName.isNotEmpty) {
-            _profileNameController.text = profileName;
-          }
         });
       }
     } catch (_) {}
@@ -72,7 +67,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _profileNameController.dispose();
     super.dispose();
   }
 
@@ -138,7 +132,7 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
             await AuthStorageService.saveCredentials(
               email: email,
               password: password,
-              profileName: activeName,
+              profileName: activeName.isNotEmpty ? activeName : 'Personal Shield',
               rememberMe: true,
             );
           }
@@ -152,9 +146,7 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
           }
         }
       } else {
-        final profileName = _profileNameController.text.trim().isNotEmpty
-            ? _profileNameController.text.trim()
-            : 'Personal Shield';
+        const profileName = 'Personal Shield';
 
         final res = await ref.read(authProvider.notifier).registerWithEmail(
           email,
@@ -194,7 +186,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = WabiSabiPalette.of(context);
-    final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authProvider);
 
     final errorText = _localError ?? auth.errorMessage;
@@ -207,133 +198,51 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top App Bar: Monogram Logo + Brand + Theme Switcher + Skip
+                    // Top Clean Brand Monogram
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: palette.ink,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'F',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      color: palette.canvas,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: palette.ink,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'F',
+                              style: GoogleFonts.jetBrainsMono(
+                                color: palette.canvas,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
                               ),
-                              const SizedBox(width: 10),
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'FOCUS DNS',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1.6,
-                                        color: palette.ink,
-                                      ),
-                                    ),
-                                    Text(
-                                      '100% Local · Sovereign Shield',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
-                                        color: palette.mutedInk,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                themeMode == ThemeMode.light
-                                    ? Icons.dark_mode_outlined
-                                    : Icons.light_mode_outlined,
-                                color: palette.ink,
-                                size: 19,
-                              ),
-                              tooltip: 'Toggle Theme',
-                              padding: const EdgeInsets.all(6),
-                              constraints: const BoxConstraints(),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
-                            ),
-                            const SizedBox(width: 4),
-                            TextButton(
-                              onPressed: _proceedNext,
-                              style: TextButton.styleFrom(
-                                foregroundColor: palette.mutedInk,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'Skip',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Icon(Icons.arrow_forward_rounded, size: 13),
-                                ],
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 10),
+                        Text(
+                          'FOCUS DNS',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.6,
+                            color: palette.ink,
+                          ),
                         ),
                       ],
                     ),
 
                     const SizedBox(height: 32),
 
-                    // Eyebrow & Headline
+                    // Clean Title
                     Text(
-                      _mode == AuthMode.signIn ? 'WELCOME BACK' : 'SOVEREIGN SETUP',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.4,
-                        color: palette.mutedInk,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    Text(
-                      _mode == AuthMode.signIn
-                          ? 'Sign in to FocusDNS.'
-                          : 'Create your local shield.',
+                      _mode == AuthMode.signIn ? 'Sign In' : 'Create Account',
                       style: GoogleFonts.fraunces(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
@@ -341,20 +250,8 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                         letterSpacing: -0.6,
                       ),
                     ),
-                    const SizedBox(height: 6),
 
-                    Text(
-                      _mode == AuthMode.signIn
-                          ? 'Access your DNS profiles, blocker preferences, and focus analytics.'
-                          : 'All credentials and configurations are saved locally on-device.',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: palette.mutedInk,
-                        height: 1.4,
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
                     // Clean Mode Switcher Capsule (Sign In vs Create Account)
                     Container(
@@ -555,7 +452,7 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                       ),
                     ),
 
-                    // Additional Fields for Create Account Mode
+                    // Field 3: Confirm Password (only in Create Account Mode)
                     if (_mode == AuthMode.createAccount) ...[
                       const SizedBox(height: 16),
                       Text(
@@ -603,46 +500,9 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                           ),
                         ),
                       ),
-
-                      const SizedBox(height: 16),
-                      Text(
-                        'PROFILE NAME',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                          color: palette.mutedInk,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        key: const Key('profile_name_input_field'),
-                        controller: _profileNameController,
-                        style: GoogleFonts.inter(fontSize: 14, color: palette.ink),
-                        decoration: InputDecoration(
-                          hintText: 'Personal Shield',
-                          hintStyle: GoogleFonts.inter(fontSize: 13, color: palette.mutedInk.withOpacity(0.4)),
-                          prefixIcon: Icon(Icons.shield_outlined, size: 18, color: palette.mutedInk),
-                          filled: true,
-                          fillColor: palette.surface,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: palette.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: palette.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: palette.ink, width: 1.5),
-                          ),
-                        ),
-                      ),
                     ],
 
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // Remember Credentials Toggle
                     InkWell(
@@ -664,13 +524,11 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Remember profile and credentials in local database',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: palette.mutedInk,
-                                ),
+                            Text(
+                              'Remember me',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: palette.mutedInk,
                               ),
                             ),
                           ],
@@ -705,9 +563,7 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                                 ),
                               )
                             : Text(
-                                _mode == AuthMode.signIn
-                                    ? 'Sign In to FocusDNS'
-                                    : 'Create Account & Continue',
+                                _mode == AuthMode.signIn ? 'Sign In' : 'Create Account',
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
@@ -739,25 +595,6 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
                               fontSize: 12.5,
                               color: palette.mutedInk,
                               decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Offline Guest Access Link
-                    Center(
-                      child: GestureDetector(
-                        onTap: _proceedNext,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            'Continue as Guest (100% Offline Mode)',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: palette.mutedInk.withOpacity(0.7),
                             ),
                           ),
                         ),

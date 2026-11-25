@@ -25,7 +25,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with WidgetsBindingObserver {
   int _currentStep = 0;
-  final TextEditingController _nameController = TextEditingController(text: 'Personal Shield');
+  final TextEditingController _nameController = TextEditingController();
 
   // Step 2: Selected Categories and Apps
   final Set<String> _selectedCategories = {'adult', 'social', 'trackers'};
@@ -68,6 +68,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
       final savedCats = prefs.getStringList('focus_onboarding_cats');
       final authProfileName = await AuthStorageService.getActiveProfileName();
 
+      final savedVpn = prefs.getBool('focus_perm_vpn') ?? false;
+      final savedA11y = prefs.getBool('focus_perm_a11y') ?? false;
+      final savedBattery = prefs.getBool('focus_perm_battery') ?? false;
+
+      String? dbVpnStr;
+      String? dbA11yStr;
+      String? dbBatteryStr;
+      try {
+        dbVpnStr = await FocusDnsBlockerManager.getKv('focus_perm_vpn');
+        dbA11yStr = await FocusDnsBlockerManager.getKv('focus_perm_a11y');
+        dbBatteryStr = await FocusDnsBlockerManager.getKv('focus_perm_battery');
+      } catch (_) {}
+
+      final dbVpn = dbVpnStr == '1';
+      final dbA11y = dbA11yStr == '1';
+      final dbBattery = dbBatteryStr == '1';
+
       if (!mounted) return;
       setState(() {
         if (savedStep != null && savedStep >= 0 && savedStep <= 2) {
@@ -82,6 +99,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
           _selectedCategories.clear();
           _selectedCategories.addAll(savedCats);
         }
+        if (savedVpn || dbVpn) _vpnPrepared = true;
+        if (savedA11y || dbA11y) _accessibilityEnabled = true;
+        if (savedBattery || dbBattery) _batteryExempt = true;
       });
     } catch (_) {}
   }
@@ -105,33 +125,78 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
   }
 
   Future<void> _checkInitialPermissions() async {
-    final vpn = await FocusDnsVpnManager.isRunning();
+    final vpn = await FocusDnsVpnManager.isPrepared() || await FocusDnsVpnManager.isRunning();
     final a11y = await FocusDnsBlockerManager.isAccessibilityServiceEnabled();
     final battery = await FocusDnsBlockerManager.isBatteryOptimizationIgnored();
+    
+    final prefs = await SharedPreferences.getInstance();
+    final savedVpn = prefs.getBool('focus_perm_vpn') ?? false;
+    final savedA11y = prefs.getBool('focus_perm_a11y') ?? false;
+    final savedBattery = prefs.getBool('focus_perm_battery') ?? false;
+
+    String? dbVpnStr;
+    String? dbA11yStr;
+    String? dbBatteryStr;
+    try {
+      dbVpnStr = await FocusDnsBlockerManager.getKv('focus_perm_vpn');
+      dbA11yStr = await FocusDnsBlockerManager.getKv('focus_perm_a11y');
+      dbBatteryStr = await FocusDnsBlockerManager.getKv('focus_perm_battery');
+    } catch (_) {}
+
+    final dbVpn = dbVpnStr == '1';
+    final dbA11y = dbA11yStr == '1';
+    final dbBattery = dbBatteryStr == '1';
+
+    final finalVpn = vpn || savedVpn || dbVpn || _vpnPrepared;
+    final finalA11y = a11y || savedA11y || dbA11y || _accessibilityEnabled;
+    final finalBattery = battery || savedBattery || dbBattery || _batteryExempt;
+
+    if (finalVpn) {
+      await prefs.setBool('focus_perm_vpn', true);
+      FocusDnsBlockerManager.putKv('focus_perm_vpn', '1').catchError((_) => false);
+    }
+    if (finalA11y) {
+      await prefs.setBool('focus_perm_a11y', true);
+      FocusDnsBlockerManager.putKv('focus_perm_a11y', '1').catchError((_) => false);
+    }
+    if (finalBattery) {
+      await prefs.setBool('focus_perm_battery', true);
+      FocusDnsBlockerManager.putKv('focus_perm_battery', '1').catchError((_) => false);
+    }
+
     if (mounted) {
       setState(() {
-        _vpnPrepared = vpn;
-        _accessibilityEnabled = a11y;
-        _batteryExempt = battery;
+        _vpnPrepared = finalVpn;
+        _accessibilityEnabled = finalA11y;
+        _batteryExempt = finalBattery;
       });
     }
   }
 
   Future<void> _requestVpn() async {
     final success = await FocusDnsVpnManager.prepare();
-    if (success && mounted) {
-      setState(() => _vpnPrepared = true);
+    final isReady = success || await FocusDnsVpnManager.isPrepared();
+    if (isReady) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('focus_perm_vpn', true);
+      await FocusDnsBlockerManager.putKv('focus_perm_vpn', '1');
+      if (mounted) setState(() => _vpnPrepared = true);
     }
+    await _checkInitialPermissions();
   }
 
   Future<void> _requestAccessibility() async {
     await FocusDnsBlockerManager.openAccessibilitySettings();
+    Future.delayed(const Duration(milliseconds: 500), _checkInitialPermissions);
     Future.delayed(const Duration(seconds: 1), _checkInitialPermissions);
+    Future.delayed(const Duration(seconds: 2), _checkInitialPermissions);
   }
 
   Future<void> _requestBattery() async {
     await FocusDnsBlockerManager.requestIgnoreBatteryOptimizations();
+    Future.delayed(const Duration(milliseconds: 500), _checkInitialPermissions);
     Future.delayed(const Duration(seconds: 1), _checkInitialPermissions);
+    Future.delayed(const Duration(seconds: 2), _checkInitialPermissions);
   }
 
   Future<void> _completeOnboarding() async {
@@ -260,48 +325,57 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: palette.surface,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: palette.border, width: 1),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: palette.surface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: palette.border, width: 1),
+                              ),
+                              child: Icon(Icons.shield_outlined, size: 16, color: palette.accent),
                             ),
-                            child: Icon(Icons.shield_outlined, size: 16, color: palette.accent),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'FOCUSDNS · SETUP',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.3,
-                                  color: palette.mutedInk,
-                                ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'FOCUSDNS · SETUP',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.3,
+                                      color: palette.mutedInk,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    _currentStep == 0
+                                        ? 'Step 1: Shield Identity'
+                                        : _currentStep == 1
+                                            ? 'Step 2: Content Rules'
+                                            : 'Step 3: Security & Trust',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: palette.ink,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 1),
-                              Text(
-                                _currentStep == 0
-                                    ? 'Step 1: Shield Identity'
-                                    : _currentStep == 1
-                                        ? 'Step 2: Content Rules'
-                                        : 'Step 3: Security & Trust',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: palette.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -481,13 +555,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'LOCAL PROFILE IDENTITY',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                      color: palette.mutedInk,
+                  Expanded(
+                    child: Text(
+                      'LOCAL PROFILE IDENTITY',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        color: palette.mutedInk,
+                      ),
                     ),
                   ),
                 ],
@@ -525,9 +603,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                 children: [
                   Icon(Icons.lock_outline_rounded, size: 13, color: palette.mutedInk),
                   const SizedBox(width: 6),
-                  Text(
-                    'Saved locally in SQLite database. Zero external servers.',
-                    style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
+                  Expanded(
+                    child: Text(
+                      'Saved locally in SQLite database. Zero external servers.',
+                      style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
+                    ),
                   ),
                 ],
               ),

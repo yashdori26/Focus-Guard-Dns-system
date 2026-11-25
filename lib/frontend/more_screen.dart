@@ -6,13 +6,18 @@ import '../backend/blocker_service.dart';
 import '../backend/mdm_service.dart';
 import '../backend/vpn_service.dart';
 import '../models/enums.dart';
+import '../services/auth_storage_service.dart';
 import '../state_management/providers.dart';
+import 'auth/email_auth_screen.dart';
+import 'profile_settings_sheet.dart';
+import 'profile_switcher_sheet.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'tabs/allowlist_tab.dart';
 import 'tabs/denylist_tab.dart';
 import 'theme/wabi_sabi_theme.dart';
 
-/// Clean, tactile, and decluttered "More" screen with inline toggles and concise descriptions.
+/// Clean, tactile, and decluttered "More" screen with inline toggles,
+/// top Profile Card, and Hinge-style Log Out & Delete Account controls.
 class MoreTab extends ConsumerStatefulWidget {
   final WabiSabiPalette palette;
   const MoreTab({super.key, required this.palette});
@@ -97,7 +102,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
 
   Future<void> _toggleAntiVpn(bool value) async {
     final strictState = ref.read(strictModeProvider);
-    if (!value && strictState.isStrict) {
+    if (!value && strictState.isStrict && strictState.remainingSeconds > 0) {
       _showStrictLockWarning();
       return;
     }
@@ -109,7 +114,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
 
   Future<void> _toggleYoutubeShorts(bool value) async {
     final strictState = ref.read(strictModeProvider);
-    if (!value && strictState.isStrict) {
+    if (!value && strictState.isStrict && strictState.remainingSeconds > 0) {
       _showStrictLockWarning();
       return;
     }
@@ -124,7 +129,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
 
   Future<void> _toggleInstagramReels(bool value) async {
     final strictState = ref.read(strictModeProvider);
-    if (!value && strictState.isStrict) {
+    if (!value && strictState.isStrict && strictState.remainingSeconds > 0) {
       _showStrictLockWarning();
       return;
     }
@@ -146,7 +151,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       setState(() => _isAccessibilityActive = true);
     } else {
       final strictState = ref.read(strictModeProvider);
-      if (strictState.isStrict) {
+      if (strictState.isStrict && strictState.remainingSeconds > 0) {
         _showStrictLockWarning();
         return;
       }
@@ -162,16 +167,22 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       setState(() => _isDeviceAdminActive = active);
     } else {
       final strictState = ref.read(strictModeProvider);
-      if (strictState.isStrict) {
+      // Tamper-Proof Lock is ONLY active during strict mode focus countdown sessions
+      if (strictState.isStrict && strictState.remainingSeconds > 0) {
         _showStrictLockWarning();
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deactivate Device Admin in Android Security settings.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      final success = await FocusMdmManager.deactivateDeviceAdmin();
+      final active = await FocusMdmManager.isDeviceAdminActive();
+      setState(() => _isDeviceAdminActive = active);
+      if (!success && active) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Deactivate Device Admin in Android Security settings.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -303,6 +314,270 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
     }
   }
 
+  void _showLogoutModal(BuildContext context, WabiSabiPalette palette) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: palette.border, width: 1.0),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: palette.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: palette.canvas,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: palette.border),
+                ),
+                child: Icon(Icons.logout_rounded, size: 26, color: palette.ink),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Log out of FocusDNS?',
+                style: GoogleFonts.fraunces(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: palette.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Are you sure you want to log out? Your local preferences, rules, and blocker settings will remain safely saved on this device.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: palette.mutedInk,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  key: const Key('confirm_logout_button'),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await ref.read(authProvider.notifier).logout();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: palette.ink,
+                    foregroundColor: palette.canvas,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'Log Out',
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: palette.ink,
+                    side: BorderSide(color: palette.border),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteAccountModal(BuildContext context, WabiSabiPalette palette) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: palette.border, width: 1.0),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: palette.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: const Icon(Icons.delete_forever_rounded, size: 28, color: Colors.red),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Delete Account?',
+                style: GoogleFonts.fraunces(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: palette.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This will permanently delete your account credentials, purge all saved profiles, stop the VPN tunnel, and reset on-device configurations.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: palette.mutedInk,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: palette.canvas,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: palette.border),
+                ),
+                child: Column(
+                  children: [
+                    _warningBullet('Wipes all local credentials & profiles', palette),
+                    const SizedBox(height: 6),
+                    _warningBullet('Stops active DNS protection & VPN', palette),
+                    const SizedBox(height: 6),
+                    _warningBullet('Clears on-device query history & custom rules', palette),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  key: const Key('confirm_delete_account_button'),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await FocusDnsVpnManager.stopVpn();
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove('focus_onboarding_completed');
+                    await prefs.remove('focus_onboarding_name');
+                    await prefs.remove('focus_onboarding_step');
+                    await prefs.remove('focus_onboarding_cats');
+                    await prefs.remove('focus_perm_vpn');
+                    await prefs.remove('focus_perm_a11y');
+                    await prefs.remove('focus_perm_battery');
+                    try {
+                      await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '0');
+                      await FocusDnsBlockerManager.putKv('focus_perm_vpn', '0');
+                      await FocusDnsBlockerManager.putKv('focus_perm_a11y', '0');
+                      await FocusDnsBlockerManager.putKv('focus_perm_battery', '0');
+                    } catch (_) {}
+                    await AuthStorageService.clearSession(preserveSavedCredentials: false);
+                    await AuthStorageService.clearAllProfiles();
+                    await ref.read(authProvider.notifier).logout();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'Delete Account & Data',
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: palette.ink,
+                    side: BorderSide(color: palette.border),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'Keep My Account',
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _warningBullet(String text, WabiSabiPalette palette) {
+    return Row(
+      children: [
+        const Icon(Icons.close_rounded, size: 14, color: Colors.red),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.inter(fontSize: 12, color: palette.ink, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = widget.palette;
@@ -310,6 +585,13 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
     final privacyState = ref.watch(privacyProvider);
     final strictState = ref.watch(strictModeProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final auth = ref.watch(authProvider);
+    final settings = ref.watch(settingsProvider);
+    final isProtectionOn = ref.watch(protectionProvider);
+
+    final displayProfileName = auth.activeProfileName.isNotEmpty
+        ? auth.activeProfileName
+        : settings.profileName;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -317,6 +599,135 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Top Profile Card
+          GestureDetector(
+            key: const Key('header_profile_pill'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const ProfileSwitcherSheet(),
+              );
+            },
+            onLongPress: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const AllProfileSettingsSheet(),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: palette.border, width: 1.0),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: palette.canvas,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: palette.border, width: 1.0),
+                    ),
+                    child: Center(
+                      child: Text(
+                        auth.isLoggedIn && auth.detectedFlag.isNotEmpty
+                            ? auth.detectedFlag
+                            : '🛡️',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isProtectionOn ? palette.safeAccent : palette.mutedInk,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              isProtectionOn ? 'PROTECTED' : 'PAUSED',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                                color: isProtectionOn ? palette.safeAccent : palette.mutedInk,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          displayProfileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: palette.ink,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        if (auth.isLoggedIn && auth.email != null)
+                          Text(
+                            auth.email!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: palette.mutedInk,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: palette.canvas,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: palette.border, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Switch',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: palette.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.unfold_more_rounded, size: 14, color: palette.mutedInk),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
           // Section 1: Network & Filtering
           _sectionHeader('NETWORK & FILTERING', palette),
           _cardGroup(
@@ -330,7 +741,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 subtitle: 'Blocks known malicious websites, phishing, and scam links.',
                 value: securityState[SecurityFeature.threatIntel] ?? true,
                 onChanged: (val) {
-                  if (!val && strictState.isStrict) {
+                  if (!val && strictState.isStrict && strictState.remainingSeconds > 0) {
                     _showStrictLockWarning();
                     return;
                   }
@@ -346,7 +757,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 subtitle: 'Forces Google and Bing to hide explicit adult results.',
                 value: securityState[SecurityFeature.safesearch] ?? true,
                 onChanged: (val) {
-                  if (!val && strictState.isStrict) {
+                  if (!val && strictState.isStrict && strictState.remainingSeconds > 0) {
                     _showStrictLockWarning();
                     return;
                   }
@@ -359,10 +770,10 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 icon: Icons.block_rounded,
                 iconColor: palette.strictAccent,
                 title: 'Ad & Tracker Blocker',
-                subtitle: 'Stops intrusive web ads, analytics scripts, and tracking.',
+                subtitle: 'Sinkholes ads and data analytics scripts across all apps.',
                 value: privacyState[PrivacyFeature.disguisedTrackers] ?? true,
                 onChanged: (val) {
-                  if (!val && strictState.isStrict) {
+                  if (!val && strictState.isStrict && strictState.remainingSeconds > 0) {
                     _showStrictLockWarning();
                     return;
                   }
@@ -373,9 +784,9 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
               _toggleRow(
                 palette: palette,
                 icon: Icons.vpn_lock_rounded,
-                iconColor: palette.safeAccent,
+                iconColor: palette.ink,
                 title: 'Anti-VPN Bypass',
-                subtitle: 'Enforces site and app blocks even if another VPN connects.',
+                subtitle: 'Prevents secondary VPNs from circumnavigating FocusDNS.',
                 value: _antiVpnBypass,
                 onChanged: _toggleAntiVpn,
               ),
@@ -384,17 +795,17 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
 
           const SizedBox(height: 20),
 
-          // Section 2: Distraction & Feed Killers
-          _sectionHeader('DISTRACTION & FEED KILLERS', palette),
+          // Section 2: Distraction & Feed Blockers
+          _sectionHeader('DISTRACTIONS & SOCIAL FEEDS', palette),
           _cardGroup(
             palette: palette,
             children: [
               _toggleRow(
                 palette: palette,
-                icon: Icons.video_library_rounded,
+                icon: Icons.smart_display_rounded,
                 iconColor: const Color(0xFFFF0000),
-                title: 'YouTube Shorts Blocker',
-                subtitle: 'Hides and intercepts short-form video feeds on YouTube.',
+                title: 'Block YouTube Shorts',
+                subtitle: 'Removes the short-form addictive video shelf from YouTube.',
                 value: _youtubeShorts,
                 onChanged: _toggleYoutubeShorts,
               ),
@@ -403,41 +814,29 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 palette: palette,
                 icon: Icons.camera_alt_rounded,
                 iconColor: const Color(0xFFE1306C),
-                title: 'Instagram Reels Blocker',
-                subtitle: 'Closes Reels immediately to stop endless video scrolling.',
+                title: 'Block Instagram Reels',
+                subtitle: 'Prevents infinite doomscrolling inside the Instagram app.',
                 value: _instagramReels,
                 onChanged: _toggleInstagramReels,
-              ),
-              _divider(palette),
-              _toggleRow(
-                palette: palette,
-                icon: Icons.accessibility_new_rounded,
-                iconColor: palette.safeAccent,
-                title: 'Accessibility App Blocker',
-                subtitle: 'Instantly closes restricted apps the moment they open.',
-                value: _isAccessibilityActive,
-                onChanged: _toggleAccessibility,
               ),
             ],
           ),
 
           const SizedBox(height: 20),
 
-          // Section 3: Focus & Device Security
-          _sectionHeader('FOCUS & DEVICE SECURITY', palette),
+          // Section 3: Device Integrity & Android Permissions
+          _sectionHeader('DEVICE INTEGRITY & PERMISSIONS', palette),
           _cardGroup(
             palette: palette,
             children: [
               _toggleRow(
                 palette: palette,
-                icon: Icons.lock_rounded,
-                iconColor: palette.strictAccent,
-                title: 'Strict Mode Lock',
-                subtitle: 'Locks filters and settings so you cannot disable them during focus.',
-                value: strictState.isStrict,
-                onChanged: (val) {
-                  ref.read(strictModeProvider.notifier).set(val, durationMinutes: 30);
-                },
+                icon: Icons.accessibility_new_rounded,
+                iconColor: palette.safeAccent,
+                title: 'Accessibility Service',
+                subtitle: 'Required to auto-close blocked applications immediately upon opening.',
+                value: _isAccessibilityActive,
+                onChanged: _toggleAccessibility,
               ),
               _divider(palette),
               _toggleRow(
@@ -445,7 +844,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
                 icon: Icons.admin_panel_settings_rounded,
                 iconColor: palette.strictAccent,
                 title: 'Anti-Uninstall Shield',
-                subtitle: 'Prevents uninstalling FocusDNS while focus sessions are active.',
+                subtitle: 'Locks uninstallation during active strict focus countdown timers.',
                 value: _isDeviceAdminActive,
                 onChanged: _toggleDeviceAdmin,
               ),
@@ -516,7 +915,34 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
             ],
           ),
 
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
+
+          // Section 5: Account Actions (Hinge Style)
+          _sectionHeader('ACCOUNT ACTIONS', palette),
+          _cardGroup(
+            palette: palette,
+            children: [
+              _actionRow(
+                palette: palette,
+                icon: Icons.logout_rounded,
+                iconColor: palette.ink,
+                title: 'Log Out',
+                subtitle: 'Sign out while safely keeping your local preferences.',
+                onTap: () => _showLogoutModal(context, palette),
+              ),
+              _divider(palette),
+              _actionRow(
+                palette: palette,
+                icon: Icons.delete_forever_rounded,
+                iconColor: Colors.red,
+                title: 'Delete Account',
+                subtitle: 'Permanently erase all local profiles, rules, and data.',
+                onTap: () => _showDeleteAccountModal(context, palette),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 36),
         ],
       ),
     );

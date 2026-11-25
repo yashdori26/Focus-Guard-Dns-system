@@ -33,7 +33,9 @@ void main() {
 
       // Check header and titles
       expect(find.text('FOCUS DNS'), findsOneWidget);
-      expect(find.text('Sign in to FocusDNS.'), findsOneWidget);
+      expect(find.text('100% Local · Sovereign Shield'), findsNothing);
+      expect(find.text('Skip'), findsNothing);
+      expect(find.text('Sign In'), findsAtLeastNWidgets(1));
       expect(find.byKey(const Key('tab_sign_in')), findsOneWidget);
       expect(find.byKey(const Key('tab_create_account')), findsOneWidget);
 
@@ -61,16 +63,16 @@ void main() {
       await tester.tap(find.byKey(const Key('tab_create_account')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Create your local shield.'), findsOneWidget);
+      expect(find.text('Create Account'), findsAtLeastNWidgets(2));
       expect(find.byKey(const Key('confirm_password_input_field')), findsOneWidget);
-      expect(find.byKey(const Key('profile_name_input_field')), findsOneWidget);
-      expect(find.text('Create Account & Continue'), findsOneWidget);
+      expect(find.byKey(const Key('profile_name_input_field')), findsNothing); // completely removed
+      expect(find.byKey(const Key('submit_auth_button')), findsOneWidget);
 
       // Tap back to Sign In
       await tester.tap(find.byKey(const Key('tab_sign_in')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Sign in to FocusDNS.'), findsOneWidget);
+      expect(find.text('Sign In'), findsAtLeastNWidgets(1));
       expect(find.byKey(const Key('confirm_password_input_field')), findsNothing);
     });
 
@@ -315,7 +317,7 @@ void main() {
   });
 
   group('MoreTab Tests', () {
-    testWidgets('Renders all 4 management sections cleanly', (WidgetTester tester) async {
+    testWidgets('Renders top profile card and all 5 management sections cleanly', (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
@@ -333,27 +335,92 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Check Top Profile Pill
+      expect(find.byKey(const Key('header_profile_pill')), findsOneWidget);
+
+      // Section 1
       expect(find.text('NETWORK & FILTERING'), findsOneWidget);
       expect(find.text('Threat Shield'), findsOneWidget);
       expect(find.text('SafeSearch Filter'), findsOneWidget);
       expect(find.text('Ad & Tracker Blocker'), findsOneWidget);
       expect(find.text('Anti-VPN Bypass'), findsOneWidget);
 
-      expect(find.text('DISTRACTION & FEED KILLERS'), findsOneWidget);
-      expect(find.text('YouTube Shorts Blocker'), findsOneWidget);
-      expect(find.text('Instagram Reels Blocker'), findsOneWidget);
-      expect(find.text('Accessibility App Blocker'), findsOneWidget);
+      // Section 2
+      expect(find.text('DISTRACTIONS & SOCIAL FEEDS'), findsOneWidget);
+      expect(find.text('Block YouTube Shorts'), findsOneWidget);
+      expect(find.text('Block Instagram Reels'), findsOneWidget);
 
-      expect(find.text('FOCUS & DEVICE SECURITY'), findsOneWidget);
-      expect(find.text('Strict Mode Lock'), findsOneWidget);
+      // Section 3
+      expect(find.text('DEVICE INTEGRITY & PERMISSIONS'), findsOneWidget);
+      expect(find.text('Accessibility Service'), findsOneWidget);
       expect(find.text('Anti-Uninstall Shield'), findsOneWidget);
       expect(find.text('Dark Theme'), findsOneWidget);
       expect(find.text('Battery Saver Immunity'), findsOneWidget);
 
+      // Section 4
       expect(find.text('DATA & SYSTEM MANAGEMENT'), findsOneWidget);
       expect(find.text('Custom Domain Rules'), findsOneWidget);
       expect(find.text('Clear Query Logs'), findsOneWidget);
       expect(find.text('Re-run Setup Walkthrough'), findsOneWidget);
+
+      // Section 5: Hinge-style Account Actions
+      expect(find.text('ACCOUNT ACTIONS'), findsOneWidget);
+      expect(find.text('Log Out'), findsOneWidget);
+      expect(find.text('Delete Account'), findsOneWidget);
+    });
+
+    testWidgets('Tapping Log Out opens Hinge-style log out confirmation modal', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: WabiSabiTheme.lightTheme,
+            home: Builder(
+              builder: (context) {
+                final palette = WabiSabiPalette.of(context);
+                return Scaffold(
+                  body: MoreTab(palette: palette),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Log Out'));
+      await tester.tap(find.text('Log Out'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Log out of FocusDNS?'), findsOneWidget);
+      expect(find.byKey(const Key('confirm_logout_button')), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+    });
+
+    testWidgets('Tapping Delete Account opens destructive warning modal', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: WabiSabiTheme.lightTheme,
+            home: Builder(
+              builder: (context) {
+                final palette = WabiSabiPalette.of(context);
+                return Scaffold(
+                  body: MoreTab(palette: palette),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Delete Account'));
+      await tester.tap(find.text('Delete Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete Account?'), findsOneWidget);
+      expect(find.byKey(const Key('confirm_delete_account_button')), findsOneWidget);
+      expect(find.text('Keep My Account'), findsOneWidget);
     });
   });
 }
