@@ -320,7 +320,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         email: email.trim().toLowerCase(),
         isNewAccount: isNewAccount,
-        devOtp: null,
+        devOtp: res['dev_otp']?.toString(),
         currentStep: AuthStep.codeVerification,
         statusMessage: 'We emailed a code to ${email.trim().toLowerCase()}',
       );

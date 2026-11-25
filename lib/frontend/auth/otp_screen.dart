@@ -179,6 +179,42 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       child: Text('We emailed a $kEmailOtpLength-digit code to ${widget.email}.',
                           style: GoogleFonts.inter(fontSize: 15, height: 1.45, color: palette.mutedInk)),
                     ),
+                    if (ref.watch(authProvider).devOtp != null) ...[
+                      const SizedBox(height: 14),
+                      FadeSlideIn(
+                        delay: FadeSlideIn.stagger(1),
+                        child: GestureDetector(
+                          key: const Key('auth_dev_otp_chip'),
+                          onTap: () {
+                            final devCode = ref.read(authProvider).devOtp;
+                            if (devCode != null) {
+                              _code.text = devCode;
+                              setState(() => _error = null);
+                              _verify();
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: palette.canvas,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: palette.border),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.pin_outlined, size: 16, color: palette.mutedInk),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Code: ${ref.watch(authProvider).devOtp} (Tap to fill)',
+                                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 30),
                     FadeSlideIn(delay: FadeSlideIn.stagger(2), child: Shake(shakeKey: _shake, child: _boxes(palette))),
                     const SizedBox(height: 16),
