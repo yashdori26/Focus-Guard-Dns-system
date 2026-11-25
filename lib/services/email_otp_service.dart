@@ -152,29 +152,33 @@ class EmailOtpService {
       };
     }
 
+    // Compose message
+    final message = Message()
+      ..from = Address(user, 'FocusDNS Security')
+      ..recipients.add(cleanEmail)
+      ..subject = '$code is your FocusDNS verification code'
+      ..text = 'Your FocusDNS verification code is: $code\n\nThis code will expire in 15 minutes.'
+      ..html = _buildHtmlEmail(code);
+
     // Compose and send email via SMTP
     try {
-      final SmtpServer smtpServer;
-      if (host.contains('gmail')) {
-        smtpServer = gmail(user, pass);
-      } else {
-        smtpServer = SmtpServer(
-          host,
-          port: port,
-          ssl: port == 465,
-          username: user,
-          password: pass,
-        );
+      // Primary attempt: Port 465 SSL direct connection (fastest, encrypted from byte 0, and reliable on mobile/cellular)
+      final SmtpServer primaryServer = (host.contains('gmail') || host == 'smtp.gmail.com')
+          ? SmtpServer('smtp.gmail.com', port: 465, ssl: true, username: user, password: pass)
+          : SmtpServer(host, port: port, ssl: port == 465, username: user, password: pass);
+
+      try {
+        await send(message, primaryServer).timeout(const Duration(seconds: 12));
+      } catch (primaryError) {
+        if (kDebugMode) debugPrint('[FocusDNS EmailOtpService] Port 465 attempt failed: $primaryError. Trying port 587 fallback...');
+        if (host.contains('gmail') || host == 'smtp.gmail.com') {
+          // Secondary fallback attempt: Port 587 with STARTTLS
+          final SmtpServer fallbackServer = gmail(user, pass);
+          await send(message, fallbackServer).timeout(const Duration(seconds: 12));
+        } else {
+          rethrow;
+        }
       }
-
-      final message = Message()
-        ..from = Address(user, 'FocusDNS Security')
-        ..recipients.add(cleanEmail)
-        ..subject = '$code is your FocusDNS verification code'
-        ..text = 'Your FocusDNS verification code is: $code\n\nThis code will expire in 15 minutes.'
-        ..html = _buildHtmlEmail(code);
-
-      await send(message, smtpServer);
 
       if (kDebugMode) debugPrint('[FocusDNS EmailOtpService] Successfully dispatched OTP $code to $cleanEmail');
       return {
@@ -184,8 +188,12 @@ class EmailOtpService {
       };
     } catch (e) {
       if (kDebugMode) debugPrint('[FocusDNS EmailOtpService] SMTP Send Error: $e');
-      String errMsg = 'Could not send verification email. Please check your SMTP settings and connection.';
-      if (e.toString().contains('Username and Password not accepted') || e.toString().contains('535')) {
+      String errMsg = 'Could not send verification email. Please check your connection.';
+      if (e.toString().contains('Failed host lookup') || e.toString().contains('No address associated')) {
+        errMsg = 'No internet connection or DNS error. Please check your mobile data or Wi-Fi.';
+      } else if (e.toString().contains('timed out') || e.toString().contains('TimeoutException')) {
+        errMsg = 'Connection timed out. Please check your network connection and try again.';
+      } else if (e.toString().contains('Username and Password not accepted') || e.toString().contains('535')) {
         errMsg = 'Gmail authentication failed. Please verify your 16-character Google App Password.';
       }
       return {
