@@ -445,11 +445,10 @@ class FocusDnsApiClient {
       }
     } catch (_) {}
 
+    // No offline fake: a code that was never emailed must not be accepted later.
     return {
-      'success': true,
-      'email': cleanEmail,
-      'dev_otp': '1234',
-      'message': 'Verification code sent to $cleanEmail',
+      'success': false,
+      'error': 'Could not reach FocusDNS. Check your connection and try again.',
     };
   }
 
@@ -475,24 +474,12 @@ class FocusDnsApiClient {
         try {
           return json.decode(res.body) as Map<String, dynamic>;
         } catch (_) {
-          return {'success': false, 'error': 'Invalid 4-digit code.'};
+          return {'success': false, 'error': 'That code is not right. Try again.'};
         }
       }
     } catch (_) {}
 
-    if (cleanCode == '1234' || cleanCode.length == 4) {
-      final localToken = 'tok_${cleanEmail.hashCode.abs().toRadixString(16)}_${DateTime.now().millisecondsSinceEpoch}';
-      setToken(localToken);
-      return {
-        'success': true,
-        'token': localToken,
-        'email': cleanEmail,
-        'profile_id': profileId,
-        'is_email_verified': true,
-      };
-    }
-
-    return {'success': false, 'error': 'Invalid 4-digit code. Please check and try again.'};
+    return {'success': false, 'error': 'Could not reach FocusDNS. Check your connection and try again.'};
   }
 
   Future<Map<String, dynamic>> sendPhoneOtp(String phone) async {

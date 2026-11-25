@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -376,17 +377,25 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
     return Expanded(
       child: InkWell(
         key: Key('nav_$index'),
-        onTap: () => _onTabChanged(index),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _onTabChanged(index);
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected ? palette.accent : palette.mutedInk,
+              AnimatedScale(
+                scale: selected ? 1.2 : 1.0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutBack,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: selected ? palette.accent : palette.mutedInk,
+                ),
               ),
               const SizedBox(height: 3),
               Text(
@@ -399,7 +408,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                 ),
               ),
               const SizedBox(height: 3),
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
                 width: selected ? 16 : 0,
                 height: 1.5,
                 color: selected ? palette.accent : Colors.transparent,

@@ -8,10 +8,11 @@ import '../backend/vpn_service.dart';
 import '../models/enums.dart';
 import '../services/auth_storage_service.dart';
 import '../state_management/providers.dart';
-import 'auth/email_auth_screen.dart';
-import 'profile_settings_sheet.dart';
-import 'profile_switcher_sheet.dart';
+import 'auth/welcome_screen.dart';
+import 'edit_profile_sheet.dart';
+import 'widgets/motion.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/profile/delete_account_screen.dart';
 import 'tabs/allowlist_tab.dart';
 import 'tabs/denylist_tab.dart';
 import 'theme/wabi_sabi_theme.dart';
@@ -28,6 +29,7 @@ class MoreTab extends ConsumerStatefulWidget {
 
 class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   bool _antiVpnBypass = true;
+  int _cardIndex = 0;
   bool _youtubeShorts = false;
   bool _instagramReels = false;
   bool _isAccessibilityActive = false;
@@ -315,266 +317,74 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   }
 
   void _showLogoutModal(BuildContext context, WabiSabiPalette palette) {
-    showModalBottomSheet(
+    showDialog<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: palette.border, width: 1.0),
-          ),
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      builder: (ctx) => Dialog(
+        backgroundColor: palette.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: palette.border,
-                  borderRadius: BorderRadius.circular(2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    Text(
+                      'Log out of FocusDNS?',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.fraunces(fontSize: 22, fontWeight: FontWeight.w700, color: palette.ink),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your local preferences, rules, and blocker settings will remain safely saved on this device.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(fontSize: 14, height: 1.45, color: palette.mutedInk),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 24),
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: palette.canvas,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: palette.border),
-                ),
-                child: Icon(Icons.logout_rounded, size: 26, color: palette.ink),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Log out of FocusDNS?',
-                style: GoogleFonts.fraunces(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: palette.ink,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Are you sure you want to log out? Your local preferences, rules, and blocker settings will remain safely saved on this device.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: palette.mutedInk,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
+              Divider(height: 1, thickness: 1, color: palette.hairlineSoft),
               SizedBox(
                 width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
+                height: 52,
+                child: TextButton(
                   key: const Key('confirm_logout_button'),
                   onPressed: () async {
                     Navigator.of(ctx).pop();
                     await ref.read(authProvider.notifier).logout();
                     if (context.mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
                         (route) => false,
                       );
                     }
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: palette.ink,
-                    foregroundColor: palette.canvas,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Log Out',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
+                  child: Text('Log Out', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: palette.ink)),
                 ),
               ),
-              const SizedBox(height: 10),
+              Divider(height: 1, thickness: 1, color: palette.hairlineSoft),
               SizedBox(
                 width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
+                height: 52,
+                child: TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: palette.ink,
-                    side: BorderSide(color: palette.border),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
+                  child: Text('Cancel', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: palette.mutedInk)),
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   void _showDeleteAccountModal(BuildContext context, WabiSabiPalette palette) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: palette.border, width: 1.0),
-          ),
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: palette.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
-                ),
-                child: const Icon(Icons.delete_forever_rounded, size: 28, color: Colors.red),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Delete Account?',
-                style: GoogleFonts.fraunces(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: palette.ink,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'This will permanently delete your account credentials, purge all saved profiles, stop the VPN tunnel, and reset on-device configurations.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: palette.mutedInk,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: palette.canvas,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: palette.border),
-                ),
-                child: Column(
-                  children: [
-                    _warningBullet('Wipes all local credentials & profiles', palette),
-                    const SizedBox(height: 6),
-                    _warningBullet('Stops active DNS protection & VPN', palette),
-                    const SizedBox(height: 6),
-                    _warningBullet('Clears on-device query history & custom rules', palette),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  key: const Key('confirm_delete_account_button'),
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    await FocusDnsVpnManager.stopVpn();
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove('focus_onboarding_completed');
-                    await prefs.remove('focus_onboarding_name');
-                    await prefs.remove('focus_onboarding_step');
-                    await prefs.remove('focus_onboarding_cats');
-                    await prefs.remove('focus_perm_vpn');
-                    await prefs.remove('focus_perm_a11y');
-                    await prefs.remove('focus_perm_battery');
-                    try {
-                      await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '0');
-                      await FocusDnsBlockerManager.putKv('focus_perm_vpn', '0');
-                      await FocusDnsBlockerManager.putKv('focus_perm_a11y', '0');
-                      await FocusDnsBlockerManager.putKv('focus_perm_battery', '0');
-                    } catch (_) {}
-                    await AuthStorageService.clearSession(preserveSavedCredentials: false);
-                    await AuthStorageService.clearAllProfiles();
-                    await ref.read(authProvider.notifier).logout();
-                    if (context.mounted) {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
-                        (route) => false,
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Delete Account & Data',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: palette.ink,
-                    side: BorderSide(color: palette.border),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Keep My Account',
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _warningBullet(String text, WabiSabiPalette palette) {
-    return Row(
-      children: [
-        const Icon(Icons.close_rounded, size: 14, color: Colors.red),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: GoogleFonts.inter(fontSize: 12, color: palette.ink, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
     );
   }
 
@@ -588,6 +398,7 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
     final auth = ref.watch(authProvider);
     final settings = ref.watch(settingsProvider);
     final isProtectionOn = ref.watch(protectionProvider);
+    _cardIndex = 0;
 
     final displayProfileName = auth.activeProfileName.isNotEmpty
         ? auth.activeProfileName
@@ -599,132 +410,8 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Profile Card
-          GestureDetector(
-            key: const Key('header_profile_pill'),
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const ProfileSwitcherSheet(),
-              );
-            },
-            onLongPress: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const AllProfileSettingsSheet(),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: palette.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: palette.border, width: 1.0),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: palette.canvas,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: palette.border, width: 1.0),
-                    ),
-                    child: Center(
-                      child: Text(
-                        auth.isLoggedIn && auth.detectedFlag.isNotEmpty
-                            ? auth.detectedFlag
-                            : '🛡️',
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isProtectionOn ? palette.safeAccent : palette.mutedInk,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isProtectionOn ? 'PROTECTED' : 'PAUSED',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.8,
-                                color: isProtectionOn ? palette.safeAccent : palette.mutedInk,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          displayProfileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: palette.ink,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        if (auth.isLoggedIn && auth.email != null)
-                          Text(
-                            auth.email!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: palette.mutedInk,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: palette.canvas,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: palette.border, width: 0.8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Switch',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: palette.ink,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.unfold_more_rounded, size: 14, color: palette.mutedInk),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // Top Profile (Instagram-style header)
+          _buildInstagramProfile(palette, displayProfileName, isProtectionOn),
 
           const SizedBox(height: 20),
 
@@ -922,27 +609,125 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
           _cardGroup(
             palette: palette,
             children: [
-              _actionRow(
-                palette: palette,
-                icon: Icons.logout_rounded,
-                iconColor: palette.ink,
-                title: 'Log Out',
-                subtitle: 'Sign out while safely keeping your local preferences.',
-                onTap: () => _showLogoutModal(context, palette),
-              ),
-              _divider(palette),
-              _actionRow(
-                palette: palette,
-                icon: Icons.delete_forever_rounded,
-                iconColor: Colors.red,
-                title: 'Delete Account',
-                subtitle: 'Permanently erase all local profiles, rules, and data.',
-                onTap: () => _showDeleteAccountModal(context, palette),
-              ),
+              _hingeRow(palette: palette, title: 'Log Out', onTap: () => _showLogoutModal(context, palette)),
+              Divider(height: 1, thickness: 0.8, color: palette.hairlineSoft),
+              _hingeRow(palette: palette, title: 'Delete Account', onTap: () => _showDeleteAccountModal(context, palette)),
             ],
           ),
 
           const SizedBox(height: 36),
+        ],
+      ),
+    );
+  }
+
+  /// Plain list row (Hinge settings style): single label, chevron, no icon/subtitle.
+  Widget _hingeRow({required WabiSabiPalette palette, required String title, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: palette.ink))),
+            Icon(Icons.chevron_right_rounded, size: 22, color: palette.mutedInk),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _compact(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+
+  Widget _statColumn(WabiSabiPalette palette, int value, String label) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedCount(value: value, formatter: _compact, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: palette.ink)),
+          const SizedBox(height: 2),
+          Text(label, style: GoogleFonts.inter(fontSize: 13, color: palette.ink)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstagramProfile(WabiSabiPalette palette, String name, bool isProtectionOn) {
+    final auth = ref.watch(authProvider);
+    final analytics = ref.watch(analyticsStateProvider);
+    final deepFocus = ref.watch(deepFocusProvider);
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'F';
+
+    return FadeSlideIn(
+      child: Column(
+        key: const Key('header_profile_pill'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                width: 84,
+                height: 84,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: isProtectionOn
+                      ? const LinearGradient(
+                          begin: Alignment.bottomLeft,
+                          end: Alignment.topRight,
+                          colors: [Color(0xFFFEDA75), Color(0xFFFA7E1E), Color(0xFFD62976), Color(0xFF962FBF), Color(0xFF4F5BD5)],
+                        )
+                      : null,
+                  color: isProtectionOn ? null : palette.border,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: palette.canvas),
+                  padding: const EdgeInsets.all(3),
+                  child: Container(
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: palette.surface),
+                    child: Center(child: Text(initial, style: GoogleFonts.fraunces(fontSize: 32, fontWeight: FontWeight.w700, color: palette.ink))),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _statColumn(palette, analytics.blockedQueries, 'Blocked'),
+              _statColumn(palette, deepFocus.websites.length, 'Sites & apps'),
+              _statColumn(palette, deepFocus.categories.length, 'Categories'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: palette.ink)),
+          if (auth.isLoggedIn && auth.email != null)
+            Text(auth.email!, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 13.5, color: palette.mutedInk)),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: PressableScale(
+              onTap: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const EditProfileSheet(),
+              ),
+              child: Container(
+                key: const Key('profile_edit_button'),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: palette.surface, borderRadius: BorderRadius.circular(9), border: Border.all(color: palette.border, width: 0.8)),
+                child: Text('Edit profile', style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w600, color: palette.ink)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Divider(height: 1, thickness: 0.8, color: palette.hairlineSoft),
+          ),
         ],
       ),
     );
@@ -964,6 +749,13 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   }
 
   Widget _cardGroup({required WabiSabiPalette palette, required List<Widget> children}) {
+    return FadeSlideIn(
+      delay: FadeSlideIn.stagger(++_cardIndex, stepMs: 70),
+      child: _cardBody(palette, children),
+    );
+  }
+
+  Widget _cardBody(WabiSabiPalette palette, List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
         color: palette.surface,

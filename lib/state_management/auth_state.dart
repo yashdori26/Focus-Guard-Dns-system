@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../backend/api_client.dart';
 import '../services/auth_storage_service.dart';
 import 'setup_state.dart';
@@ -317,9 +320,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
         email: email.trim().toLowerCase(),
         isNewAccount: isNewAccount,
-        devOtp: res['dev_otp']?.toString() ?? '1234',
+        devOtp: null,
         currentStep: AuthStep.codeVerification,
-        statusMessage: res['message'] ?? '4-digit verification code sent to $email',
+        statusMessage: 'We emailed a code to ${email.trim().toLowerCase()}',
       );
     } else {
       state = state.copyWith(
@@ -341,8 +344,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final pid = res['profile_id']?.toString() ?? state.activeProfileId;
 
       if (state.isNewAccount) {
-        // Option 3A: New account -> proceed to Profile Name setup (Screen 3)
+        // New account: persist the verified session so onboarding survives an app restart.
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('focus_auth_is_returning');
+        } catch (_) {}
+        if (token.isNotEmpty) {
+          await AuthStorageService.saveSession(
+            token: token,
+            email: email,
+            profileId: pid,
+            profileName: state.activeProfileName,
+            isEmailVerified: true,
+          );
+        }
         state = state.copyWith(
+          isLoggedIn: true,
           isLoading: false,
           sessionToken: token,
           activeProfileId: pid,
@@ -350,7 +367,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         return {'success': true, 'next': 'profile_setup'};
       } else {
-        // Option 3A: Returning account -> save session & unlock Protect dashboard
+        // Returning account -> save session & unlock Protect dashboard
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('focus_auth_is_returning', true);
+        } catch (_) {}
         if (token.isNotEmpty) {
           await AuthStorageService.saveSession(
             token: token,
@@ -371,7 +392,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } else {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: res['error']?.toString() ?? 'Invalid 4-digit code. Use 1234.',
+        errorMessage: res['error']?.toString() ?? 'That code is not right. Try again.',
       );
       return {'success': false, 'error': state.errorMessage};
     }
@@ -402,7 +423,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> completePermissionsAndLaunch({String? password}) async {
     state = state.copyWith(isLoading: true);
     final email = state.email ?? 'user@focusdns.net';
-    final pwd = password ?? state.pendingPassword ?? 'password123';
+    final pwd = password ?? state.pendingPassword ?? _randomPassword();
     final pid = state.activeProfileId;
     final pname = state.activeProfileName;
 
@@ -479,7 +500,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final res = await _apiClient.sendEmailCode(email);
       state = state.copyWith(
         isLoading: false,
-        devOtp: res['dev_otp']?.toString() ?? '1234',
+        devOtp: null,
         statusMessage: 'Verification code sent to $email',
       );
       return res;
@@ -704,6 +725,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
       activeProfileId: 'local',
       activeProfileName: 'Local Shield',
     );
+  }
+
+  /// Updates the active profile name everywhere (state + storage) so every screen agrees.
+  Future<void> setActiveProfileName(String name) async {
+    final clean = name.trim();
+    if (clean.isEmpty) return;
+    state = state.copyWith(activeProfileName: clean);
+    await AuthStorageService.updateActiveProfile(state.activeProfileId, clean);
+  }
+
+  static String _randomPassword() {
+    final r = Random.secure();
+    return base64Url.encode(List<int>.generate(24, (_) => r.nextInt(256)));
+  }
+
+  /// Applies the name chosen in onboarding. The account itself is created by the server when
+  /// the emailed code is verified, so there is no password to set here.
+  Future<void> finalizeAccountWithName(String name) async {
+    final clean = name.trim().isNotEmpty ? name.trim() : 'Personal Shield';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('focus_auth_is_returning');
+    } catch (_) {}
+    await setActiveProfileName(clean);
   }
 
   Future<void> logout() async {

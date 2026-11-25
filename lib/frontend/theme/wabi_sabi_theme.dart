@@ -105,6 +105,10 @@ class WabiSabiTheme {
       ),
     );
     return base.copyWith(
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+      }),
       textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
         bodyColor: WabiSabiPalette.dark.ink,
         displayColor: WabiSabiPalette.dark.ink,
@@ -128,6 +132,10 @@ class WabiSabiTheme {
       ),
     );
     return base.copyWith(
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+      }),
       textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
         bodyColor: WabiSabiPalette.light.ink,
         displayColor: WabiSabiPalette.light.ink,

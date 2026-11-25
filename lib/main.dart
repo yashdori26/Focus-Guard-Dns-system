@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:focus_dns/models/app_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/blocker_service.dart';
-import 'frontend/auth/email_auth_screen.dart';
+import 'frontend/auth/welcome_screen.dart';
 import 'frontend/home_screen.dart';
 import 'frontend/screens/onboarding/onboarding_screen.dart';
 import 'frontend/theme/wabi_sabi_theme.dart';
@@ -46,7 +46,7 @@ void main() async {
 
   // Determine initial launch screen:
   // 1. If onboarding has been completed: launch directly into the home screen with remembered profile.
-  // 2. If onboarding is not complete and user hasn't authenticated yet: show EmailAuthScreen.
+  // 2. If onboarding is not complete and user hasn't authenticated yet: show WelcomeScreen.
   // 3. If user is authenticated but hasn't completed onboarding: resume onboarding.
   Widget initialScreen;
   if (hasCompletedOnboarding) {
@@ -54,7 +54,7 @@ void main() async {
   } else if (isLoggedIn) {
     initialScreen = const OnboardingScreen();
   } else {
-    initialScreen = const EmailAuthScreen();
+    initialScreen = const WelcomeScreen();
   }
 
   runApp(ProviderScope(

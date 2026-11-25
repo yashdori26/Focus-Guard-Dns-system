@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/server_config.dart';
 import '../state_management/providers.dart';
-import 'auth/email_auth_screen.dart';
+import 'auth/welcome_screen.dart';
 import 'phone_auth_sheet.dart';
 import 'profile_settings_sheet.dart';
 import 'theme/wabi_sabi_theme.dart';
@@ -232,7 +232,7 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                    MaterialPageRoute(builder: (_) => const WelcomeScreen()),
                   );
                 },
                 child: Container(
@@ -340,7 +340,7 @@ class _ProfileSwitcherSheetState extends ConsumerState<ProfileSwitcherSheet> {
                         if (context.mounted) {
                           Navigator.pop(context);
                           Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
                           );
                         }
                       },

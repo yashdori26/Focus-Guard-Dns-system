@@ -10,12 +10,13 @@ import '../../../services/auth_storage_service.dart';
 import '../../../state_management/providers.dart';
 import '../../home_screen.dart';
 import '../../theme/wabi_sabi_theme.dart';
+import '../../widgets/motion.dart';
+import '../legal/privacy_policy_screen.dart';
 
 /// Clean, Minimal, and Sovereign Onboarding Experience.
-/// Guides the user through:
-///   Step 1: Shield Identity (Profile Name)
-///   Step 2: Content Rules (Categories to sever)
-///   Step 3: Local Security & Trust (Permissions & Local SQLite Assurance)
+/// Hinge-style flow: one question per screen, thin progress bar, back chevron,
+/// serif headline, underlined input and a round "next" button.
+///   0: Privacy pledge   1: Shield name   2: Content rules   3: VPN   4: Accessibility   5: Battery
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -24,6 +25,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with WidgetsBindingObserver {
+  static const int _stepCount = 6;
   int _currentStep = 0;
   final TextEditingController _nameController = TextEditingController();
 
@@ -87,7 +89,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
 
       if (!mounted) return;
       setState(() {
-        if (savedStep != null && savedStep >= 0 && savedStep <= 2) {
+        if (savedStep != null && savedStep >= 0 && savedStep < _stepCount) {
           _currentStep = savedStep;
         }
         if (savedName != null && savedName.isNotEmpty) {
@@ -208,7 +210,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
 
     // 1. Save profile name
     ref.read(settingsProvider.notifier).updateProfileName(profileName);
-    await AuthStorageService.updateActiveProfile('local', profileName);
+    await ref.read(authProvider.notifier).finalizeAccountWithName(profileName);
 
     // 2. Map selected categories to native blocker & rules
     final List<String> nativeCategories = [];
@@ -296,401 +298,284 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const FocusDNSHomeScreen()),
+        appRoute(const FocusDNSHomeScreen()),
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hinge-style presentation
+  // ---------------------------------------------------------------------------
+  static const List<Map<String, String>> _categoryOptions = [
+    {'id': 'adult', 'icon': '🔞', 'title': 'Adult content & NSFW', 'sub': '45,000+ adult domains and SafeSearch enforcement'},
+    {'id': 'social', 'icon': '📱', 'title': 'Social media feeds', 'sub': 'Instagram, TikTok, Facebook, X and Snapchat'},
+    {'id': 'trackers', 'icon': '🛡️', 'title': 'Ads & trackers', 'sub': 'In-app ad SDKs, analytics and surveillance networks'},
+    {'id': 'gambling', 'icon': '🎰', 'title': 'Gambling & betting', 'sub': 'Casinos, sports betting and wager sites'},
+  ];
+
+  bool get _canContinue {
+    if (_isLaunching) return false;
+    if (_currentStep == 1) return _nameController.text.trim().isNotEmpty;
+    return true;
+  }
+
+  void _goNext() {
+    if (!_canContinue) return;
+    FocusScope.of(context).unfocus();
+    if (_currentStep < _stepCount - 1) {
+      setState(() => _currentStep++);
+      _saveStep(_currentStep);
+    } else {
+      _completeOnboarding();
+    }
+  }
+
+  void _goBack() {
+    if (_currentStep == 0) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _currentStep--);
+    _saveStep(_currentStep);
   }
 
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
-    final palette = themeMode == ThemeMode.light
-        ? WabiSabiPalette.light
-        : WabiSabiPalette.dark;
+    final palette = themeMode == ThemeMode.light ? WabiSabiPalette.light : WabiSabiPalette.dark;
+    final progress = (_currentStep + 1) / _stepCount;
 
-    final progress = (_currentStep + 1) / 3.0;
-
-    return Scaffold(
-      backgroundColor: palette.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Minimal Header with Hairline Progress
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: palette.surface,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: palette.border, width: 1),
-                              ),
-                              child: Icon(Icons.shield_outlined, size: 16, color: palette.accent),
+    return PopScope(
+      canPop: _currentStep == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: Scaffold(
+        backgroundColor: palette.canvas,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Top bar: back chevron + thin progress bar (Hinge)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: _currentStep == 0
+                          ? null
+                          : IconButton(
+                              key: const Key('onboarding_back_button'),
+                              onPressed: _goBack,
+                              icon: Icon(Icons.chevron_left_rounded, size: 32, color: palette.ink),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'FOCUSDNS · SETUP',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 1.3,
-                                      color: palette.mutedInk,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    _currentStep == 0
-                                        ? 'Step 1: Shield Identity'
-                                        : _currentStep == 1
-                                            ? 'Step 2: Content Rules'
-                                            : 'Step 3: Security & Trust',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: palette.ink,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: palette.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: palette.border),
-                        ),
-                        child: Text(
-                          '${_currentStep + 1} / 3',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: palette.accent,
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: progress),
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeOutCubic,
+                          builder: (_, v, __) => LinearProgressIndicator(
+                            value: v,
+                            minHeight: 4,
+                            backgroundColor: palette.border,
+                            valueColor: AlwaysStoppedAnimation<Color>(palette.ink),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: SizedBox(
-                      height: 3,
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: palette.border,
-                        valueColor: AlwaysStoppedAnimation<Color>(palette.accent),
-                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween<Offset>(begin: const Offset(0.06, 0), end: Offset.zero).animate(anim),
+                      child: child,
                     ),
                   ),
-                ],
-              ),
-            ),
-            Divider(height: 1, thickness: 1, color: palette.hairlineSoft),
-
-            // Step Content Body
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: KeyedSubtree(
-                  key: ValueKey<int>(_currentStep),
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_currentStep),
                     child: _buildCurrentStep(palette),
                   ),
                 ),
               ),
-            ),
-
-            // Minimalist Bottom Action Bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
-              decoration: BoxDecoration(
-                color: palette.surface,
-                border: Border(top: BorderSide(color: palette.border, width: 1.0)),
-              ),
-              child: Row(
-                children: [
-                  if (_currentStep > 0) ...[
-                    OutlinedButton(
-                      onPressed: () {
-                        setState(() {
-                          _currentStep--;
-                          _saveStep(_currentStep);
-                        });
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: palette.ink,
-                        side: BorderSide(color: palette.border, width: 1.1),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text('← Back', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLaunching
-                          ? null
-                          : () {
-                              if (_currentStep < 2) {
-                                setState(() {
-                                  _currentStep++;
-                                  _saveStep(_currentStep);
-                                });
-                              } else {
-                                _completeOnboarding();
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: palette.accent,
-                        foregroundColor: palette.canvas,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: _isLaunching
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2.0, color: palette.canvas),
-                            )
-                          : Text(
-                              _currentStep == 2 ? 'Activate Shield & Launch →' : 'Continue →',
-                              style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.bold, letterSpacing: -0.1),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              _buildBottomBar(palette),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _headline(WabiSabiPalette palette, String text) => Text(
+        text,
+        style: GoogleFonts.fraunces(fontSize: 34, height: 1.12, fontWeight: FontWeight.w700, color: palette.ink, letterSpacing: -0.6),
+      );
+
   Widget _buildCurrentStep(WabiSabiPalette palette) {
     switch (_currentStep) {
       case 0:
-        return _buildStep1Profile(palette);
+        return _buildPledgeStep(palette);
       case 1:
-        return _buildStep2Categories(palette);
+        return _buildNameStep(palette);
       case 2:
+        return _buildCategoriesStep(palette);
+      case 3:
+        return _buildPermissionStep(
+          palette,
+          icon: Icons.vpn_lock_rounded,
+          title: 'Turn on your\nlocal shield',
+          body: 'FocusDNS filters DNS on this phone to block the sites and apps you choose. Nothing leaves your device.',
+          granted: _vpnPrepared,
+        );
+      case 4:
+        return _buildPermissionStep(
+          palette,
+          icon: Icons.accessibility_new_rounded,
+          title: 'Stay focused\nin your apps',
+          body: 'Accessibility lets FocusDNS close restricted apps and feeds the moment you open them.',
+          granted: _accessibilityEnabled,
+        );
       default:
-        return _buildStep3PermissionsAndTrust(palette);
+        return _buildPermissionStep(
+          palette,
+          icon: Icons.battery_charging_full_rounded,
+          title: 'Keep protection\nrunning',
+          body: 'Allow FocusDNS to run in the background so Android does not stop your shield during deep sleep.',
+          granted: _batteryExempt,
+        );
     }
   }
 
-  // --- STEP 1: SHIELD IDENTITY ---
-  Widget _buildStep1Profile(WabiSabiPalette palette) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Name Your Shield',
-          style: GoogleFonts.fraunces(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: palette.ink,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Name this device configuration. All rules, logs, and telemetry are isolated on-device.',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: palette.mutedInk,
-            height: 1.45,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: palette.border, width: 1.1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: palette.safeAccent,
+  Widget _buildPledgeStep(WabiSabiPalette palette) {
+    const pledges = <List<dynamic>>[
+      [Icons.phone_android_rounded, 'Your data stays on your phone', 'Rules, lists, history and stats are stored on this device. Your email is only used to sign you in.'],
+      [Icons.visibility_off_outlined, 'We never read your screen', 'Accessibility only closes the apps and feeds you restrict. We do not see messages or passwords.'],
+      [Icons.lock_outline_rounded, 'Blocked lookups stay private', 'Blocked requests never leave your phone. Allowed ones go to a public DNS resolver, like they do today.'],
+      [Icons.delete_outline_rounded, 'You are in control', 'Log out any time, or delete your account and everything stored on this device.'],
+    ];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FadeSlideIn(child: _headline(palette, 'Welcome to FocusDNS.\nHere is how we\nhandle your data.')),
+          const SizedBox(height: 24),
+          for (var i = 0; i < pledges.length; i++)
+            FadeSlideIn(
+              delay: FadeSlideIn.stagger(i + 2, stepMs: 90),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: palette.border, width: 1.3)),
+                      child: Icon(pledges[i][0] as IconData, size: 20, color: palette.ink),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'LOCAL PROFILE IDENTITY',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
-                        color: palette.mutedInk,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(pledges[i][1] as String, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: palette.ink)),
+                          const SizedBox(height: 3),
+                          Text(pledges[i][2] as String, style: GoogleFonts.inter(fontSize: 14, height: 1.45, color: palette.mutedInk)),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _nameController,
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: palette.ink,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'e.g. Personal Shield, Deep Work',
-                  hintStyle: TextStyle(color: palette.mutedInk.withOpacity(0.4)),
-                  filled: true,
-                  fillColor: palette.canvas,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: palette.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: palette.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: palette.accent, width: 1.6),
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Icon(Icons.lock_outline_rounded, size: 13, color: palette.mutedInk),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Saved locally in SQLite database. Zero external servers.',
-                      style: GoogleFonts.inter(fontSize: 11.5, color: palette.mutedInk),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
+          FadeSlideIn(
+            delay: FadeSlideIn.stagger(7, stepMs: 90),
+            child: GestureDetector(
+              key: const Key('onboarding_privacy_link'),
+              onTap: () => openPrivacyPolicy(context),
+              child: Text('Read the full Privacy Policy',
+                  style: GoogleFonts.inter(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.ink, decoration: TextDecoration.underline)),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // --- STEP 2: CONTENT RULES ---
-  Widget _buildStep2Categories(WabiSabiPalette palette) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Choose What to Sever',
-          style: GoogleFonts.fraunces(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: palette.ink,
-            letterSpacing: -0.5,
+  Widget _buildNameStep(WabiSabiPalette palette) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FadeSlideIn(child: _headline(palette, 'What should we\ncall your shield?')),
+          const SizedBox(height: 28),
+          TextField(
+            key: const Key('onboarding_name_field'),
+            controller: _nameController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            maxLength: 24,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _goNext(),
+            cursorColor: palette.ink,
+            style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w500, color: palette.ink),
+            decoration: InputDecoration(
+              hintText: 'Shield name',
+              counterText: '',
+              hintStyle: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w500, color: palette.mutedInk.withOpacity(0.5)),
+              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: palette.border, width: 1.5)),
+              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: palette.ink, width: 2)),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Select the categories and dopamine sinks you want sinkholed on this device.',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: palette.mutedInk,
-            height: 1.45,
+          const SizedBox(height: 14),
+          Text(
+            'This is how your profile appears on your phone. You can change it later.',
+            style: GoogleFonts.inter(fontSize: 13.5, height: 1.4, color: palette.mutedInk),
           ),
-        ),
-        const SizedBox(height: 20),
-
-        _buildCategoryCard(
-          id: 'adult',
-          icon: '🔞',
-          title: 'Adult Content & NSFW',
-          subtitle: '45,000+ adult domains, explicit webcams & SafeSearch enforcement.',
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        _buildCategoryCard(
-          id: 'social',
-          icon: '📱',
-          title: 'Social Media (Reels & Feeds)',
-          subtitle: 'Instagram, TikTok, Facebook, Twitter/X, and Snapchat umbrellas.',
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        _buildCategoryCard(
-          id: 'trackers',
-          icon: '🛡️',
-          title: 'Surveillance & Ad Trackers',
-          subtitle: 'In-app ad SDKs, analytics, and surveillance networks.',
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        _buildCategoryCard(
-          id: 'gambling',
-          icon: '🎰',
-          title: 'Gambling & Betting',
-          subtitle: 'Casinos, sports betting portals, and speculative wager sites.',
-          palette: palette,
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text('Required', style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w600, color: palette.mutedInk)),
+        ],
+      ),
     );
   }
 
-  Widget _buildCategoryCard({
-    required String id,
-    required String icon,
-    required String title,
-    required String subtitle,
-    required WabiSabiPalette palette,
-  }) {
+  Widget _buildCategoriesStep(WabiSabiPalette palette) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FadeSlideIn(child: _headline(palette, 'What pulls you\naway from focus?')),
+          const SizedBox(height: 8),
+          Text('Select all that apply', style: GoogleFonts.inter(fontSize: 13.5, color: palette.mutedInk)),
+          const SizedBox(height: 22),
+          for (var i = 0; i < _categoryOptions.length; i++) ...[
+            FadeSlideIn(delay: FadeSlideIn.stagger(i + 1, stepMs: 80), child: _buildOptionTile(palette, _categoryOptions[i])),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionTile(WabiSabiPalette palette, Map<String, String> c) {
+    final id = c['id']!;
     final selected = _selectedCategories.contains(id);
-
     return InkWell(
+      key: Key('onboarding_option_$id'),
+      borderRadius: BorderRadius.circular(14),
       onTap: () {
         setState(() {
           if (selected) {
@@ -701,68 +586,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         });
         _saveCategories();
       },
-      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? palette.surface : palette.canvas,
+          color: selected ? palette.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? palette.accent : palette.border,
-            width: selected ? 1.5 : 1.0,
-          ),
+          border: Border.all(color: selected ? palette.ink : palette.border, width: selected ? 2 : 1.2),
         ),
         child: Row(
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: palette.canvas,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: palette.border, width: 1),
-              ),
-              alignment: Alignment.center,
-              child: Text(icon, style: const TextStyle(fontSize: 18)),
-            ),
-            const SizedBox(width: 12),
+            Text(c['icon']!, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 13.5,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
-                      color: palette.ink,
-                    ),
-                  ),
+                  Text(c['title']!, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: palette.ink)),
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(fontSize: 11, color: palette.mutedInk, height: 1.3),
-                  ),
+                  Text(c['sub']!, style: GoogleFonts.inter(fontSize: 12.5, height: 1.35, color: palette.mutedInk)),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: 22,
-              height: 22,
+            const SizedBox(width: 10),
+            Container(
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
-                color: selected ? palette.accent : Colors.transparent,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? palette.accent : palette.mutedInk.withOpacity(0.35),
-                  width: 1.5,
-                ),
+                color: selected ? palette.ink : Colors.transparent,
+                border: Border.all(color: selected ? palette.ink : palette.border, width: 1.5),
               ),
-              child: selected
-                  ? Icon(Icons.check_rounded, size: 14, color: palette.canvas)
-                  : null,
+              child: selected ? Icon(Icons.check_rounded, size: 17, color: palette.canvas) : null,
             ),
           ],
         ),
@@ -770,214 +625,141 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     );
   }
 
-  // --- STEP 3: SECURITY & LOCAL TRUST ---
-  Widget _buildStep3PermissionsAndTrust(WabiSabiPalette palette) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Local Security & Trust',
-          style: GoogleFonts.fraunces(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: palette.ink,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'FocusDNS operates 100% on-device. Review permissions and local database assurance.',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: palette.mutedInk,
-            height: 1.45,
-          ),
-        ),
-        const SizedBox(height: 18),
-
-        // 100% LOCAL DATABASE TRUST GUARANTEE CARD
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: palette.safeAccent.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: palette.safeAccent.withOpacity(0.3), width: 1.1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: palette.safeAccent.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.verified_user_rounded, color: palette.safeAccent, size: 15),
-                  ),
-                  const SizedBox(width: 9),
-                  Text(
-                    '100% LOCAL SQLITE ASSURANCE',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                      color: palette.safeAccent,
-                    ),
-                  ),
-                ],
+  Widget _buildPermissionStep(
+    WabiSabiPalette palette, {
+    required IconData icon,
+    required String title,
+    required String body,
+    required bool granted,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _headline(palette, title),
+          const SizedBox(height: 14),
+          Text(body, style: GoogleFonts.inter(fontSize: 15, height: 1.5, color: palette.mutedInk)),
+          const Spacer(),
+          Center(
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: palette.surface, border: Border.all(color: palette.border, width: 1.2)),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 380),
+                switchInCurve: Curves.elasticOut,
+                transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                child: Icon(granted ? Icons.check_rounded : icon, key: ValueKey<bool>(granted), size: 64, color: granted ? palette.accent : palette.ink),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Every query log, telemetry record, and blocklist is saved strictly in your phone’s local SQLite database. No external servers are reached, and zero personal data is transmitted.',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: palette.ink,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: palette.canvas,
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: palette.border, width: 0.8),
-                ),
-                child: Text(
-                  'Loopback Virtual Bind: 10.254.1.2 (IPv4) • fd00::2 (IPv6)',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 10,
-                    color: palette.mutedInk,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-
-        // PERMISSION 1: VPN SETUP
-        _buildPermissionTile(
-          icon: Icons.vpn_lock_rounded,
-          title: 'Local DNS VPN Tunnel',
-          subtitle: 'Required to intercept DNS queries and sinkhole ads & distractions locally.',
-          granted: _vpnPrepared,
-          actionLabel: _vpnPrepared ? 'ACTIVE ✓' : 'AUTHORIZE',
-          onTap: _requestVpn,
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        // PERMISSION 2: ACCESSIBILITY SERVICE
-        _buildPermissionTile(
-          icon: Icons.accessibility_new_rounded,
-          title: 'Doomscroll Accessibility',
-          subtitle: 'Enables automatic closure and enforcement on restricted applications.',
-          granted: _accessibilityEnabled,
-          actionLabel: _accessibilityEnabled ? 'ACTIVE ✓' : 'ENABLE',
-          onTap: _requestAccessibility,
-          palette: palette,
-        ),
-        const SizedBox(height: 10),
-
-        // PERMISSION 3: DOZE BATTERY OPTIMIZATION
-        _buildPermissionTile(
-          icon: Icons.battery_charging_full_rounded,
-          title: 'Doze Battery Immunity',
-          subtitle: 'Prevents Android from stopping background protection during deep sleep.',
-          granted: _batteryExempt,
-          actionLabel: _batteryExempt ? 'ACTIVE ✓' : 'ALLOW',
-          onTap: _requestBattery,
-          palette: palette,
-        ),
-      ],
+          const Spacer(),
+        ],
+      ),
     );
   }
 
-  Widget _buildPermissionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool granted,
-    required String actionLabel,
-    required VoidCallback onTap,
-    required WabiSabiPalette palette,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: granted ? palette.safeAccent.withOpacity(0.35) : palette.border,
-          width: 1.0,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: granted
-                  ? palette.safeAccent.withOpacity(0.12)
-                  : palette.canvas,
-              shape: BoxShape.circle,
-              border: Border.all(color: granted ? palette.safeAccent.withOpacity(0.25) : palette.border, width: 0.8),
-            ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: granted ? palette.safeAccent : palette.mutedInk,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: palette.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(fontSize: 10.5, color: palette.mutedInk, height: 1.3),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: granted ? null : onTap,
-            borderRadius: BorderRadius.circular(8),
+  Future<void> _requestCurrentPermission() async {
+    if (_currentStep == 3) {
+      await _requestVpn();
+    } else if (_currentStep == 4) {
+      await _requestAccessibility();
+    } else if (_currentStep == 5) {
+      await _requestBattery();
+    }
+  }
+
+  bool get _currentPermissionGranted =>
+      _currentStep == 3 ? _vpnPrepared : _currentStep == 4 ? _accessibilityEnabled : _batteryExempt;
+
+  Widget _buildBottomBar(WabiSabiPalette palette) {
+    final isPermissionStep = _currentStep >= 3;
+
+    if (_currentStep == 0) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+        child: SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: PressableScale(
+            onTap: _goNext,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-              decoration: BoxDecoration(
-                color: granted
-                    ? palette.safeAccent.withOpacity(0.12)
-                    : palette.accent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                actionLabel,
-                style: GoogleFonts.inter(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.3,
-                  color: granted ? palette.safeAccent : palette.canvas,
-                ),
-              ),
+              key: const Key('onboarding_agree_button'),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: palette.ink, borderRadius: BorderRadius.circular(28)),
+              child: Text('I agree', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: palette.canvas)),
             ),
           ),
+        ),
+      );
+    }
+
+    if (!isPermissionStep) {
+      // Round "next" arrow, bottom-right (Hinge)
+      final enabled = _canContinue;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            key: const Key('onboarding_next_button'),
+            onTap: enabled ? _goNext : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: enabled ? palette.ink : palette.border),
+              child: Icon(Icons.arrow_forward_rounded, size: 28, color: enabled ? palette.canvas : palette.mutedInk),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final granted = _currentPermissionGranted;
+    final isLast = _currentStep == _stepCount - 1;
+    final labels = ['Allow VPN access', 'Open Accessibility settings', 'Allow background running'];
+    final primaryLabel = granted ? (isLast ? 'Activate shield' : 'Continue') : labels[_currentStep - 3];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              key: const Key('onboarding_primary_button'),
+              onPressed: _isLaunching
+                  ? null
+                  : () async {
+                      if (granted) {
+                        _goNext();
+                      } else {
+                        await _requestCurrentPermission();
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: palette.ink,
+                foregroundColor: palette.canvas,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              ),
+              child: _isLaunching
+                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: palette.canvas))
+                  : Text(primaryLabel, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          if (!granted)
+            TextButton(
+              key: const Key('onboarding_skip_button'),
+              onPressed: _isLaunching ? null : _goNext,
+              child: Text('Maybe later', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: palette.mutedInk)),
+            )
+          else
+            const SizedBox(height: 48),
         ],
       ),
     );

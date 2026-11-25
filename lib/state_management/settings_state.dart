@@ -71,7 +71,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   void updateProfileName(String name) async {
     state = state.copyWith(profileName: name);
     try {
-      await AuthStorageService.updateActiveProfile('local', name);
+      final pid = await AuthStorageService.getActiveProfileId();
+      await AuthStorageService.updateActiveProfile(pid, name);
     } catch (_) {}
     _client?.updateProfileName(name);
   }
