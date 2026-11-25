@@ -265,8 +265,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Check Top Profile Pill
+      // Check Top Profile Pill & Shield ID Card
       expect(find.byKey(const Key('header_profile_pill')), findsOneWidget);
+      expect(find.text('FOCUSDNS'), findsOneWidget);
+      expect(find.text('SHIELD ID'), findsOneWidget);
+      expect(find.text('Member since'), findsOneWidget);
+      expect(find.text('Rank'), findsOneWidget);
+      expect(find.text('Streak'), findsOneWidget);
+      expect(find.text('MILESTONES'), findsOneWidget);
+      expect(find.text('Shield activated'), findsOneWidget);
+      expect(find.byKey(const Key('profile_edit_button')), findsOneWidget);
 
       // Section 1
       expect(find.text('NETWORK & FILTERING'), findsOneWidget);

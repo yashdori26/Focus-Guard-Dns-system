@@ -36,6 +36,10 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
   bool _isDeviceAdminActive = false;
   bool _isBatteryImmune = false;
   bool _isLoading = true;
+  int _streakDays = 1;
+  String _memberSince = 'Nov 2026';
+  bool _hasStrictFinished = false;
+  String? _storedEmail;
 
   @override
   void initState() {
@@ -68,6 +72,19 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       final admin = await FocusMdmManager.isDeviceAdminActive();
       final battery = await FocusDnsBlockerManager.isBatteryOptimizationIgnored();
 
+      final streak = prefs.getInt('focus_streak_days') ?? 1;
+      final strictFinished = prefs.getBool('focus_first_strict_finished') ??
+          ((prefs.getInt('focus_strict_sessions_count') ?? 0) > 0);
+      final storedEmail = prefs.getString('focus_dns_auth_email');
+
+      String? memberSince = prefs.getString('focus_member_since');
+      if (memberSince == null || memberSince.isEmpty) {
+        final now = DateTime.now();
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        memberSince = '${months[now.month - 1]} ${now.year}';
+        await prefs.setString('focus_member_since', memberSince);
+      }
+
       if (mounted) {
         setState(() {
           _antiVpnBypass = antiVpn;
@@ -76,6 +93,10 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
           _isAccessibilityActive = acc;
           _isDeviceAdminActive = admin;
           _isBatteryImmune = battery;
+          _streakDays = streak;
+          _memberSince = memberSince!;
+          _hasStrictFinished = strictFinished;
+          _storedEmail = storedEmail;
           _isLoading = false;
         });
       }
@@ -638,94 +659,376 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
     );
   }
 
-  String _compact(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
-  }
-
-  Widget _statColumn(WabiSabiPalette palette, int value, String label) {
-    return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedCount(value: value, formatter: _compact, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: palette.ink)),
-          const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: palette.ink)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildInstagramProfile(WabiSabiPalette palette, String name, bool isProtectionOn) {
     final auth = ref.watch(authProvider);
     final analytics = ref.watch(analyticsStateProvider);
-    final deepFocus = ref.watch(deepFocusProvider);
     final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'F';
+    final email = (auth.email != null && auth.email!.trim().isNotEmpty)
+        ? auth.email!.trim()
+        : (_storedEmail != null && _storedEmail!.trim().isNotEmpty
+            ? _storedEmail!.trim()
+            : 'yash@email.com');
+
+    // Rank from analyticsStateProvider.blockedQueries
+    // Rookie <100 blocked, Guardian <1000, Sentinel 1000+
+    final int blocked = analytics.blockedQueries;
+    final String rank;
+    if (blocked >= 1000) {
+      rank = 'Sentinel';
+    } else if (blocked >= 100) {
+      rank = 'Guardian';
+    } else {
+      rank = 'Rookie';
+    }
+
+    // Milestones: vertical timeline (2px left line) with 3 items:
+    // "1,000 distractions blocked" (only if reached), "First strict session finished", "Shield activated".
+    // Show only the ones actually earned.
+    final milestoneWidgets = <Widget>[];
+    if (blocked >= 1000) {
+      milestoneWidgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '1,000 distractions blocked',
+              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: palette.ink),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'This week',
+              style: GoogleFonts.inter(fontSize: 12, color: palette.mutedInk),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_hasStrictFinished) {
+      if (milestoneWidgets.isNotEmpty) milestoneWidgets.add(const SizedBox(height: 14));
+      milestoneWidgets.add(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'First strict session finished',
+              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: palette.ink),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Completed',
+              style: GoogleFonts.inter(fontSize: 12, color: palette.mutedInk),
+            ),
+          ],
+        ),
+      );
+    }
+    // "Shield activated" is always earned
+    if (milestoneWidgets.isNotEmpty) milestoneWidgets.add(const SizedBox(height: 14));
+    milestoneWidgets.add(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Shield activated',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: palette.ink),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _memberSince,
+            style: GoogleFonts.inter(fontSize: 12, color: palette.mutedInk),
+          ),
+        ],
+      ),
+    );
 
     return FadeSlideIn(
       child: Column(
         key: const Key('header_profile_pill'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                width: 84,
-                height: 84,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: isProtectionOn
-                      ? const LinearGradient(
-                          begin: Alignment.bottomLeft,
-                          end: Alignment.topRight,
-                          colors: [Color(0xFFFEDA75), Color(0xFFFA7E1E), Color(0xFFD62976), Color(0xFF962FBF), Color(0xFF4F5BD5)],
-                        )
-                      : null,
-                  color: isProtectionOn ? null : palette.border,
+          // 1. Shield ID Card: dark (palette.ink bg, palette.canvas text), 22 radius, soft shadow, 20 padding
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: palette.ink,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: palette.ink.withOpacity(0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
-                child: Container(
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: palette.canvas),
-                  padding: const EdgeInsets.all(3),
-                  child: Container(
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: palette.surface),
-                    child: Center(child: Text(initial, style: GoogleFonts.fraunces(fontSize: 32, fontWeight: FontWeight.w700, color: palette.ink))),
-                  ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top row: "FOCUSDNS" left, "SHIELD ID" right (11px, letter-spaced, muted)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'FOCUSDNS',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: palette.canvas.withOpacity(0.55),
+                      ),
+                    ),
+                    Text(
+                      'SHIELD ID',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: palette.canvas.withOpacity(0.55),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              _statColumn(palette, analytics.blockedQueries, 'Blocked'),
-              _statColumn(palette, deepFocus.websites.length, 'Sites & apps'),
-              _statColumn(palette, deepFocus.categories.length, 'Categories'),
-            ],
+                const SizedBox(height: 18),
+
+                // Middle: 68x84 rounded avatar (accent bg, first letter of name, Fraunces 36) + name (Fraunces 28), email (13px), and a "PROTECTED" / "PAUSED" outlined stamp from protectionProvider
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        color: palette.accent,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initial,
+                        style: GoogleFonts.fraunces(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.fraunces(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: palette.canvas,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: palette.canvas.withOpacity(0.65),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isProtectionOn ? palette.accent : (palette.warningAccent ?? const Color(0xFFC48B28)),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Text(
+                              isProtectionOn ? 'PROTECTED' : 'PAUSED',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                color: isProtectionOn ? palette.accent : (palette.warningAccent ?? const Color(0xFFC48B28)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+
+                // Bottom row, 3 columns: "Member since" (month + year from auth/storage), "Rank" (Rookie <100 blocked, Guardian <1000, Sentinel 1000+ from analyticsStateProvider.blockedQueries), "Streak" (days, from existing streak source in home_screen)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Member since',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: palette.canvas.withOpacity(0.55),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _memberSince,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: palette.canvas,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Rank',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: palette.canvas.withOpacity(0.55),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            rank,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: palette.canvas,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Streak',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: palette.canvas.withOpacity(0.55),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedCount(
+                                value: _streakDays,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.canvas,
+                                ),
+                              ),
+                              Text(
+                                ' days',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.canvas,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Below the card: "MILESTONES" label + vertical timeline (2px left line)
+          Text(
+            'MILESTONES',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: palette.mutedInk,
+            ),
           ),
           const SizedBox(height: 12),
-          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: palette.ink)),
-          if (auth.isLoggedIn && auth.email != null)
-            Text(auth.email!, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 13.5, color: palette.mutedInk)),
-          const SizedBox(height: 12),
-          SizedBox(
+          Container(
             width: double.infinity,
-            height: 36,
-            child: PressableScale(
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const EditProfileSheet(),
+            padding: const EdgeInsets.only(left: 14),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: palette.border,
+                  width: 2,
+                ),
               ),
-              child: Container(
-                key: const Key('profile_edit_button'),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: palette.surface, borderRadius: BorderRadius.circular(9), border: Border.all(color: palette.border, width: 0.8)),
-                child: Text('Edit profile', style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w600, color: palette.ink)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: milestoneWidgets,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Below that: one "Edit profile" button opening EditProfileSheet
+          PressableScale(
+            onTap: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => const EditProfileSheet(),
+            ),
+            child: Container(
+              key: const Key('profile_edit_button'),
+              width: double.infinity,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(
+                  color: palette.ink,
+                  width: 1.2,
+                ),
+              ),
+              child: Text(
+                'Edit profile',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: palette.ink,
+                ),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 14),
+            padding: const EdgeInsets.only(top: 20),
             child: Divider(height: 1, thickness: 0.8, color: palette.hairlineSoft),
           ),
         ],
