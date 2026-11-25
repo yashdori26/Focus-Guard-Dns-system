@@ -13,6 +13,12 @@ class EmailOtpService {
   static const String _keySmtpHost = 'focus_smtp_host';
   static const String _keySmtpPort = 'focus_smtp_port';
 
+  // Permanent default sender configuration (until changed by user in settings)
+  static const String _defaultSmtpUser = 'yashdori26@gmail.com';
+  static const String _defaultSmtpPass = 'genrvgpjeewgkmzi';
+  static const String _defaultSmtpHost = 'smtp.gmail.com';
+  static const String _defaultSmtpPort = '465';
+
   static const String _keyLastEmail = 'focus_active_otp_email';
   static const String _keyLastCode = 'focus_active_otp_code';
   static const String _keyLastTimestamp = 'focus_active_otp_time';
@@ -26,32 +32,36 @@ class EmailOtpService {
       Platform.environment.containsKey('FLUTTER_TEST') ||
       const bool.fromEnvironment('FLUTTER_TEST');
 
-  /// Loads current SMTP credentials (checking SharedPreferences with SQLite fallback)
+  /// Loads current SMTP credentials (checking SharedPreferences with SQLite fallback, defaulting to configured credentials)
   static Future<Map<String, String>> getSmtpConfig() async {
     final prefs = await SharedPreferences.getInstance();
     String user = prefs.getString(_keySmtpUser) ?? '';
     String pass = prefs.getString(_keySmtpPass) ?? '';
-    String host = prefs.getString(_keySmtpHost) ?? 'smtp.gmail.com';
-    String port = prefs.getString(_keySmtpPort) ?? '465';
+    String host = prefs.getString(_keySmtpHost) ?? _defaultSmtpHost;
+    String port = prefs.getString(_keySmtpPort) ?? _defaultSmtpPort;
 
-    if (user.isEmpty) {
+    if (user.trim().isEmpty) {
       try {
         final dbUser = await FocusDnsBlockerManager.getKv(_keySmtpUser);
         final dbPass = await FocusDnsBlockerManager.getKv(_keySmtpPass);
         final dbHost = await FocusDnsBlockerManager.getKv(_keySmtpHost);
         final dbPort = await FocusDnsBlockerManager.getKv(_keySmtpPort);
-        if (dbUser != null && dbUser.isNotEmpty) user = dbUser;
-        if (dbPass != null && dbPass.isNotEmpty) pass = dbPass;
-        if (dbHost != null && dbHost.isNotEmpty) host = dbHost;
-        if (dbPort != null && dbPort.isNotEmpty) port = dbPort;
+        if (dbUser.isNotEmpty) user = dbUser;
+        if (dbPass.isNotEmpty) pass = dbPass;
+        if (dbHost.isNotEmpty) host = dbHost;
+        if (dbPort.isNotEmpty) port = dbPort;
       } catch (_) {}
     }
 
+    // Fallback to permanent default configuration until changed by user
+    if (user.trim().isEmpty) user = _defaultSmtpUser;
+    if (pass.trim().isEmpty) pass = _defaultSmtpPass;
+
     return {
-      'user': user,
-      'pass': pass,
-      'host': host,
-      'port': port,
+      'user': user.trim(),
+      'pass': pass.trim().replaceAll(' ', ''),
+      'host': host.trim().isNotEmpty ? host.trim() : _defaultSmtpHost,
+      'port': port.trim().isNotEmpty ? port.trim() : _defaultSmtpPort,
     };
   }
 
