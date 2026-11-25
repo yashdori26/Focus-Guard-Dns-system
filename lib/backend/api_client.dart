@@ -1,4 +1,5 @@
 import '../models/app_config.dart';
+import '../services/email_otp_service.dart';
 import 'dart:convert';
 import 'package:focus_dns/shim/http.dart' as http;
 
@@ -447,15 +448,8 @@ class FocusDnsApiClient {
       } catch (_) {}
     }
 
-    // Resilient offline / local fallback so app remains 100% usable without a remote server
-    const offlineCode = '123456';
-    return {
-      'success': true,
-      'email': cleanEmail,
-      'dev_otp': offlineCode,
-      'smtp_delivered': true,
-      'message': 'Verification code sent to $cleanEmail',
-    };
+    // Direct real email dispatch via EmailOtpService
+    return await EmailOtpService.sendOtpEmail(cleanEmail);
   }
 
   Future<Map<String, dynamic>> verifyEmailCode(String email, String code) async {
@@ -487,8 +481,9 @@ class FocusDnsApiClient {
       } catch (_) {}
     }
 
-    // Offline / local verification fallback
-    if (cleanCode == '123456' || cleanCode == '1234' || cleanCode == '000000' || cleanCode.length == 6) {
+    // Direct strict OTP verification
+    final isValid = await EmailOtpService.verifyOtp(cleanEmail, cleanCode);
+    if (isValid) {
       final localPid = 'local';
       final localToken = 'tok_${cleanEmail.hashCode.abs().toRadixString(16)}_${DateTime.now().millisecondsSinceEpoch}';
       profileId = localPid;
@@ -502,7 +497,7 @@ class FocusDnsApiClient {
       };
     }
 
-    return {'success': false, 'error': 'That code is not right. Try again.'};
+    return {'success': false, 'error': 'Incorrect verification code. Please check your email and try again.'};
   }
 
   Future<Map<String, dynamic>> sendPhoneOtp(String phone) async {

@@ -64,7 +64,7 @@ void main() {
       expect(find.byKey(const Key('auth_otp_field')), findsNothing);
     });
 
-    testWidgets('Valid email advances to code screen with auto-fill chip', (WidgetTester tester) async {
+    testWidgets('Valid email advances to code screen', (WidgetTester tester) async {
       await tester.pumpWidget(app(const EmailEntryScreen(isNewAccount: true)));
       await tester.pumpAndSettle();
 
@@ -75,7 +75,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(find.byKey(const Key('auth_otp_field')), findsOneWidget);
-      expect(find.byKey(const Key('auth_dev_otp_chip')), findsOneWidget);
+      expect(find.textContaining('yash@example.com'), findsOneWidget);
     });
 
     testWidgets('Code screen shows the email and a disabled resend timer', (WidgetTester tester) async {

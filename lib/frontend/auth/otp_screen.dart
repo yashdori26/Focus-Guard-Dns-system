@@ -11,10 +11,9 @@ import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
 import 'auth_widgets.dart';
 
-/// Length of the emailed code. Keep in sync with the server (see server_otp_patch).
 const int kEmailOtpLength = 6;
 
-/// Hinge-style code entry: boxes, auto-submit, shake on a wrong code, resend timer.
+/// Cohesive Wabi-Sabi OTP Verification Screen
 class OtpScreen extends ConsumerStatefulWidget {
   final String email;
   final bool isNewAccount;
@@ -68,6 +67,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       _verifying = true;
       _error = null;
     });
+
     final res = await ref.read(authProvider.notifier).verifyEmail4DigitCode(_code.text);
     if (!mounted) return;
 
@@ -76,7 +76,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       setState(() {
         _verifying = false;
         _shake++;
-        _error = res['error']?.toString() ?? 'That code is not right. Try again.';
+        _error = res['error']?.toString() ?? 'That code is not right. Please check your email.';
       });
       _focus.requestFocus();
       return;
@@ -97,6 +97,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     if (res['success'] == true) {
       _startTimer();
       setState(() => _error = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('A new 6-digit code was sent to ${widget.email}')),
+      );
     } else {
       setState(() => _error = res['error']?.toString() ?? 'Could not resend the code.');
     }
@@ -113,22 +116,38 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
             final active = i == text.length && _focus.hasFocus;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              width: 46,
-              height: 60,
+              width: 48,
+              height: 58,
               alignment: Alignment.center,
               decoration: BoxDecoration(
+                color: palette.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _error != null ? Colors.red.shade600 : (active || filled ? palette.ink : palette.border), width: active ? 2 : 1.4),
+                border: Border.all(
+                  color: _error != null
+                      ? Colors.red.shade600
+                      : (active ? palette.ink : (filled ? palette.accent : palette.border)),
+                  width: active ? 2 : 1.2,
+                ),
+                boxShadow: active
+                    ? [BoxShadow(color: palette.ink.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))]
+                    : null,
               ),
               child: AnimatedScale(
                 scale: filled ? 1 : 0.6,
                 duration: const Duration(milliseconds: 140),
-                child: Text(filled ? text[i] : '', style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w700, color: palette.ink)),
+                child: Text(
+                  filled ? text[i] : '',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: palette.ink,
+                  ),
+                ),
               ),
             );
           }),
         ),
-        // Invisible field receives the typing (and SMS/email autofill).
+        // Invisible field receives the input & keyboard events
         Positioned.fill(
           child: Opacity(
             opacity: 0.0,
@@ -139,11 +158,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               autofocus: true,
               keyboardType: TextInputType.number,
               autofillHints: const [AutofillHints.oneTimeCode],
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(kEmailOtpLength)],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(kEmailOtpLength),
+              ],
               enableInteractiveSelection: false,
               showCursor: false,
               onChanged: (_) {
-                setState(() => _error = null);
+                if (_error != null) setState(() => _error = null);
+                setState(() {});
                 if (_code.text.length == kEmailOtpLength) _verify();
               },
             ),
@@ -168,80 +191,91 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
             AuthBackBar(palette: palette),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FadeSlideIn(child: AuthHeadline('Enter your\ncode', palette: palette)),
-                    const SizedBox(height: 10),
+                    FadeSlideIn(
+                      child: AuthHeadline('Enter verification\ncode', palette: palette),
+                    ),
+                    const SizedBox(height: 8),
                     FadeSlideIn(
                       delay: FadeSlideIn.stagger(1),
-                      child: Text('We emailed a $kEmailOtpLength-digit code to ${widget.email}.',
-                          style: GoogleFonts.inter(fontSize: 15, height: 1.45, color: palette.mutedInk)),
-                    ),
-                    if (ref.watch(authProvider).devOtp != null) ...[
-                      const SizedBox(height: 14),
-                      FadeSlideIn(
-                        delay: FadeSlideIn.stagger(1),
-                        child: GestureDetector(
-                          key: const Key('auth_dev_otp_chip'),
-                          onTap: () {
-                            final devCode = ref.read(authProvider).devOtp;
-                            if (devCode != null) {
-                              _code.text = devCode;
-                              setState(() => _error = null);
-                              _verify();
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: palette.canvas,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: palette.border),
+                      child: Text.rich(
+                        TextSpan(
+                          style: GoogleFonts.inter(fontSize: 14, height: 1.45, color: palette.mutedInk),
+                          children: [
+                            const TextSpan(text: 'We sent a 6-digit code to '),
+                            TextSpan(
+                              text: widget.email,
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: palette.ink),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.pin_outlined, size: 16, color: palette.mutedInk),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Code: ${ref.watch(authProvider).devOtp} (Tap to fill)',
-                                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: palette.ink),
-                                ),
-                              ],
-                            ),
-                          ),
+                            const TextSpan(text: '. Check your inbox or spam folder.'),
+                          ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 30),
-                    FadeSlideIn(delay: FadeSlideIn.stagger(2), child: Shake(shakeKey: _shake, child: _boxes(palette))),
+                    ),
+                    const SizedBox(height: 32),
+                    FadeSlideIn(
+                      delay: FadeSlideIn.stagger(2),
+                      child: Shake(shakeKey: _shake, child: _boxes(palette)),
+                    ),
                     const SizedBox(height: 16),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       child: _error != null
-                          ? Text(_error!, key: const ValueKey('err'), style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.red.shade700))
+                          ? Container(
+                              key: const ValueKey('err'),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade900.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade400.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _error!,
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red.shade700),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
                           : const SizedBox.shrink(key: ValueKey('noerr')),
                     ),
                     const SizedBox(height: 24),
-                    GestureDetector(
-                      key: const Key('auth_resend_button'),
-                      onTap: canResend ? _resend : null,
-                      child: Text(
-                        canResend ? 'Resend code' : 'Resend code in $mm',
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: canResend ? palette.ink : palette.mutedInk,
-                          decoration: canResend ? TextDecoration.underline : TextDecoration.none,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          key: const Key('auth_resend_button'),
+                          onTap: canResend ? _resend : null,
+                          child: Text(
+                            canResend ? 'Resend code' : 'Resend code in $mm',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: canResend ? palette.ink : palette.mutedInk,
+                              decoration: canResend ? TextDecoration.underline : TextDecoration.none,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).maybePop(),
-                      child: Text('Wrong email? Go back', style: GoogleFonts.inter(fontSize: 14, color: palette.mutedInk)),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).maybePop(),
+                          child: Text(
+                            'Change email',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: palette.mutedInk,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -249,9 +283,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: RoundNextButton(palette: palette, enabled: _code.text.length == kEmailOtpLength, loading: _verifying, onTap: _verify),
+              child: WabiSabiButton(
+                buttonKey: const Key('auth_verify_button'),
+                label: 'Verify & Continue',
+                enabled: _code.text.length == kEmailOtpLength,
+                loading: _verifying,
+                onTap: _verify,
               ),
             ),
           ],

@@ -353,36 +353,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         body: SafeArea(
           child: Column(
             children: [
-              // Top bar: back chevron + thin progress bar (Hinge)
+              // Top bar: back chevron + segmented progress bar
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
+                padding: const EdgeInsets.fromLTRB(12, 8, 24, 0),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 48,
-                      height: 48,
+                      width: 44,
+                      height: 44,
                       child: _currentStep == 0
                           ? null
                           : IconButton(
                               key: const Key('onboarding_back_button'),
                               onPressed: _goBack,
-                              icon: Icon(Icons.chevron_left_rounded, size: 32, color: palette.ink),
+                              icon: Icon(Icons.arrow_back_rounded, size: 24, color: palette.ink),
                             ),
                     ),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0, end: progress),
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeOutCubic,
-                          builder: (_, v, __) => LinearProgressIndicator(
-                            value: v,
-                            minHeight: 4,
-                            backgroundColor: palette.border,
-                            valueColor: AlwaysStoppedAnimation<Color>(palette.ink),
-                          ),
-                        ),
+                      child: Row(
+                        children: List.generate(_stepCount, (i) {
+                          final isPassed = i <= _currentStep;
+                          final isCurrent = i == _currentStep;
+                          return Expanded(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: isPassed ? palette.accent : palette.border,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          );
+                        }),
                       ),
                     ),
                   ],
@@ -519,29 +522,36 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         children: [
           FadeSlideIn(child: _headline(palette, 'What should we\ncall your shield?')),
           const SizedBox(height: 28),
-          TextField(
-            key: const Key('onboarding_name_field'),
-            controller: _nameController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            maxLength: 24,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) => _goNext(),
-            cursorColor: palette.ink,
-            style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w500, color: palette.ink),
-            decoration: InputDecoration(
-              hintText: 'Shield name',
-              counterText: '',
-              hintStyle: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w500, color: palette.mutedInk.withOpacity(0.5)),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: palette.border, width: 1.5)),
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: palette.ink, width: 2)),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: palette.border, width: 1.2),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: TextField(
+              key: const Key('onboarding_name_field'),
+              controller: _nameController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              maxLength: 24,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _canContinue ? _goNext() : null,
+              cursorColor: palette.ink,
+              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: palette.ink),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Shield name (e.g. Personal Shield)',
+                counterText: '',
+                icon: Icon(Icons.shield_outlined, size: 22, color: palette.mutedInk),
+                hintStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, color: palette.mutedInk.withOpacity(0.6)),
+              ),
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'This is how your profile appears on your phone. You can change it later.',
+            'This is how your profile appears on your phone. You can change it anytime.',
             style: GoogleFonts.inter(fontSize: 13.5, height: 1.4, color: palette.mutedInk),
           ),
           const SizedBox(height: 6),
@@ -681,14 +691,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
         child: SizedBox(
           width: double.infinity,
-          height: 56,
+          height: 52,
           child: PressableScale(
             onTap: _goNext,
             child: Container(
               key: const Key('onboarding_agree_button'),
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: palette.ink, borderRadius: BorderRadius.circular(28)),
-              child: Text('I agree', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: palette.canvas)),
+              decoration: BoxDecoration(
+                color: palette.ink,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'I agree',
+                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: palette.canvas),
+              ),
             ),
           ),
         ),
@@ -696,21 +712,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
     }
 
     if (!isPermissionStep) {
-      // Round "next" arrow, bottom-right (Hinge)
       final enabled = _canContinue;
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            key: const Key('onboarding_next_button'),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: PressableScale(
             onTap: enabled ? _goNext : null,
             child: AnimatedContainer(
+              key: const Key('onboarding_next_button'),
               duration: const Duration(milliseconds: 180),
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: enabled ? palette.ink : palette.border),
-              child: Icon(Icons.arrow_forward_rounded, size: 28, color: enabled ? palette.canvas : palette.mutedInk),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: enabled ? palette.ink : palette.border.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Continue',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? palette.canvas : palette.mutedInk,
+                ),
+              ),
             ),
           ),
         ),
@@ -729,7 +754,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
         children: [
           SizedBox(
             width: double.infinity,
-            height: 56,
+            height: 52,
             child: ElevatedButton(
               key: const Key('onboarding_primary_button'),
               onPressed: _isLaunching
@@ -742,23 +767,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Widget
                       }
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: palette.ink,
+                backgroundColor: granted ? palette.accent : palette.ink,
                 foregroundColor: palette.canvas,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: _isLaunching
                   ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: palette.canvas))
-                  : Text(primaryLabel, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                  : Text(primaryLabel, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ),
-          if (!granted)
+          if (!granted) ...[
+            const SizedBox(height: 4),
             TextButton(
               key: const Key('onboarding_skip_button'),
               onPressed: _isLaunching ? null : _goNext,
-              child: Text('Maybe later', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: palette.mutedInk)),
-            )
-          else
+              child: Text('Maybe later', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: palette.mutedInk)),
+            ),
+          ] else
             const SizedBox(height: 48),
         ],
       ),
