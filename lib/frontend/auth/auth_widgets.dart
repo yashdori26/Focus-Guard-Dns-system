@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
-import 'smtp_settings_sheet.dart';
-
-/// Clean back bar matching the Wabi-Sabi app design with optional SMTP setup shortcut
+/// Clean back bar matching the Wabi-Sabi app design
 class AuthBackBar extends StatelessWidget {
   final WabiSabiPalette palette;
   final VoidCallback? onBack;
@@ -14,29 +12,20 @@ class AuthBackBar extends StatelessWidget {
     super.key,
     required this.palette,
     this.onBack,
-    this.showSmtpGear = true,
+    this.showSmtpGear = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            key: const Key('auth_back_button'),
-            onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-            icon: Icon(Icons.arrow_back_rounded, size: 24, color: palette.ink),
-          ),
-          if (showSmtpGear)
-            IconButton(
-              key: const Key('auth_smtp_setup_button'),
-              tooltip: 'Email Sender Setup',
-              onPressed: () => SmtpSettingsSheet.show(context),
-              icon: Icon(Icons.tune_rounded, size: 22, color: palette.mutedInk),
-            ),
-        ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: IconButton(
+          key: const Key('auth_back_button'),
+          onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+          icon: Icon(Icons.arrow_back_rounded, size: 24, color: palette.ink),
+        ),
       ),
     );
   }

@@ -7,7 +7,6 @@ import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
 import 'auth_widgets.dart';
 import 'email_entry_screen.dart';
-import 'smtp_settings_sheet.dart';
 
 /// Cohesive Wabi-Sabi Welcome Screen matching the FocusDNS design system
 class WelcomeScreen extends ConsumerWidget {
@@ -25,19 +24,6 @@ class WelcomeScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              // Top utility bar (Email sender setup)
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: IconButton(
-                    key: const Key('welcome_smtp_button'),
-                    tooltip: 'Email Sender Setup',
-                    onPressed: () => SmtpSettingsSheet.show(context),
-                    icon: Icon(Icons.tune_rounded, size: 22, color: palette.mutedInk),
-                  ),
-                ),
-              ),
               const Spacer(flex: 3),
               // Tactile Shield Emblem matching FocusDNS App Icon
               FadeSlideIn(

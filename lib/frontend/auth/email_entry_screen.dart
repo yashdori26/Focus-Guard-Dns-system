@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../services/email_otp_service.dart';
 import '../../state_management/providers.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
 import 'auth_widgets.dart';
 import 'otp_screen.dart';
-import 'smtp_settings_sheet.dart';
 
 final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$');
 
@@ -24,7 +22,6 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
   final TextEditingController _email = TextEditingController();
   bool _loading = false;
   String? _error;
-  bool _needsSmtpSetup = false;
   int _shake = 0;
 
   bool get _valid => _emailPattern.hasMatch(_email.text.trim());
@@ -41,7 +38,6 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
     setState(() {
       _loading = true;
       _error = null;
-      _needsSmtpSetup = false;
     });
 
     final res = await ref.read(authProvider.notifier).sendEmailVerificationCode(
@@ -51,13 +47,11 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
     if (!mounted) return;
 
     final ok = res['success'] == true;
-    final needsSetup = res['needs_smtp_setup'] == true;
 
     if (!ok) {
       setState(() {
         _loading = false;
         _shake++;
-        _needsSmtpSetup = needsSetup;
         _error = res['error']?.toString() ?? 'Could not send verification email. Please try again.';
       });
       return;
@@ -141,46 +135,16 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: Colors.red.shade400.withOpacity(0.4)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _error!,
-                                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red.shade700),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_needsSmtpSetup) ...[
-                              const SizedBox(height: 10),
-                              GestureDetector(
-                                onTap: () => SmtpSettingsSheet.show(context),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: palette.surface,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: palette.border),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.tune_rounded, size: 16, color: palette.ink),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Configure Gmail / SMTP Sender',
-                                        style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.ink),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                            Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red.shade700),
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ),
