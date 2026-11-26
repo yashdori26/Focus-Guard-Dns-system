@@ -17,6 +17,7 @@ import 'package:focus_dns/frontend/auth/set_password_screen.dart';
 import 'package:focus_dns/frontend/home_screen.dart';
 import 'package:focus_dns/state_management/providers.dart';
 import 'package:focus_dns/services/auth_storage_service.dart';
+import 'package:focus_dns/services/app_storage_service.dart';
 
 void main() {
   setUp(() {
@@ -539,5 +540,58 @@ void main() {
 
       container.read(routineFocusProvider.notifier).cancelRoutine(force: true);
     });
+
+    testWidgets('Routine background persistence test: resumes active session and break after process restart', (WidgetTester tester) async {
+      final container1 = ProviderContainer();
+      container1.read(routineFocusProvider.notifier).updateConfig(
+        sessionMinutes: 5,
+        breakMinutes: 5,
+        totalCycles: 4,
+      );
+      container1.read(routineFocusProvider.notifier).startRoutine(strict: true);
+      expect(container1.read(routineFocusProvider).isActive, isTrue);
+      expect(container1.read(routineFocusProvider).isStrict, isTrue);
+      expect(container1.read(routineFocusProvider).isFocus, isTrue);
+      expect(container1.read(routineFocusProvider).currentCycle, equals(1));
+
+      // Simulate app killed / removed from background
+      container1.dispose();
+
+      // Simulate reopening app after 7 minutes (5 min session elapsed + 2 min into break)
+      final raw = await AppStorageService.loadActiveRoutineState();
+      expect(raw, isNotNull);
+      expect(raw!['isActive'], isTrue);
+      expect(raw['isStrict'], isTrue);
+
+      // Now create a new container (new process) with targetEndTime 3 minutes into future
+      // (which simulates 7 min passed from start)
+      final newEndTime = DateTime.now().add(const Duration(minutes: 3));
+      await AppStorageService.saveActiveRoutineState(
+        isActive: true,
+        phase: 'breakSession',
+        currentCycle: 1,
+        isStrict: true,
+        isPaused: false,
+        remainingSeconds: 180,
+        targetEndTime: newEndTime,
+        sessionMinutes: 5,
+        breakMinutes: 5,
+        totalCycles: 4,
+      );
+
+      final container2 = ProviderContainer();
+      addTearDown(container2.dispose);
+
+      await container2.read(routineFocusProvider.notifier).initPersistenceForTesting();
+
+      expect(container2.read(routineFocusProvider).isActive, isTrue);
+      expect(container2.read(routineFocusProvider).isStrict, isTrue);
+      expect(container2.read(routineFocusProvider).isBreak, isTrue);
+      expect(container2.read(routineFocusProvider).currentCycle, equals(1));
+      expect(container2.read(routineFocusProvider).remainingSeconds, greaterThan(0));
+
+      container2.read(routineFocusProvider.notifier).cancelRoutine(force: true);
+    });
   });
 }
+

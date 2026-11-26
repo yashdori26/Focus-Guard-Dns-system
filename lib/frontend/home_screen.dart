@@ -45,6 +45,12 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
     _loadStreak();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(setupProvider.notifier).autoSyncAndLinkIp();
+      final routine = ref.read(routineFocusProvider);
+      final strict = ref.read(strictModeProvider);
+      if (routine.isActive && strict.isStrict) {
+        ref.read(strictModeProvider.notifier).set(false, force: true);
+        FocusDnsBlockerManager.setStrictMode(false);
+      }
     });
     _handleQueryParams();
   }
@@ -645,10 +651,10 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               final profileId = ref.read(setupProvider).profileId;
               await ref.read(vpnProvider.notifier).start(profileId: profileId);
             }
-            final totalDuration = (focusMinutes + breakMinutes) * cycles;
             if (isStrict) {
-              await ref.read(strictModeProvider.notifier).set(true, durationMinutes: totalDuration);
-              await FocusDnsBlockerManager.setStrictMode(true, durationMinutes: totalDuration);
+              // Ensure standalone strict countdown timer does not conflict with routine
+              await ref.read(strictModeProvider.notifier).set(false, force: true);
+              await FocusDnsBlockerManager.setStrictMode(false);
             }
           },
         );
@@ -903,7 +909,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                 children: [
                   // EYEBROW
                   Text(
-                    strictState.isStrict ? 'FOCUSDNS · STRICT MODE' : 'FOCUSDNS · $currentDay',
+                    routineFocus.isActive
+                        ? (routineFocus.isStrict ? 'FOCUSDNS · STRICT ROUTINE' : 'FOCUSDNS · FOCUS ROUTINE')
+                        : (strictState.isStrict ? 'FOCUSDNS · STRICT MODE' : 'FOCUSDNS · $currentDay'),
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -915,7 +923,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
 
                   // HERO HEADLINE
                   Text(
-                    strictState.isStrict ? 'Protection Locked' : 'Your attention\nis yours again.',
+                    routineFocus.isActive
+                        ? (routineFocus.isFocus ? 'Deep Focus Active' : 'Break Time Active')
+                        : (strictState.isStrict ? 'Protection Locked' : 'Your attention\nis yours again.'),
                     style: GoogleFonts.fraunces(
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
@@ -928,11 +938,15 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
 
                   // SUBTITLE
                   Text(
-                    strictState.isStrict
-                        ? 'Protection is active and locked. Calls, maps and payments still work.'
-                        : isProtectionOn
-                            ? 'Protection is active. Blocked apps cannot be opened.'
-                            : 'Protection is paused. All apps and websites are unblocked.',
+                    routineFocus.isActive
+                        ? (routineFocus.isFocus
+                            ? 'Focus session in progress. Blocked apps cannot be opened.'
+                            : 'Break timer active. Apps are temporarily unblocked.')
+                        : (strictState.isStrict
+                            ? 'Protection is active and locked. Calls, maps and payments still work.'
+                            : isProtectionOn
+                                ? 'Protection is active. Blocked apps cannot be opened.'
+                                : 'Protection is paused. All apps and websites are unblocked.'),
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: palette.mutedInk,
@@ -991,7 +1005,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                               ),
                               const SizedBox(height: 4),
                               // Caption containing test-contract exact strings
-                              if (strictState.isStrict) ...[
+                              if (strictState.isStrict && !routineFocus.isActive) ...[
                                 Wrap(
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   spacing: 4,
@@ -1297,7 +1311,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                   ),
 
                   // PRIMARY SESSION ACTION / ACTIVE STRICT STATUS
-                  if (strictState.isStrict)
+                  if (strictState.isStrict && !routineFocus.isActive)
                     GestureDetector(
                       key: const Key('active_strict_session_badge'),
                       behavior: HitTestBehavior.opaque,

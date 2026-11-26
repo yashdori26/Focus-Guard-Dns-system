@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../backend/blocker_service.dart';
 import '../services/app_storage_service.dart';
@@ -112,6 +113,9 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     _initPersistence();
   }
 
+  @visibleForTesting
+  Future<void> initPersistenceForTesting() => _initPersistence();
+
   Future<void> _initPersistence() async {
     final saved = await AppStorageService.loadRoutineConfig();
     if (!mounted) return;
@@ -124,10 +128,161 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
         ),
       );
     }
+
+    final activeState = await AppStorageService.loadActiveRoutineState();
+    if (!mounted || activeState == null || activeState['isActive'] != true) return;
+
+    final isStrict = activeState['isStrict'] as bool? ?? false;
+    final isPaused = activeState['isPaused'] as bool? ?? false;
+    final sessionMins = activeState['sessionMinutes'] as int? ?? state.config.sessionMinutes;
+    final breakMins = activeState['breakMinutes'] as int? ?? state.config.breakMinutes;
+    final totalCycles = activeState['totalCycles'] as int? ?? state.config.totalCycles;
+    final savedCycle = activeState['currentCycle'] as int? ?? 1;
+    final phaseStr = activeState['phase'] as String? ?? 'focusSession';
+    final targetEndTimeMs = activeState['targetEndTime'] as int?;
+
+    // Restore updated config if saved
+    state = state.copyWith(
+      config: state.config.copyWith(
+        sessionMinutes: sessionMins,
+        breakMinutes: breakMins,
+        totalCycles: totalCycles,
+      ),
+    );
+
+    if (isPaused) {
+      final rem = activeState['remainingSeconds'] as int? ?? 0;
+      state = state.copyWith(
+        phase: phaseStr == 'breakSession' ? RoutinePhase.breakSession : RoutinePhase.focusSession,
+        currentCycle: savedCycle,
+        remainingSeconds: rem,
+        targetEndTime: null,
+        isPaused: true,
+        isStrict: isStrict,
+      );
+      _applyFocusBlocking(false);
+      return;
+    }
+
+    if (targetEndTimeMs != null) {
+      final now = DateTime.now();
+      final targetEndTime = DateTime.fromMillisecondsSinceEpoch(targetEndTimeMs);
+      final diff = targetEndTime.difference(now).inSeconds;
+
+      if (diff > 0) {
+        // Current phase is still actively running!
+        final isBreak = phaseStr == 'breakSession';
+        state = state.copyWith(
+          phase: isBreak ? RoutinePhase.breakSession : RoutinePhase.focusSession,
+          currentCycle: savedCycle,
+          remainingSeconds: diff,
+          targetEndTime: targetEndTime,
+          isStrict: isStrict,
+          isPaused: false,
+        );
+        _applyFocusBlocking(!isBreak);
+        _armTicker();
+      } else {
+        // Phase expired while app was in background; calculate how far routine has progressed
+        var elapsedAfterTarget = -diff;
+        var currentCycle = savedCycle;
+        var currentPhase = phaseStr == 'breakSession' ? RoutinePhase.breakSession : RoutinePhase.focusSession;
+
+        bool resolved = false;
+        while (!resolved) {
+          if (currentPhase == RoutinePhase.focusSession) {
+            // Focus session finished while away -> switch to break
+            currentPhase = RoutinePhase.breakSession;
+            final breakSec = breakMins * 60;
+            if (elapsedAfterTarget < breakSec) {
+              final rem = breakSec - elapsedAfterTarget;
+              state = state.copyWith(
+                phase: RoutinePhase.breakSession,
+                currentCycle: currentCycle,
+                remainingSeconds: rem,
+                targetEndTime: now.add(Duration(seconds: rem)),
+                isStrict: isStrict,
+                isPaused: false,
+              );
+              _applyFocusBlocking(false);
+              _armTicker();
+              _persistActiveState();
+              resolved = true;
+            } else {
+              elapsedAfterTarget -= breakSec;
+              currentCycle++;
+              if (currentCycle > totalCycles) {
+                // Completed!
+                _applyFocusBlocking(false);
+                state = state.copyWith(
+                  phase: RoutinePhase.completed,
+                  remainingSeconds: 0,
+                  targetEndTime: null,
+                  isStrict: false,
+                  isPaused: false,
+                );
+                _persistActiveState();
+                resolved = true;
+              }
+            }
+          } else {
+            // Break finished while away -> switch to next cycle focus session
+            currentCycle++;
+            if (currentCycle > totalCycles) {
+              _applyFocusBlocking(false);
+              state = state.copyWith(
+                phase: RoutinePhase.completed,
+                remainingSeconds: 0,
+                targetEndTime: null,
+                isStrict: false,
+                isPaused: false,
+              );
+              _persistActiveState();
+              resolved = true;
+            } else {
+              currentPhase = RoutinePhase.focusSession;
+              final sessionSec = sessionMins * 60;
+              if (elapsedAfterTarget < sessionSec) {
+                final rem = sessionSec - elapsedAfterTarget;
+                state = state.copyWith(
+                  phase: RoutinePhase.focusSession,
+                  currentCycle: currentCycle,
+                  remainingSeconds: rem,
+                  targetEndTime: now.add(Duration(seconds: rem)),
+                  isStrict: isStrict,
+                  isPaused: false,
+                );
+                _applyFocusBlocking(true);
+                _armTicker();
+                _persistActiveState();
+                resolved = true;
+              } else {
+                elapsedAfterTarget -= sessionSec;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   void _persistConfig() {
     AppStorageService.saveRoutineConfig(
+      sessionMinutes: state.config.sessionMinutes,
+      breakMinutes: state.config.breakMinutes,
+      totalCycles: state.config.totalCycles,
+    );
+  }
+
+  void _persistActiveState() {
+    AppStorageService.saveActiveRoutineState(
+      isActive: state.isActive,
+      phase: state.phase.name,
+      currentCycle: state.currentCycle,
+      isStrict: state.isStrict,
+      isPaused: state.isPaused,
+      remainingSeconds: state.remainingSeconds,
+      targetEndTime: state.targetEndTime,
       sessionMinutes: state.config.sessionMinutes,
       breakMinutes: state.config.breakMinutes,
       totalCycles: state.config.totalCycles,
@@ -162,6 +317,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     );
     _applyFocusBlocking(true);
     _armTicker();
+    _persistActiveState();
   }
 
   void _startBreak() {
@@ -174,6 +330,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     // Allow apps temporarily during break
     _applyFocusBlocking(false);
     _armTicker();
+    _persistActiveState();
   }
 
   void _armTicker() {
@@ -231,6 +388,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
           targetEndTime: null,
           isStrict: false,
         );
+        _persistActiveState();
       }
     }
   }
@@ -279,6 +437,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     );
     // Unblock temporarily during pause in normal mode
     _applyFocusBlocking(false);
+    _persistActiveState();
     return true;
   }
 
@@ -293,6 +452,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     );
     _applyFocusBlocking(state.isFocus);
     _armTicker();
+    _persistActiveState();
     return true;
   }
 
@@ -307,6 +467,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
       FocusDnsBlockerManager.setProtectionEnabled(true);
       FocusDnsBlockerManager.setStrictMode(false);
     } catch (_) {}
+    AppStorageService.clearActiveRoutineState();
     state = state.copyWith(
       phase: RoutinePhase.idle,
       remainingSeconds: 0,

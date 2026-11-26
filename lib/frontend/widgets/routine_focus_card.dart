@@ -166,10 +166,9 @@ class RoutineFocusCard extends ConsumerWidget {
                   child: ElevatedButton.icon(
                     key: const Key('start_routine_strict_button'),
                     onPressed: () {
+                      ref.read(strictModeProvider.notifier).set(false, force: true);
+                      FocusDnsBlockerManager.setStrictMode(false);
                       ref.read(routineFocusProvider.notifier).startRoutine(strict: true);
-                      final total = (routine.config.sessionMinutes + routine.config.breakMinutes) * routine.config.totalCycles;
-                      ref.read(strictModeProvider.notifier).set(true, durationMinutes: total);
-                      FocusDnsBlockerManager.setStrictMode(true, durationMinutes: total);
                       ref.read(protectionProvider.notifier).set(true);
                     },
                     icon: const Icon(Icons.lock_rounded, size: 16),

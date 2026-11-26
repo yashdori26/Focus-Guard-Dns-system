@@ -13,6 +13,7 @@ class AppStorageService {
   static const String _keyStrictUntilMs = 'focus_strict_until_ms';
   static const String _keyPerAppTimers = 'focus_per_app_timers';
   static const String _keyRoutineConfig = 'focus_routine_config';
+  static const String _keyRoutineActiveState = 'focus_routine_active_state';
   static const String _keyThemeMode = 'focus_theme_mode';
   static const String _keyDenylist = 'focus_custom_denylist';
   static const String _keyAllowlist = 'focus_custom_allowlist';
@@ -178,6 +179,58 @@ class AppStorageService {
         'totalCycles': totalCycles,
       };
       await prefs.setString(_keyRoutineConfig, json.encode(map));
+    } catch (_) {}
+  }
+
+  static Future<void> saveActiveRoutineState({
+    required bool isActive,
+    required String phase,
+    required int currentCycle,
+    required bool isStrict,
+    required bool isPaused,
+    required int remainingSeconds,
+    DateTime? targetEndTime,
+    int? sessionMinutes,
+    int? breakMinutes,
+    int? totalCycles,
+  }) async {
+    try {
+      final prefs = await _getPrefs();
+      if (!isActive) {
+        await prefs.remove(_keyRoutineActiveState);
+        return;
+      }
+      final map = {
+        'isActive': isActive,
+        'phase': phase,
+        'currentCycle': currentCycle,
+        'isStrict': isStrict,
+        'isPaused': isPaused,
+        'remainingSeconds': remainingSeconds,
+        'targetEndTime': targetEndTime?.millisecondsSinceEpoch,
+        'sessionMinutes': sessionMinutes,
+        'breakMinutes': breakMinutes,
+        'totalCycles': totalCycles,
+      };
+      await prefs.setString(_keyRoutineActiveState, json.encode(map));
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>?> loadActiveRoutineState() async {
+    try {
+      final prefs = await _getPrefs();
+      final raw = prefs.getString(_keyRoutineActiveState);
+      if (raw == null) return null;
+      return json.decode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> clearActiveRoutineState() async {
+    try {
+      final prefs = await _getPrefs();
+      await prefs.remove(_keyRoutineActiveState);
     } catch (_) {}
   }
 
