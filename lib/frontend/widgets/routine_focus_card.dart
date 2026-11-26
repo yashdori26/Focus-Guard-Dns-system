@@ -141,20 +141,42 @@ class RoutineFocusCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                key: const Key('start_routine_button'),
-                onPressed: () => ref.read(routineFocusProvider.notifier).startRoutine(),
-                icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                label: const Text('START FOCUS + BREAK ROUTINE'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: palette.ink,
-                  foregroundColor: palette.canvas,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    key: const Key('start_routine_normal_button'),
+                    onPressed: () => ref.read(routineFocusProvider.notifier).startRoutine(strict: false),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('Apply Normally', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: palette.ink,
+                      foregroundColor: palette.canvas,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    key: const Key('start_routine_strict_button'),
+                    onPressed: () {
+                      ref.read(routineFocusProvider.notifier).startRoutine(strict: true);
+                      final total = (routine.config.sessionMinutes + routine.config.breakMinutes) * routine.config.totalCycles;
+                      ref.read(strictModeProvider.notifier).set(true, durationMinutes: total);
+                    },
+                    icon: const Icon(Icons.lock_rounded, size: 16),
+                    label: const Text('Apply Strictly', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF991B1B),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             SizedBox(
@@ -186,7 +208,7 @@ class RoutineFocusCard extends ConsumerWidget {
                     : (1.0 - (routine.remainingSeconds / (routine.config.breakMinutes * 60))).clamp(0.0, 1.0),
                 backgroundColor: palette.canvas,
                 valueColor: AlwaysStoppedAnimation(
-                  routine.isBreak ? const Color(0xFF10B981) : palette.strictAccent,
+                  routine.isBreak ? const Color(0xFF10B981) : (routine.isStrict ? const Color(0xFF991B1B) : palette.strictAccent),
                 ),
                 minHeight: 6,
               ),
@@ -195,26 +217,38 @@ class RoutineFocusCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  routine.isBreak
-                      ? '⚠️ Apps will force-close at break end!'
-                      : '🔒 Apps blocked. Break starts automatically.',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
-                    color: routine.isBreak ? const Color(0xFF10B981) : palette.mutedInk,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    routine.isStrict
+                        ? '🔒 Strictly locked. Changes & pausing disabled.'
+                        : (routine.isBreak
+                            ? '⚠️ Apps will force-close at break end!'
+                            : '🔒 Apps blocked. Break starts automatically.'),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      color: routine.isStrict
+                          ? const Color(0xFFB91C1C)
+                          : (routine.isBreak ? const Color(0xFF10B981) : palette.mutedInk),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                TextButton(
-                  onPressed: () => ref.read(routineFocusProvider.notifier).cancelRoutine(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: palette.mutedInk,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                if (!routine.isStrict)
+                  TextButton(
+                    onPressed: () => ref.read(routineFocusProvider.notifier).cancelRoutine(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: palette.mutedInk,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Stop Routine', style: TextStyle(fontSize: 11)),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Icon(Icons.lock, size: 14, color: Color(0xFFB91C1C)),
                   ),
-                  child: const Text('Stop Routine', style: TextStyle(fontSize: 11)),
-                ),
               ],
             ),
           ],
@@ -266,42 +300,85 @@ class RoutineFocusCard extends ConsumerWidget {
     required ValueChanged<int> onSelect,
   }) {
     final palette = WabiSabiPalette.of(context);
+    final textController = TextEditingController(text: '$current');
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: palette.canvas,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: palette.ink)),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: values.map((val) {
-                    final sel = val == current;
-                    return ChoiceChip(
-                      label: Text('$val'),
-                      selected: sel,
-                      selectedColor: palette.ink,
-                      labelStyle: TextStyle(
-                        color: sel ? palette.canvas : palette.ink,
-                        fontWeight: FontWeight.bold,
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: palette.ink)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: textController,
+                      keyboardType: TextInputType.number,
+                      autofocus: true,
+                      style: GoogleFonts.jetBrainsMono(fontSize: 15, fontWeight: FontWeight.bold, color: palette.ink),
+                      decoration: InputDecoration(
+                        labelText: 'Type custom number',
+                        labelStyle: TextStyle(color: palette.mutedInk, fontSize: 13),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onSelected: (_) {
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      final val = int.tryParse(textController.text.trim());
+                      if (val != null && val > 0) {
                         onSelect(val);
-                        Navigator.pop(ctx);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+                      }
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: palette.ink,
+                      foregroundColor: palette.canvas,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Set'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text('Quick Presets:', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: palette.mutedInk)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: values.map((val) {
+                  final sel = val == current;
+                  return ChoiceChip(
+                    label: Text('$val'),
+                    selected: sel,
+                    selectedColor: palette.ink,
+                    labelStyle: TextStyle(
+                      color: sel ? palette.canvas : palette.ink,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    onSelected: (_) {
+                      onSelect(val);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
           ),
         );
       },

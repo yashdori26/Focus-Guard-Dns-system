@@ -156,8 +156,8 @@ class EmailOtpService {
     final message = Message()
       ..from = Address(user, 'FocusDNS Security')
       ..recipients.add(cleanEmail)
-      ..subject = '$code is your FocusDNS verification code'
-      ..text = 'Your FocusDNS verification code is: $code\n\nThis code will expire in 15 minutes.'
+      ..subject = '$code is your FocusDNS code'
+      ..text = 'Your FocusDNS verification code: $code\n\nExpires in 10 minutes. If you didn’t request this code, you can ignore this email.'
       ..html = _buildHtmlEmail(code);
 
     // Compose and send email via SMTP
@@ -249,29 +249,16 @@ class EmailOtpService {
 <html>
 <head>
   <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #1A1713; color: #F2EBDD; margin: 0; padding: 24px; }
-    .card { max-width: 460px; margin: 0 auto; background: #24201A; border: 1px solid #2E2A24; border-radius: 16px; padding: 32px 24px; text-align: center; }
-    .shield { font-size: 40px; margin-bottom: 12px; }
-    h1 { font-size: 22px; color: #F2EBDD; margin: 0 0 8px 0; font-weight: 700; }
-    p { font-size: 14px; color: #A89F8F; line-height: 1.5; margin: 0 0 24px 0; }
-    .code-box { background: #1A1713; border: 1.5px solid #7FC4A0; border-radius: 12px; padding: 18px 24px; display: inline-block; margin-bottom: 20px; }
-    .code-text { font-family: 'Courier New', monospace; font-size: 34px; font-weight: 700; letter-spacing: 8px; color: #7FC4A0; margin-left: 8px; }
-    .footer { font-size: 12px; color: #7E7668; margin-top: 24px; border-top: 1px solid #2E2A24; padding-top: 16px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body>
-  <div class="card">
-    <div class="shield">🛡️</div>
-    <h1>FocusDNS Verification</h1>
-    <p>Enter the 6-digit code below to verify your email and access your FocusDNS shield.</p>
-    <div class="code-box">
-      <div class="code-text">$code</div>
+<body style="margin: 0; padding: 32px 16px; background-color: #F7F6F2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 380px; margin: 0 auto; background: #FFFFFF; border-radius: 14px; padding: 28px 24px; border: 1px solid #E6E3DB; text-align: center;">
+    <div style="font-size: 19px; font-weight: 700; color: #181511; letter-spacing: -0.3px; margin-bottom: 6px;">FocusDNS</div>
+    <div style="font-size: 13.5px; color: #6E685F; margin-bottom: 20px;">Your verification code is:</div>
+    <div style="background: #F7F5EE; border: 1px solid #DFDBD1; border-radius: 10px; padding: 14px 18px; font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #181511; display: inline-block; margin-bottom: 18px;">
+      $code
     </div>
-    <p style="font-size: 13px; color: #7E7668; margin-bottom: 0;">This code will expire in 15 minutes.</p>
-    <div class="footer">
-      If you did not request this code, you can safely ignore this email.
-    </div>
+    <div style="font-size: 12px; color: #9E9689; line-height: 1.4;">Expires in 10 minutes. If you did not request this, you can ignore this email.</div>
   </div>
 </body>
 </html>

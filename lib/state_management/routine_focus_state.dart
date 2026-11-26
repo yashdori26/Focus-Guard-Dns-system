@@ -43,6 +43,7 @@ class RoutineFocusState {
   final int totalFocusSecondsCompleted;
   final int totalBreakSecondsCompleted;
   final bool autoSendHomeOnBreakEnd;
+  final bool isStrict;
 
   const RoutineFocusState({
     this.phase = RoutinePhase.idle,
@@ -53,6 +54,7 @@ class RoutineFocusState {
     this.totalFocusSecondsCompleted = 0,
     this.totalBreakSecondsCompleted = 0,
     this.autoSendHomeOnBreakEnd = true,
+    this.isStrict = false,
   });
 
   bool get isActive => phase == RoutinePhase.focusSession || phase == RoutinePhase.breakSession;
@@ -81,6 +83,7 @@ class RoutineFocusState {
     int? totalFocusSecondsCompleted,
     int? totalBreakSecondsCompleted,
     bool? autoSendHomeOnBreakEnd,
+    bool? isStrict,
   }) {
     return RoutineFocusState(
       phase: phase ?? this.phase,
@@ -91,6 +94,7 @@ class RoutineFocusState {
       totalFocusSecondsCompleted: totalFocusSecondsCompleted ?? this.totalFocusSecondsCompleted,
       totalBreakSecondsCompleted: totalBreakSecondsCompleted ?? this.totalBreakSecondsCompleted,
       autoSendHomeOnBreakEnd: autoSendHomeOnBreakEnd ?? this.autoSendHomeOnBreakEnd,
+      isStrict: isStrict ?? this.isStrict,
     );
   }
 }
@@ -137,8 +141,9 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     _persistConfig();
   }
 
-  void startRoutine() {
+  void startRoutine({bool strict = false}) {
     if (state.isActive) return;
+    state = state.copyWith(isStrict: strict);
     _startSession(1);
   }
 
@@ -219,6 +224,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
           phase: RoutinePhase.completed,
           remainingSeconds: 0,
           targetEndTime: null,
+          isStrict: false,
         );
       }
     }
@@ -230,7 +236,10 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     } catch (_) {}
   }
 
-  void cancelRoutine() {
+  bool cancelRoutine({bool force = false}) {
+    if (state.isStrict && !force && state.isActive) {
+      return false; // Locked in strict mode!
+    }
     _ticker?.cancel();
     _ticker = null;
     _applyFocusBlocking(false);
@@ -238,7 +247,9 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
       phase: RoutinePhase.idle,
       remainingSeconds: 0,
       targetEndTime: null,
+      isStrict: false,
     );
+    return true;
   }
 
   @override

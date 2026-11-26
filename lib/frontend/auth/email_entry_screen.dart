@@ -20,20 +20,35 @@ class EmailEntryScreen extends ConsumerStatefulWidget {
 
 class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
   final TextEditingController _email = TextEditingController();
+  final TextEditingController _password = TextEditingController();
+  bool _obscurePassword = true;
   bool _loading = false;
   String? _error;
   int _shake = 0;
 
-  bool get _valid => _emailPattern.hasMatch(_email.text.trim());
+  bool get _valid {
+    final emailOk = _emailPattern.hasMatch(_email.text.trim());
+    if (!widget.isNewAccount) return emailOk;
+    return emailOk && _password.text.length >= 6;
+  }
 
   @override
   void dispose() {
     _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (!_valid || _loading) return;
+    if (!_valid || _loading) {
+      if (widget.isNewAccount && _emailPattern.hasMatch(_email.text.trim()) && _password.text.length < 6) {
+        setState(() {
+          _error = 'Password must be at least 6 characters.';
+          _shake++;
+        });
+      }
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() {
       _loading = true;
@@ -61,6 +76,7 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
     Navigator.of(context).push(appRoute(OtpScreen(
       email: _email.text.trim().toLowerCase(),
       isNewAccount: widget.isNewAccount,
+      password: widget.isNewAccount ? _password.text : null,
     )));
   }
 
@@ -83,7 +99,7 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                   children: [
                     FadeSlideIn(
                       child: AuthHeadline(
-                        widget.isNewAccount ? "What's your\nemail address?" : 'Welcome back.\nEnter your email',
+                        widget.isNewAccount ? "Create your\naccount" : 'Welcome back.\nEnter your email',
                         palette: palette,
                       ),
                     ),
@@ -91,7 +107,9 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                     FadeSlideIn(
                       delay: FadeSlideIn.stagger(1),
                       child: Text(
-                        "We'll send a 6-digit verification code to confirm it's you. No password required.",
+                        widget.isNewAccount
+                            ? "Set a password and we'll send a 6-digit code to verify your email."
+                            : "We'll send a 6-digit verification code to confirm it's you. No password required.",
                         style: GoogleFonts.inter(fontSize: 14, height: 1.45, color: palette.mutedInk),
                       ),
                     ),
@@ -105,7 +123,7 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                           controller: _email,
                           autofocus: true,
                           keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.done,
+                          textInputAction: widget.isNewAccount ? TextInputAction.next : TextInputAction.done,
                           autofillHints: const [AutofillHints.email],
                           hintText: 'name@example.com',
                           icon: Icons.alternate_email_rounded,
@@ -113,7 +131,9 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                             if (_error != null) setState(() => _error = null);
                             setState(() {});
                           },
-                          onSubmitted: (_) => _submit(),
+                          onSubmitted: (_) {
+                            if (!widget.isNewAccount) _submit();
+                          },
                           suffixIcon: _email.text.isNotEmpty
                               ? IconButton(
                                   icon: Icon(Icons.clear, size: 18, color: palette.mutedInk),
@@ -126,6 +146,33 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                         ),
                       ),
                     ),
+                    if (widget.isNewAccount) ...[
+                      const SizedBox(height: 14),
+                      FadeSlideIn(
+                        delay: FadeSlideIn.stagger(3),
+                        child: AuthCardTextField(
+                          fieldKey: const Key('auth_password_field'),
+                          controller: _password,
+                          obscureText: _obscurePassword,
+                          hintText: 'Password (min 6 characters)',
+                          icon: Icons.lock_outline_rounded,
+                          textInputAction: TextInputAction.done,
+                          onChanged: (_) {
+                            if (_error != null) setState(() => _error = null);
+                            setState(() {});
+                          },
+                          onSubmitted: (_) => _submit(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 20,
+                              color: palette.mutedInk,
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     if (_error != null)
                       Container(

@@ -636,7 +636,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
         return CircularRoutineSetupSheet(
           palette: palette,
           onCancel: () => Navigator.pop(ctx),
-          onConfirm: (focusMinutes, breakMinutes, cycles) async {
+          onConfirm: (focusMinutes, breakMinutes, cycles, isStrict) async {
             Navigator.pop(ctx);
             ref.read(routineEngineProvider).updateConfig(
               RoutineScheduleConfig(
@@ -653,12 +653,19 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               final profileId = ref.read(setupProvider).profileId;
               await ref.read(vpnProvider.notifier).start(profileId: profileId);
             }
+            final totalDuration = (focusMinutes + breakMinutes) * cycles;
+            if (isStrict) {
+              await ref.read(strictModeProvider.notifier).set(true, durationMinutes: totalDuration);
+              await FocusDnsBlockerManager.setStrictMode(true, durationMinutes: totalDuration);
+            }
             if (context.mounted) {
               final focusLabel = focusMinutes < 60 ? '${focusMinutes}m' : '${focusMinutes ~/ 60}h${focusMinutes % 60 > 0 ? ' ${focusMinutes % 60}m' : ''}';
               final breakLabel = breakMinutes < 60 ? '${breakMinutes}m' : '${breakMinutes ~/ 60}h${breakMinutes % 60 > 0 ? ' ${breakMinutes % 60}m' : ''}';
+              final strictPrefix = isStrict ? '🔒 Strict ' : '⏳ ';
+              final strictSuffix = isStrict ? ' (Strict lockdown engaged)' : '';
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('⏳ Focus Routine started: $focusLabel focus · $breakLabel break · $cycles cycles'),
+                  content: Text('$strictPrefix Focus Routine started: $focusLabel focus · $breakLabel break · $cycles cycles$strictSuffix'),
                   backgroundColor: palette.surface,
                 ),
               );
@@ -1995,7 +2002,7 @@ class _StrictModeDisclaimerSheetContentState
 class CircularRoutineSetupSheet extends StatefulWidget {
   final WabiSabiPalette palette;
   final VoidCallback onCancel;
-  final void Function(int focusMinutes, int breakMinutes, int cycles) onConfirm;
+  final void Function(int focusMinutes, int breakMinutes, int cycles, bool isStrict) onConfirm;
 
   const CircularRoutineSetupSheet({
     super.key,
@@ -2013,6 +2020,29 @@ class _CircularRoutineSetupSheetState extends State<CircularRoutineSetupSheet> {
   int _selectedFocus = 25; // in minutes (5m to 8h)
   int _selectedBreak = 5; // in minutes (5m to 4h)
   int _selectedCycles = 4; // 1 to 10
+  late final TextEditingController _customInputController;
+
+  @override
+  void initState() {
+    super.initState();
+    _customInputController = TextEditingController(text: '$_selectedFocus');
+  }
+
+  @override
+  void dispose() {
+    _customInputController.dispose();
+    super.dispose();
+  }
+
+  void _syncInputController() {
+    if (_step == 1) {
+      _customInputController.text = '$_selectedFocus';
+    } else if (_step == 2) {
+      _customInputController.text = '$_selectedBreak';
+    } else {
+      _customInputController.text = '$_selectedCycles';
+    }
+  }
 
   static const _focusOptions = <({int minutes, String label})>[
     (minutes: 5, label: '5m'),
@@ -2278,7 +2308,12 @@ class _CircularRoutineSetupSheetState extends State<CircularRoutineSetupSheet> {
               _buildCircularDial<int>(
                 items: _focusOptions.map((e) => (value: e.minutes, label: e.label)).toList(),
                 selectedValue: _selectedFocus,
-                onSelected: (v) => setState(() => _selectedFocus = v),
+                onSelected: (v) {
+                  setState(() {
+                    _selectedFocus = v;
+                    _customInputController.text = '$v';
+                  });
+                },
                 centerPrimaryText: _formatDuration(_selectedFocus),
                 centerSubText: 'FOCUS DURATION',
                 palette: palette,
@@ -2287,7 +2322,12 @@ class _CircularRoutineSetupSheetState extends State<CircularRoutineSetupSheet> {
               _buildCircularDial<int>(
                 items: _breakOptions.map((e) => (value: e.minutes, label: e.label)).toList(),
                 selectedValue: _selectedBreak,
-                onSelected: (v) => setState(() => _selectedBreak = v),
+                onSelected: (v) {
+                  setState(() {
+                    _selectedBreak = v;
+                    _customInputController.text = '$v';
+                  });
+                },
                 centerPrimaryText: _formatDuration(_selectedBreak),
                 centerSubText: 'BREAK TIMER',
                 palette: palette,
@@ -2296,11 +2336,54 @@ class _CircularRoutineSetupSheetState extends State<CircularRoutineSetupSheet> {
               _buildCircularDial<int>(
                 items: _cycleOptions.map((e) => (value: e.count, label: e.label)).toList(),
                 selectedValue: _selectedCycles,
-                onSelected: (v) => setState(() => _selectedCycles = v),
+                onSelected: (v) {
+                  setState(() {
+                    _selectedCycles = v;
+                    _customInputController.text = '$v';
+                  });
+                },
                 centerPrimaryText: '$_selectedCycles',
                 centerSubText: 'CYCLES',
                 palette: palette,
               ),
+
+            const SizedBox(height: 12),
+
+            // Direct Type Input Field
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _step == 1 ? 'Or type focus (min): ' : (_step == 2 ? 'Or type break (min): ' : 'Or type cycles: '),
+                  style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w500, color: palette.mutedInk),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 76,
+                  height: 38,
+                  child: TextField(
+                    controller: _customInputController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.bold, color: palette.ink),
+                    decoration: InputDecoration(
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onChanged: (val) {
+                      final n = int.tryParse(val.trim());
+                      if (n != null && n > 0) {
+                        setState(() {
+                          if (_step == 1) _selectedFocus = n;
+                          else if (_step == 2) _selectedBreak = n;
+                          else _selectedCycles = n;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
 
             const SizedBox(height: 16),
 
@@ -2331,57 +2414,136 @@ class _CircularRoutineSetupSheetState extends State<CircularRoutineSetupSheet> {
             const SizedBox(height: 18),
 
             // Navigation Actions
-            Row(
-              children: [
-                if (_step > 1) ...[
+            if (_step < 3)
+              Row(
+                children: [
+                  if (_step > 1) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        key: const Key('routine_prev_step'),
+                        onPressed: () {
+                          setState(() {
+                            _step--;
+                            _syncInputController();
+                          });
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: palette.ink,
+                          side: BorderSide(color: palette.hairlineSoft),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        child: Text('← Back', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
-                    child: OutlinedButton(
-                      key: const Key('routine_prev_step'),
-                      onPressed: () => setState(() => _step--),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: palette.ink,
-                        side: BorderSide(color: palette.hairlineSoft),
+                    flex: 2,
+                    child: ElevatedButton(
+                      key: const Key('routine_next_step'),
+                      onPressed: () {
+                        setState(() {
+                          _step++;
+                          _syncInputController();
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2F6B4F),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
-                      child: Text('← Back', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    key: Key(_step < 3 ? 'routine_next_step' : 'routine_start_button'),
-                    onPressed: () {
-                      if (_step < 3) {
-                        setState(() => _step++);
-                      } else {
-                        widget.onConfirm(_selectedFocus, _selectedBreak, _selectedCycles);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2F6B4F),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    child: Text(
-                      _step == 1
-                          ? 'Next: Break Timer →'
-                          : (_step == 2 ? 'Next: Cycles →' : 'Begin Routine 🚀'),
-                      style: GoogleFonts.fraunces(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        letterSpacing: 0.2,
+                      child: Text(
+                        _step == 1 ? 'Next: Break Timer →' : 'Next: Cycles →',
+                        style: GoogleFonts.fraunces(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          key: const Key('routine_prev_step'),
+                          onPressed: () {
+                            setState(() {
+                              _step--;
+                              _syncInputController();
+                            });
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: palette.ink,
+                            side: BorderSide(color: palette.hairlineSoft),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                          child: Text('← Back', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          key: const Key('routine_start_button'),
+                          onPressed: () => widget.onConfirm(_selectedFocus, _selectedBreak, _selectedCycles, false),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: palette.ink,
+                            foregroundColor: palette.canvas,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                          child: Text(
+                            'Apply Normally',
+                            style: GoogleFonts.fraunces(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: palette.canvas,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      key: const Key('routine_start_strict_button'),
+                      onPressed: () => widget.onConfirm(_selectedFocus, _selectedBreak, _selectedCycles, true),
+                      icon: const Icon(Icons.lock_rounded, size: 16, color: Colors.white),
+                      label: Text(
+                        'Apply Strictly (Lock Changes)',
+                        style: GoogleFonts.fraunces(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF991B1B),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),

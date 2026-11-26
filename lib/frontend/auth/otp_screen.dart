@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../backend/blocker_service.dart';
+import '../../services/auth_storage_service.dart';
 import '../../state_management/providers.dart';
 import '../home_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -18,7 +19,8 @@ const int kEmailOtpLength = 6;
 class OtpScreen extends ConsumerStatefulWidget {
   final String email;
   final bool isNewAccount;
-  const OtpScreen({super.key, required this.email, required this.isNewAccount});
+  final String? password;
+  const OtpScreen({super.key, required this.email, required this.isNewAccount, this.password});
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
@@ -99,7 +101,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       return;
     }
 
-    // New account: proceed through onboarding flow
+    // New account: save credentials and proceed through onboarding flow
+    if (widget.password != null && widget.password!.isNotEmpty) {
+      await AuthStorageService.saveCredentials(
+        email: widget.email,
+        password: widget.password!,
+        profileName: 'Focus User',
+      );
+    }
     final onboarded = prefs.getBool('focus_onboarding_completed') ?? false;
     if (!mounted) return;
     final next = onboarded ? const FocusDNSHomeScreen() : const OnboardingScreen();

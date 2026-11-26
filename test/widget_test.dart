@@ -69,6 +69,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byKey(const Key('auth_email_field')), 'yash@example.com');
+      await tester.enterText(find.byKey(const Key('auth_password_field')), 'secret123');
       await tester.pump();
       await tester.tap(find.byKey(const Key('auth_next_button')));
       await tester.pump();
