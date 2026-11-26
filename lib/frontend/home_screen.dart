@@ -316,20 +316,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                             onCancel: () => setState(() => _urlOverlay = null),
                             onConfirm: (mins) async {
                               setState(() => _urlOverlay = null);
-                              final success = await ref
+                              await ref
                                   .read(strictModeProvider.notifier)
                                   .set(true, durationMinutes: mins);
-                              if (success && context.mounted) {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        '🔒 Strict Mode activated for $mins minutes! Protection locked.'),
-                                    backgroundColor: palette.surface,
-                                    duration: const Duration(seconds: 3),
-                                  ),
-                                );
-                              }
                             },
                           )
                         : _urlOverlay == 'auth_sheet'
@@ -614,20 +603,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               }
             } catch (_) {}
 
-            final success = await ref
+            await ref
                 .read(strictModeProvider.notifier)
                 .set(true, durationMinutes: selectedMinutes);
-            if (success && context.mounted) {
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      '🔒 Strict Mode activated for $selectedMinutes minutes! Tamper-Proof Device Admin lock armed.'),
-                  backgroundColor: palette.surface,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            }
           },
         );
       },
@@ -671,18 +649,6 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
             if (isStrict) {
               await ref.read(strictModeProvider.notifier).set(true, durationMinutes: totalDuration);
               await FocusDnsBlockerManager.setStrictMode(true, durationMinutes: totalDuration);
-            }
-            if (context.mounted) {
-              final focusLabel = focusMinutes < 60 ? '${focusMinutes}m' : '${focusMinutes ~/ 60}h${focusMinutes % 60 > 0 ? ' ${focusMinutes % 60}m' : ''}';
-              final breakLabel = breakMinutes < 60 ? '${breakMinutes}m' : '${breakMinutes ~/ 60}h${breakMinutes % 60 > 0 ? ' ${breakMinutes % 60}m' : ''}';
-              final strictPrefix = isStrict ? '🔒 Strict ' : '⏳ ';
-              final strictSuffix = isStrict ? ' (Strict lockdown engaged)' : '';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$strictPrefix Focus Routine started: $focusLabel focus · $breakLabel break · $cycles cycles$strictSuffix'),
-                  backgroundColor: palette.surface,
-                ),
-              );
             }
           },
         );
@@ -761,14 +727,6 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                       if (!kIsWeb) {
                         final profileId = ref.read(setupProvider).profileId;
                         await ref.read(vpnProvider.notifier).start(profileId: profileId);
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('🌿 Normal Focus active. Tap Pause anytime to stop.'),
-                            backgroundColor: palette.surface,
-                          ),
-                        );
                       }
                     },
                     child: Container(
@@ -1162,29 +1120,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                 } catch (_) {}
                                 await ref.read(vpnProvider.notifier).start(profileId: profileId);
                                 ref.read(setupProvider.notifier).autoSyncAndLinkIp();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).clearSnackBars();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('🛡️ Protection & Routine Resumed.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
-                                      backgroundColor: const Color(0xFF1B3B2B),
-                                      duration: const Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
                               } else {
                                 await FocusDnsBlockerManager.setProtectionEnabled(false);
                                 await ref.read(vpnProvider.notifier).stop();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).clearSnackBars();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('⏸️ Protection & Routine Paused. Distractions temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
-                                      backgroundColor: const Color(0xFF26262B),
-                                      duration: const Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
                               }
                             }
                           },
@@ -1292,25 +1230,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                       if (routineFocus.isPaused) {
                         ref.read(routineFocusProvider.notifier).resumeRoutine();
                         ref.read(protectionProvider.notifier).set(true);
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('▶️ Routine Resumed (${routineFocus.phaseLabel})', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
-                            backgroundColor: const Color(0xFF1B3B2B),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
                       } else {
                         ref.read(routineFocusProvider.notifier).pauseRoutine();
                         ref.read(protectionProvider.notifier).set(false);
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('⏸️ Routine Paused. Ticking paused and apps temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
-                            backgroundColor: const Color(0xFF26262B),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
                       }
                     },
                     child: Container(
