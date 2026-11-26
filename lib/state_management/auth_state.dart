@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../backend/api_client.dart';
+import '../backend/blocker_service.dart';
 import '../services/auth_storage_service.dart';
 import 'setup_state.dart';
 
@@ -371,6 +372,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('focus_auth_is_returning', true);
+          await prefs.setBool('focus_onboarding_completed', true);
+          await prefs.setBool('focus_dns_auth_is_logged_in', true);
+          await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '1');
+          await FocusDnsBlockerManager.putKv('focus_dns_auth_is_logged_in', 'true');
         } catch (_) {}
         if (token.isNotEmpty) {
           await AuthStorageService.saveSession(

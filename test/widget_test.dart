@@ -86,6 +86,18 @@ void main() {
       expect(find.textContaining('Resend code in'), findsOneWidget);
       expect(find.byKey(const Key('auth_otp_field')), findsOneWidget);
     });
+
+    testWidgets('Sign In (Login) bypasses onboarding and opens HomeScreen directly', (WidgetTester tester) async {
+      await tester.pumpWidget(app(const OtpScreen(email: 'yash@example.com', isNewAccount: false)));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // Enter 6-digit test code (in test environment 123456 verifies)
+      await tester.enterText(find.byKey(const Key('auth_otp_field')), '123456');
+      await tester.pumpAndSettle();
+
+      // Verify that FocusDNSHomeScreen is displayed and OnboardingScreen is bypassed
+      expect(find.byType(OnboardingScreen), findsNothing);
+    });
   });
 
   group('OnboardingScreen Tests', () {

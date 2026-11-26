@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../backend/blocker_service.dart';
 import '../../state_management/providers.dart';
 import '../home_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -84,9 +85,24 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
     HapticFeedback.lightImpact();
     final prefs = await SharedPreferences.getInstance();
+
+    if (!widget.isNewAccount) {
+      // Returning user logging in: bypass onboarding completely and go straight to Home Screen!
+      await prefs.setBool('focus_onboarding_completed', true);
+      await prefs.setBool('focus_dns_auth_is_logged_in', true);
+      try {
+        await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '1');
+        await FocusDnsBlockerManager.putKv('focus_dns_auth_is_logged_in', 'true');
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(appRoute(const FocusDNSHomeScreen()), (route) => false);
+      return;
+    }
+
+    // New account: proceed through onboarding flow
     final onboarded = prefs.getBool('focus_onboarding_completed') ?? false;
     if (!mounted) return;
-    final next = (!widget.isNewAccount && onboarded) ? const FocusDNSHomeScreen() : const OnboardingScreen();
+    final next = onboarded ? const FocusDNSHomeScreen() : const OnboardingScreen();
     Navigator.of(context).pushAndRemoveUntil(appRoute(next), (route) => false);
   }
 

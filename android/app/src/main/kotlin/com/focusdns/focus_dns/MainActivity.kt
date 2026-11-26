@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.RenderMode
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -20,6 +21,10 @@ import kotlin.concurrent.thread
 
 @Suppress("DEPRECATION")
 class MainActivity : FlutterActivity() {
+
+    override fun getRenderMode(): RenderMode {
+        return RenderMode.texture
+    }
 
     private val reqVpn = 4711
     private val reqNotif = 4712

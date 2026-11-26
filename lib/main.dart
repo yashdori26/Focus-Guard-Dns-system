@@ -15,53 +15,51 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
 
-  bool hasCompletedOnboarding = prefs.getBool('focus_onboarding_completed') ?? false;
-  bool isLoggedIn = prefs.getBool('focus_dns_auth_is_logged_in') ?? false;
-
-  // Dual-layer persistence sync: Reconcile with native SQLite LocalDb (focusdns.db)
-  // so no data or configuration ever resets when the app is backgrounded or reopened.
-  try {
-    final dbOnboarding = await FocusDnsBlockerManager.getKv('focus_onboarding_completed', '0');
-    if (dbOnboarding == '1') {
-      hasCompletedOnboarding = true;
-      await prefs.setBool('focus_onboarding_completed', true);
-    }
-
-    final dbLoggedIn = await FocusDnsBlockerManager.getKv('focus_dns_auth_is_logged_in', '');
-    if (dbLoggedIn == 'true') {
-      isLoggedIn = true;
-      await prefs.setBool('focus_dns_auth_is_logged_in', true);
-    }
-
-    final dbProfileName = await FocusDnsBlockerManager.getKv('focus_dns_auth_profile_name', '');
-    if (dbProfileName.isNotEmpty) {
-      final currentName = prefs.getString('focus_dns_auth_profile_name');
-      if (currentName == null || currentName.isEmpty) {
-        await prefs.setString('focus_dns_auth_profile_name', dbProfileName);
-      }
-    }
-  } catch (e) {
-    debugPrint('[Main] SQLite synchronization check notice: $e');
-  }
+  final hasCompletedOnboarding = prefs.getBool('focus_onboarding_completed') ?? false;
+  final isLoggedIn = prefs.getBool('focus_dns_auth_is_logged_in') ?? false;
 
   // Determine initial launch screen:
-  // 1. If onboarding has been completed: launch directly into the home screen with remembered profile.
-  // 2. If onboarding is not complete and user hasn't authenticated yet: show WelcomeScreen.
-  // 3. If user is authenticated but hasn't completed onboarding: resume onboarding.
+  // 1. If onboarding has been completed or user is logged in: launch directly into HomeScreen!
+  // 2. Otherwise: show WelcomeScreen.
   Widget initialScreen;
-  if (hasCompletedOnboarding) {
+  if (hasCompletedOnboarding || isLoggedIn) {
     initialScreen = const FocusDNSHomeScreen();
-  } else if (isLoggedIn) {
-    initialScreen = const OnboardingScreen();
   } else {
     initialScreen = const WelcomeScreen();
   }
 
+  // Draw first frame immediately — zero blocking on IPC, platform channels, or SQLite
   runApp(ProviderScope(
     child: FocusDNSMobileApp(
       home: initialScreen,
     ),
   ));
+
+  // Dual-layer persistence sync in background microtask: Reconcile with native SQLite LocalDb (focusdns.db)
+  // Non-blocking so app never shows a white screen on startup or restart.
+  Future.microtask(() async {
+    try {
+      final dbOnboarding = await FocusDnsBlockerManager.getKv('focus_onboarding_completed', '0');
+      if (dbOnboarding == '1' && !hasCompletedOnboarding) {
+        await prefs.setBool('focus_onboarding_completed', true);
+      }
+
+      final dbLoggedIn = await FocusDnsBlockerManager.getKv('focus_dns_auth_is_logged_in', '');
+      if (dbLoggedIn == 'true' && !isLoggedIn) {
+        await prefs.setBool('focus_dns_auth_is_logged_in', true);
+      }
+
+      final dbProfileName = await FocusDnsBlockerManager.getKv('focus_dns_auth_profile_name', '');
+      if (dbProfileName.isNotEmpty) {
+        final currentName = prefs.getString('focus_dns_auth_profile_name');
+        if (currentName == null || currentName.isEmpty) {
+          await prefs.setString('focus_dns_auth_profile_name', dbProfileName);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Main] SQLite synchronization background notice: $e');
+    }
+  });
 }
 
 class FocusDNSMobileApp extends ConsumerWidget {
