@@ -14,6 +14,8 @@ import 'package:focus_dns/frontend/theme/wabi_sabi_theme.dart';
 import 'package:focus_dns/frontend/screens/legal/privacy_policy_screen.dart';
 import 'package:focus_dns/frontend/widgets/routine_focus_card.dart';
 import 'package:focus_dns/frontend/auth/set_password_screen.dart';
+import 'package:focus_dns/frontend/home_screen.dart';
+import 'package:focus_dns/state_management/providers.dart';
 import 'package:focus_dns/services/auth_storage_service.dart';
 
 void main() {
@@ -461,6 +463,65 @@ void main() {
       final saved = await AuthStorageService.getSavedCredentials();
       expect(saved['email'], 'verified_user@example.com');
       expect(saved['password'], 'mypassword123');
+    });
+  });
+
+  group('HomeScreen 3-Block Routine Telemetry Tests', () {
+    testWidgets('Renders 3 blocks for Session Time, Break Time, and Session Cycles below telemetry strip', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: FocusDNSHomeScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Micro telemetry strip
+      expect(find.text('DISTRACTIONS STOPPED'), findsOneWidget);
+      expect(find.text('MINDFUL STREAK'), findsOneWidget);
+      expect(find.text('TRACKERS BLOCKED'), findsOneWidget);
+
+      // Routine 3-block telemetry strip
+      expect(find.byKey(const Key('routine_telemetry_strip')), findsOneWidget);
+      expect(find.text('SESSION TIME'), findsOneWidget);
+      expect(find.text('BREAK TIME'), findsOneWidget);
+      expect(find.text('SESSION CYCLES'), findsOneWidget);
+
+      // Verify RoutineFocusCard ("Anti-Doomscroll Routine") was removed from home screen
+      expect(find.text('Anti-Doomscroll Routine'), findsNothing);
+    });
+
+    testWidgets('Normal mode allows pause and resume, strict mode locks pause', (WidgetTester tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      // Normal mode start
+      container.read(routineFocusProvider.notifier).startRoutine(strict: false);
+      expect(container.read(routineFocusProvider).isActive, isTrue);
+      expect(container.read(routineFocusProvider).isPaused, isFalse);
+
+      // Pause in normal mode
+      final paused = container.read(routineFocusProvider.notifier).pauseRoutine();
+      expect(paused, isTrue);
+      expect(container.read(routineFocusProvider).isPaused, isTrue);
+
+      // Resume in normal mode
+      final resumed = container.read(routineFocusProvider.notifier).resumeRoutine();
+      expect(resumed, isTrue);
+      expect(container.read(routineFocusProvider).isPaused, isFalse);
+
+      // Reset and test strict mode
+      container.read(routineFocusProvider.notifier).cancelRoutine(force: true);
+      container.read(routineFocusProvider.notifier).startRoutine(strict: true);
+      expect(container.read(routineFocusProvider).isStrict, isTrue);
+
+      // Attempt pause in strict mode -> must fail / be locked!
+      final strictPaused = container.read(routineFocusProvider.notifier).pauseRoutine();
+      expect(strictPaused, isFalse);
+      expect(container.read(routineFocusProvider).isPaused, isFalse);
+
+      container.read(routineFocusProvider.notifier).cancelRoutine(force: true);
     });
   });
 }

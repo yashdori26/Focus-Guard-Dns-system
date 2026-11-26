@@ -583,6 +583,13 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
     return '${m.toString().padLeft(2, '0')}m ${s.toString().padLeft(2, '0')}s';
   }
 
+  String _formatTime(int seconds) {
+    if (seconds <= 0) return '00:00';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   void _showStrictModeDisclaimerDialog(BuildContext context, {int initialMinutes = 30}) {
     final palette = WabiSabiPalette.of(context);
 
@@ -921,6 +928,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
     WabiSabiPalette palette,
   ) {
     final liveTelemetry = ref.watch(liveTelemetryProvider);
+    final routineFocus = ref.watch(routineFocusProvider);
     final daysOfWeek = const ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
     final currentDay = daysOfWeek[DateTime.now().weekday - 1];
 
@@ -1124,11 +1132,13 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                           key: const Key('main_protection_toggle'),
                           behavior: HitTestBehavior.opaque,
                           onTap: () async {
-                            if (strictState.isStrict) {
+                            final isStrictLocked = strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict);
+                            if (isStrictLocked) {
+                              final seconds = strictState.isStrict ? strictState.remainingSeconds : routineFocus.remainingSeconds;
                               ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('🔒 Strict Mode active: ${_formatRemaining(strictState.remainingSeconds)} remaining. Protection is locked.'),
+                                  content: Text('🔒 Strict Mode active: ${_formatRemaining(seconds)}. Protection is locked and cannot be paused.'),
                                   duration: const Duration(seconds: 2),
                                 ),
                               );
@@ -1136,6 +1146,13 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                             }
                             final willBeOn = !isProtectionOn;
                             await ref.read(protectionProvider.notifier).set(willBeOn);
+                            if (routineFocus.isActive && !routineFocus.isStrict) {
+                              if (!willBeOn) {
+                                ref.read(routineFocusProvider.notifier).pauseRoutine();
+                              } else {
+                                ref.read(routineFocusProvider.notifier).resumeRoutine();
+                              }
+                            }
                             if (!kIsWeb) {
                               final profileId = ref.read(setupProvider).profileId;
                               if (willBeOn) {
@@ -1149,7 +1166,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                   ScaffoldMessenger.of(context).clearSnackBars();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('🛡️ Protection Resumed. Blocked apps & sites are strictly locked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                                      content: Text('🛡️ Protection & Routine Resumed.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
                                       backgroundColor: const Color(0xFF1B3B2B),
                                       duration: const Duration(seconds: 2),
                                     ),
@@ -1162,7 +1179,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                   ScaffoldMessenger.of(context).clearSnackBars();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('⏸️ Protection Paused. Blocked apps & sites are temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                                      content: Text('⏸️ Protection & Routine Paused. Distractions temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
                                       backgroundColor: const Color(0xFF26262B),
                                       duration: const Duration(seconds: 2),
                                     ),
@@ -1174,14 +1191,14 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: strictState.isStrict
+                              color: (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                   ? palette.surface
                                   : isProtectionOn
                                       ? palette.canvas
                                       : palette.surface,
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                color: strictState.isStrict
+                                color: (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                     ? palette.strictAccent.withOpacity(0.5)
                                     : isProtectionOn
                                         ? palette.hairlineSoft
@@ -1193,13 +1210,13 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  strictState.isStrict
+                                  (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                       ? Icons.lock
                                       : isProtectionOn
                                           ? Icons.pause_rounded
                                           : Icons.play_arrow_rounded,
                                   size: 15,
-                                  color: strictState.isStrict
+                                  color: (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                       ? palette.strictAccent
                                       : isProtectionOn
                                           ? palette.ink
@@ -1207,7 +1224,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  strictState.isStrict
+                                  (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                       ? 'Locked'
                                       : isProtectionOn
                                           ? 'Pause'
@@ -1215,7 +1232,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
-                                    color: strictState.isStrict
+                                    color: (strictState.isStrict || (routineFocus.isActive && routineFocus.isStrict))
                                         ? palette.strictAccent
                                         : isProtectionOn
                                             ? palette.ink
@@ -1250,8 +1267,111 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                     ),
                   ),
 
-                  // ROUTINE FOCUS CARD (SESSION TIMER, BREAK TIMER, AND SESSIONS)
-                  const RoutineFocusCard(),
+                  // ROUTINE SESSION / BREAK / CYCLES 3-BLOCK STRIP
+                  GestureDetector(
+                    key: const Key('routine_telemetry_strip'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (!routineFocus.isActive) {
+                        _showCircularRoutineSetupDialog(context);
+                        return;
+                      }
+                      if (strictState.isStrict || routineFocus.isStrict) {
+                        final seconds = strictState.isStrict ? strictState.remainingSeconds : routineFocus.remainingSeconds;
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('🔒 Strict Mode active: ${_formatRemaining(seconds)}. Cannot pause in Strict Mode.'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+                      // In Normal Mode: toggle active and pause!
+                      if (routineFocus.isPaused) {
+                        ref.read(routineFocusProvider.notifier).resumeRoutine();
+                        ref.read(protectionProvider.notifier).set(true);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('▶️ Routine Resumed (${routineFocus.phaseLabel})', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                            backgroundColor: const Color(0xFF1B3B2B),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      } else {
+                        ref.read(routineFocusProvider.notifier).pauseRoutine();
+                        ref.read(protectionProvider.notifier).set(false);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('⏸️ Routine Paused. Ticking paused and apps temporarily unblocked.', style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                            backgroundColor: const Color(0xFF26262B),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: routineFocus.isStrict
+                            ? palette.strictAccent.withOpacity(0.06)
+                            : (routineFocus.isPaused ? palette.canvas : palette.surface),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: routineFocus.isStrict
+                              ? palette.strictAccent.withOpacity(0.4)
+                              : (routineFocus.isActive
+                                  ? (routineFocus.isPaused ? palette.hairlineSoft : palette.safeAccent.withOpacity(0.5))
+                                  : palette.hairlineSoft),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildMicroStat(
+                              routineFocus.isFocus
+                                  ? '${_formatTime(routineFocus.remainingSeconds)}${routineFocus.isPaused ? ' ⏸' : ''}'
+                                  : '${routineFocus.config.sessionMinutes}m',
+                              routineFocus.isFocus && routineFocus.isPaused
+                                  ? 'SESSION (PAUSED)'
+                                  : 'SESSION TIME',
+                              palette,
+                              highlightColor: routineFocus.isFocus
+                                  ? (routineFocus.isStrict ? palette.strictAccent : palette.safeAccent)
+                                  : null,
+                            ),
+                          ),
+                          Container(height: 24, width: 1, color: palette.hairlineSoft),
+                          Expanded(
+                            child: _buildMicroStat(
+                              routineFocus.isBreak
+                                  ? '${_formatTime(routineFocus.remainingSeconds)}${routineFocus.isPaused ? ' ⏸' : ''}'
+                                  : '${routineFocus.config.breakMinutes}m',
+                              routineFocus.isBreak && routineFocus.isPaused
+                                  ? 'BREAK (PAUSED)'
+                                  : 'BREAK TIME',
+                              palette,
+                              highlightColor: routineFocus.isBreak ? const Color(0xFF10B981) : null,
+                            ),
+                          ),
+                          Container(height: 24, width: 1, color: palette.hairlineSoft),
+                          Expanded(
+                            child: _buildMicroStat(
+                              routineFocus.isActive
+                                  ? '${routineFocus.currentCycle} / ${routineFocus.config.totalCycles}'
+                                  : '${routineFocus.config.totalCycles} Cycles',
+                              'SESSION CYCLES',
+                              palette,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                   // PRIMARY SESSION ACTION / ACTIVE STRICT STATUS
                   if (strictState.isStrict)
@@ -1399,7 +1519,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
     );
   }
 
-  Widget _buildMicroStat(String value, String label, WabiSabiPalette palette) {
+  Widget _buildMicroStat(String value, String label, WabiSabiPalette palette, {Color? highlightColor}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1409,7 +1529,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
           style: GoogleFonts.fraunces(
             fontSize: 16.5,
             fontWeight: FontWeight.w700,
-            color: palette.ink,
+            color: highlightColor ?? palette.ink,
             letterSpacing: -0.3,
           ),
           maxLines: 1,
@@ -1423,7 +1543,7 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
             fontSize: 8.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
-            color: palette.mutedInk,
+            color: highlightColor != null ? highlightColor.withOpacity(0.85) : palette.mutedInk,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

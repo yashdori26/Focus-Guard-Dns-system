@@ -44,6 +44,7 @@ class RoutineFocusState {
   final int totalBreakSecondsCompleted;
   final bool autoSendHomeOnBreakEnd;
   final bool isStrict;
+  final bool isPaused;
 
   const RoutineFocusState({
     this.phase = RoutinePhase.idle,
@@ -55,20 +56,22 @@ class RoutineFocusState {
     this.totalBreakSecondsCompleted = 0,
     this.autoSendHomeOnBreakEnd = true,
     this.isStrict = false,
+    this.isPaused = false,
   });
 
   bool get isActive => phase == RoutinePhase.focusSession || phase == RoutinePhase.breakSession;
   bool get isFocus => phase == RoutinePhase.focusSession;
   bool get isBreak => phase == RoutinePhase.breakSession;
+  bool get isRunning => isActive && !isPaused;
 
   String get phaseLabel {
     switch (phase) {
       case RoutinePhase.idle:
         return 'Ready to Focus';
       case RoutinePhase.focusSession:
-        return 'Deep Focus Session';
+        return isPaused ? 'Focus Session (Paused)' : 'Deep Focus Session';
       case RoutinePhase.breakSession:
-        return 'Micro-Break (Restricted)';
+        return isPaused ? 'Micro-Break (Paused)' : 'Micro-Break (Restricted)';
       case RoutinePhase.completed:
         return 'Routine Completed';
     }
@@ -84,6 +87,7 @@ class RoutineFocusState {
     int? totalBreakSecondsCompleted,
     bool? autoSendHomeOnBreakEnd,
     bool? isStrict,
+    bool? isPaused,
   }) {
     return RoutineFocusState(
       phase: phase ?? this.phase,
@@ -95,6 +99,7 @@ class RoutineFocusState {
       totalBreakSecondsCompleted: totalBreakSecondsCompleted ?? this.totalBreakSecondsCompleted,
       autoSendHomeOnBreakEnd: autoSendHomeOnBreakEnd ?? this.autoSendHomeOnBreakEnd,
       isStrict: isStrict ?? this.isStrict,
+      isPaused: isPaused ?? this.isPaused,
     );
   }
 }
@@ -247,6 +252,50 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     } catch (_) {}
   }
 
+  bool togglePause() {
+    if (!state.isActive) return false;
+    if (state.isStrict) return false; // Strict mode CANNOT pause!
+    return state.isPaused ? resumeRoutine() : pauseRoutine();
+  }
+
+  bool pauseRoutine() {
+    if (!state.isActive) return false;
+    if (state.isStrict) return false; // Strict mode CANNOT pause!
+    if (state.isPaused) return true;
+
+    _ticker?.cancel();
+    _ticker = null;
+
+    int currentRemaining = state.remainingSeconds;
+    if (state.targetEndTime != null) {
+      final diff = state.targetEndTime!.difference(DateTime.now()).inSeconds;
+      if (diff > 0) currentRemaining = diff;
+    }
+
+    state = state.copyWith(
+      isPaused: true,
+      remainingSeconds: currentRemaining,
+      targetEndTime: null,
+    );
+    // Unblock temporarily during pause in normal mode
+    _applyFocusBlocking(false);
+    return true;
+  }
+
+  bool resumeRoutine() {
+    if (!state.isActive || !state.isPaused) return false;
+
+    final seconds = state.remainingSeconds > 0 ? state.remainingSeconds : 1;
+    state = state.copyWith(
+      isPaused: false,
+      remainingSeconds: seconds,
+      targetEndTime: DateTime.now().add(Duration(seconds: seconds)),
+    );
+    _applyFocusBlocking(state.isFocus);
+    _armTicker();
+    return true;
+  }
+
   bool cancelRoutine({bool force = false}) {
     if (state.isStrict && !force && state.isActive) {
       return false; // Locked in strict mode!
@@ -263,6 +312,7 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
       remainingSeconds: 0,
       targetEndTime: null,
       isStrict: false,
+      isPaused: false,
     );
     return true;
   }
