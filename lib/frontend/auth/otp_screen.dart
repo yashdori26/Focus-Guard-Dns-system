@@ -88,6 +88,14 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     HapticFeedback.lightImpact();
     final prefs = await SharedPreferences.getInstance();
 
+    if (widget.password != null && widget.password!.isNotEmpty) {
+      await AuthStorageService.saveCredentials(
+        email: widget.email,
+        password: widget.password!,
+        profileName: 'Focus User',
+      );
+    }
+
     if (!widget.isNewAccount) {
       // Returning user logging in: bypass onboarding completely and go straight to Home Screen!
       await prefs.setBool('focus_onboarding_completed', true);
@@ -99,15 +107,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(appRoute(const FocusDNSHomeScreen()), (route) => false);
       return;
-    }
-
-    // New account: save credentials and proceed through onboarding flow
-    if (widget.password != null && widget.password!.isNotEmpty) {
-      await AuthStorageService.saveCredentials(
-        email: widget.email,
-        password: widget.password!,
-        profileName: 'Focus User',
-      );
     }
     final onboarded = prefs.getBool('focus_onboarding_completed') ?? false;
     if (!mounted) return;

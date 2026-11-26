@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../state_management/providers.dart';
+import '../../services/auth_storage_service.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
 import 'auth_widgets.dart';
@@ -33,6 +34,24 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final creds = await AuthStorageService.getSavedCredentials();
+    if (!mounted) return;
+    if (creds['email'] != null && creds['email']!.isNotEmpty && _email.text.isEmpty) {
+      _email.text = creds['email']!;
+    }
+    if (creds['password'] != null && creds['password']!.isNotEmpty && _password.text.isEmpty) {
+      _password.text = creds['password']!;
+    }
+    setState(() {});
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();
@@ -55,6 +74,15 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
       _error = null;
     });
 
+    // Ensure typed password is saved to local database
+    if (_password.text.isNotEmpty) {
+      await AuthStorageService.saveCredentials(
+        email: _email.text.trim().toLowerCase(),
+        password: _password.text,
+        profileName: _email.text.trim().isNotEmpty ? _email.text.trim().split('@').first : 'User',
+      );
+    }
+
     final res = await ref.read(authProvider.notifier).sendEmailVerificationCode(
           _email.text.trim(),
           isNewAccount: widget.isNewAccount,
@@ -76,7 +104,7 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
     Navigator.of(context).push(appRoute(OtpScreen(
       email: _email.text.trim().toLowerCase(),
       isNewAccount: widget.isNewAccount,
-      password: widget.isNewAccount ? _password.text : null,
+      password: _password.text.isNotEmpty ? _password.text : null,
     )));
   }
 
@@ -127,12 +155,19 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                           autofillHints: const [AutofillHints.email],
                           hintText: 'name@example.com',
                           icon: Icons.alternate_email_rounded,
-                          onChanged: (_) {
+                          onChanged: (val) {
                             if (_error != null) setState(() => _error = null);
                             setState(() {});
+                            if (_password.text.isNotEmpty && val.trim().isNotEmpty) {
+                              AuthStorageService.saveCredentials(
+                                email: val.trim().toLowerCase(),
+                                password: _password.text,
+                                profileName: val.trim().split('@').first,
+                              );
+                            }
                           },
                           onSubmitted: (_) {
-                            if (!widget.isNewAccount) _submit();
+                            if (!widget.isNewAccount && _password.text.isEmpty) _submit();
                           },
                           suffixIcon: _email.text.isNotEmpty
                               ? IconButton(
@@ -146,33 +181,38 @@ class _EmailEntryScreenState extends ConsumerState<EmailEntryScreen> {
                         ),
                       ),
                     ),
-                    if (widget.isNewAccount) ...[
-                      const SizedBox(height: 14),
-                      FadeSlideIn(
-                        delay: FadeSlideIn.stagger(3),
-                        child: AuthCardTextField(
-                          fieldKey: const Key('auth_password_field'),
-                          controller: _password,
-                          obscureText: _obscurePassword,
-                          hintText: 'Password (min 6 characters)',
-                          icon: Icons.lock_outline_rounded,
-                          textInputAction: TextInputAction.done,
-                          onChanged: (_) {
-                            if (_error != null) setState(() => _error = null);
-                            setState(() {});
-                          },
-                          onSubmitted: (_) => _submit(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              size: 20,
-                              color: palette.mutedInk,
-                            ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    const SizedBox(height: 14),
+                    FadeSlideIn(
+                      delay: FadeSlideIn.stagger(3),
+                      child: AuthCardTextField(
+                        fieldKey: const Key('auth_password_field'),
+                        controller: _password,
+                        obscureText: _obscurePassword,
+                        hintText: widget.isNewAccount ? 'Password (min 6 characters)' : 'Password',
+                        icon: Icons.lock_outline_rounded,
+                        textInputAction: TextInputAction.done,
+                        onChanged: (val) {
+                          if (_error != null) setState(() => _error = null);
+                          setState(() {});
+                          if (val.isNotEmpty) {
+                            AuthStorageService.saveCredentials(
+                              email: _email.text.trim().toLowerCase(),
+                              password: val,
+                              profileName: _email.text.trim().isNotEmpty ? _email.text.trim().split('@').first : 'User',
+                            );
+                          }
+                        },
+                        onSubmitted: (_) => _submit(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            size: 20,
+                            color: palette.mutedInk,
                           ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
-                    ],
+                    ),
                     const SizedBox(height: 16),
                     if (_error != null)
                       Container(

@@ -13,6 +13,7 @@ import 'package:focus_dns/frontend/more_screen.dart';
 import 'package:focus_dns/frontend/theme/wabi_sabi_theme.dart';
 import 'package:focus_dns/frontend/screens/legal/privacy_policy_screen.dart';
 import 'package:focus_dns/frontend/widgets/routine_focus_card.dart';
+import 'package:focus_dns/services/auth_storage_service.dart';
 
 void main() {
   setUp(() {
@@ -403,6 +404,29 @@ void main() {
       expect(find.text('Sessions'), findsOneWidget);
       expect(find.byKey(const Key('start_routine_normal_button')), findsOneWidget);
       expect(find.byKey(const Key('start_routine_strict_button')), findsOneWidget);
+    });
+  });
+
+  group('Password Database Persistence Tests', () {
+    testWidgets('Password typed into login/signin is saved to database and preloaded', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: EmailEntryScreen(isNewAccount: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter email and password
+      await tester.enterText(find.byKey(const Key('auth_email_field')), 'typed_user@example.com');
+      await tester.enterText(find.byKey(const Key('auth_password_field')), 'typed_password_123');
+      await tester.pump();
+
+      // Verify that database / storage received the credentials
+      final saved = await AuthStorageService.getSavedCredentials();
+      expect(saved['email'], 'typed_user@example.com');
+      expect(saved['password'], 'typed_password_123');
     });
   });
 }
