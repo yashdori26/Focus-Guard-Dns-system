@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
+import android.content.Context
 import android.os.PowerManager
 import android.provider.Settings
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -24,6 +25,11 @@ class MainActivity : FlutterActivity() {
 
     override fun getRenderMode(): RenderMode {
         return RenderMode.texture
+    }
+
+    override fun onResume() {
+        super.onResume()
+        FocusAccessibilityService.restoreAccessibilityIfConfigured(this)
     }
 
     private val reqVpn = 4711
@@ -219,6 +225,7 @@ class MainActivity : FlutterActivity() {
     private fun handleBlocker(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "isAccessibilityServiceEnabled" -> {
+                FocusAccessibilityService.restoreAccessibilityIfConfigured(this)
                 var isEnabled = FocusAccessibilityService.instance != null
                 if (!isEnabled) {
                     val am = getSystemService(ACCESSIBILITY_SERVICE) as? AccessibilityManager
@@ -240,6 +247,12 @@ class MainActivity : FlutterActivity() {
                 result.success(isEnabled)
             }
             "openAccessibilitySettings" -> {
+                try {
+                    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                } catch (_: Exception) {}
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 result.success(true)
             }

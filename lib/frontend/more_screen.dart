@@ -171,6 +171,12 @@ class _MoreTabState extends ConsumerState<MoreTab> with WidgetsBindingObserver {
       if (!enabled) {
         await FocusDnsBlockerManager.openAccessibilitySettings();
       }
+      try {
+        final batteryIgnored = await FocusDnsBlockerManager.isBatteryOptimizationIgnored();
+        if (!batteryIgnored) {
+          await FocusDnsBlockerManager.requestIgnoreBatteryOptimizations();
+        }
+      } catch (_) {}
       setState(() => _isAccessibilityActive = true);
     } else {
       final strictState = ref.read(strictModeProvider);

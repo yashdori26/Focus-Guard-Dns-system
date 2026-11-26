@@ -392,13 +392,13 @@ class DeepFocusTab extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
 
-        // CARD 1: WEBSITES, APPS & GAMES
+        // CARD 1: APPS & GAMES
         _buildListCard(
           context: context,
           palette: palette,
-          title: 'Websites, Apps & Games',
-          desc: 'Restrict access to specific websites, apps and games.',
-          buttonText: 'ADD A WEBSITE, APP OR GAME',
+          title: 'Apps & Games',
+          desc: 'Restrict access to specific apps and games.',
+          buttonText: 'ADD AN APP OR GAME',
           onPressed: () => _showAddWebsiteModal(context, ref),
           items: state.websites.map((w) {
             return _listItem(
@@ -670,45 +670,6 @@ class DeepFocusTab extends ConsumerWidget {
                     ),
                   ),
                 ],
-                Builder(builder: (context) {
-                  final target = (appName ?? title).toLowerCase();
-                  final isSurgical = target.contains('insta') ||
-                      target.contains('youtube') ||
-                      target.contains('tiktok') ||
-                      target.contains('twitter') ||
-                      target.contains('reddit');
-                  if (!isSurgical) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: palette.safeAccent.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: palette.safeAccent.withOpacity(0.3), width: 0.8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.bolt_rounded, size: 10, color: palette.safeAccent),
-                              const SizedBox(width: 3),
-                              Text(
-                                'Surgical Feeds Shielded',
-                                style: GoogleFonts.inter(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: palette.safeAccent,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
               ],
             ),
           ),
@@ -899,7 +860,7 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Block App or Website',
+                      'Block App or Game',
                       style: GoogleFonts.fraunces(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -940,7 +901,7 @@ class _AddBlockedAppModalState extends State<AddBlockedAppModal> {
               style: GoogleFonts.inter(color: palette.ink, fontSize: 13),
               decoration: InputDecoration(
                 icon: Icon(Icons.search_rounded, color: palette.mutedInk, size: 18),
-                hintText: 'Search apps on phone or enter domain...',
+                hintText: 'Search apps on phone or enter app name...',
                 hintStyle: GoogleFonts.inter(color: palette.mutedInk.withOpacity(0.7), fontSize: 13),
                 border: InputBorder.none,
                 isDense: true,

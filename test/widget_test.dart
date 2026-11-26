@@ -187,7 +187,7 @@ void main() {
       expect(find.text('Quiet the noise.'), findsOneWidget);
       expect(find.text('ACTIVE RESTRICTIONS'), findsOneWidget);
       expect(find.byKey(const Key('add_restriction_button')), findsOneWidget);
-      expect(find.text('Websites, Apps & Games'), findsOneWidget);
+      expect(find.text('Apps & Games'), findsOneWidget);
       expect(find.text('Categories'), findsOneWidget);
     });
 
