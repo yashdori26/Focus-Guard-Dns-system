@@ -12,6 +12,7 @@ import '../screens/onboarding/onboarding_screen.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../widgets/motion.dart';
 import 'auth_widgets.dart';
+import 'set_password_screen.dart';
 
 const int kEmailOtpLength = 6;
 
@@ -96,22 +97,22 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       );
     }
 
-    if (!widget.isNewAccount) {
-      // Returning user logging in: bypass onboarding completely and go straight to Home Screen!
-      await prefs.setBool('focus_onboarding_completed', true);
-      await prefs.setBool('focus_dns_auth_is_logged_in', true);
-      try {
-        await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '1');
-        await FocusDnsBlockerManager.putKv('focus_dns_auth_is_logged_in', 'true');
-      } catch (_) {}
+    if (widget.isNewAccount) {
+      // Email verified! Ask for password and confirm password now
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(appRoute(const FocusDNSHomeScreen()), (route) => false);
+      Navigator.of(context).pushReplacement(appRoute(SetPasswordScreen(email: widget.email)));
       return;
     }
-    final onboarded = prefs.getBool('focus_onboarding_completed') ?? false;
+
+    // Returning user logging in: bypass onboarding completely and go straight to Home Screen!
+    await prefs.setBool('focus_onboarding_completed', true);
+    await prefs.setBool('focus_dns_auth_is_logged_in', true);
+    try {
+      await FocusDnsBlockerManager.putKv('focus_onboarding_completed', '1');
+      await FocusDnsBlockerManager.putKv('focus_dns_auth_is_logged_in', 'true');
+    } catch (_) {}
     if (!mounted) return;
-    final next = onboarded ? const FocusDNSHomeScreen() : const OnboardingScreen();
-    Navigator.of(context).pushAndRemoveUntil(appRoute(next), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(appRoute(const FocusDNSHomeScreen()), (route) => false);
   }
 
   Future<void> _resend() async {

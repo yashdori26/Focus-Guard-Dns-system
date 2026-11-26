@@ -13,6 +13,7 @@ import 'package:focus_dns/frontend/more_screen.dart';
 import 'package:focus_dns/frontend/theme/wabi_sabi_theme.dart';
 import 'package:focus_dns/frontend/screens/legal/privacy_policy_screen.dart';
 import 'package:focus_dns/frontend/widgets/routine_focus_card.dart';
+import 'package:focus_dns/frontend/auth/set_password_screen.dart';
 import 'package:focus_dns/services/auth_storage_service.dart';
 
 void main() {
@@ -71,7 +72,6 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byKey(const Key('auth_email_field')), 'yash@example.com');
-      await tester.enterText(find.byKey(const Key('auth_password_field')), 'secret123');
       await tester.pump();
       await tester.tap(find.byKey(const Key('auth_next_button')));
       await tester.pump();
@@ -427,6 +427,40 @@ void main() {
       final saved = await AuthStorageService.getSavedCredentials();
       expect(saved['email'], 'typed_user@example.com');
       expect(saved['password'], 'typed_password_123');
+    });
+
+    testWidgets('Sign up asks for password and confirm password after email is verified', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: SetPasswordScreen(email: 'verified_user@example.com'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create your\npassword'), findsOneWidget);
+      expect(find.byKey(const Key('auth_password_field')), findsOneWidget);
+      expect(find.byKey(const Key('auth_confirm_password_field')), findsOneWidget);
+
+      // Passwords do not match
+      await tester.enterText(find.byKey(const Key('auth_password_field')), 'mypassword123');
+      await tester.enterText(find.byKey(const Key('auth_confirm_password_field')), 'different123');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('auth_next_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Passwords do not match. Please re-enter.'), findsOneWidget);
+
+      // Passwords match
+      await tester.enterText(find.byKey(const Key('auth_confirm_password_field')), 'mypassword123');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('auth_next_button')));
+      await tester.pumpAndSettle();
+
+      final saved = await AuthStorageService.getSavedCredentials();
+      expect(saved['email'], 'verified_user@example.com');
+      expect(saved['password'], 'mypassword123');
     });
   });
 }
