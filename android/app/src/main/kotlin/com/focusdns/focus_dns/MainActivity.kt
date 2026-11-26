@@ -294,6 +294,12 @@ class MainActivity : FlutterActivity() {
                 applyStrict(enabled, mins)
                 result.success(true)
             }
+            "setRoutineInBreak" -> {
+                val inBreak = call.argument<Boolean>("inBreak") ?: false
+                db().putKv("routine_in_break", if (inBreak) "1" else "0")
+                Rules.reload(this)
+                result.success(true)
+            }
             "getStrictRemainingSeconds" -> result.success(strictRemaining())
             "syncRules" -> {
                 val packages = call.argument<List<*>>("packages")?.mapNotNull { it?.toString() }

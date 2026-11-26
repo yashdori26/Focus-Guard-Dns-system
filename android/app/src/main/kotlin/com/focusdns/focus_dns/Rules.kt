@@ -24,6 +24,8 @@ object Rules {
     @Volatile var threatIntelEnabled = true
     @Volatile var adblockEnabled = true
     @Volatile var antiVpnBypassEnabled = true
+    @Volatile var protectionPaused = false
+    @Volatile var routineInBreak = false
 
     private val lists = ConcurrentHashMap<String, Set<String>>()
 
@@ -64,6 +66,8 @@ object Rules {
         threatIntelEnabled = db.getKv("sec_threat_intel", "1") == "1"
         adblockEnabled = db.getKv("sec_adblock", "1") == "1"
         antiVpnBypassEnabled = db.getKv("sec_anti_vpn_bypass", "1") == "1"
+        protectionPaused = db.getKv("protection_paused", "0") == "1"
+        routineInBreak = db.getKv("routine_in_break", "0") == "1"
         loaded = true
     }
 
@@ -134,6 +138,7 @@ object Rules {
 
     fun decide(ctx: Context, raw: String): Decision {
         ensureLoaded(ctx)
+        if (routineInBreak || protectionPaused) return Decision(false, "Unblocked during break/pause")
         val d = raw.trim().trimEnd('.').lowercase()
         if (d.isEmpty() || !d.contains('.')) return Decision(false, "")
         if (exempt(d)) return Decision(false, "exempt")
@@ -155,6 +160,7 @@ object Rules {
     }
 
     fun isPackageBlocked(pkg: String): Boolean {
+        if (routineInBreak || protectionPaused) return false
         if (packages.contains(pkg)) return true
         val p = pkg.lowercase()
         for (pkgRule in packages) {

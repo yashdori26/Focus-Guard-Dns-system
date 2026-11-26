@@ -113,6 +113,9 @@ class FocusAccessibilityService : AccessibilityService() {
         if (pkg in NEVER_BLOCK) return
         Rules.ensureLoaded(this)
 
+        val inBreak = db.getKv("routine_in_break", "0") == "1"
+        if (inBreak) return // Completely unblocked during break timer!
+
         val isPaused = db.getKv("protection_paused", "0") == "1"
         if (isPaused && !isStrict) return
 

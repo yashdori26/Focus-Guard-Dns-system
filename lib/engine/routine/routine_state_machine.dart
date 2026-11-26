@@ -420,7 +420,14 @@ class RoutineStateMachine extends ChangeNotifier {
 
   void _enforcePlatformBlock(bool shouldBlock) {
     try {
-      FocusDnsBlockerManager.setStrictMode(shouldBlock);
+      if (shouldBlock) {
+        FocusDnsBlockerManager.setRoutineInBreak(false);
+        FocusDnsBlockerManager.setProtectionEnabled(true);
+        FocusDnsBlockerManager.setStrictMode(true);
+      } else {
+        FocusDnsBlockerManager.setRoutineInBreak(true);
+        FocusDnsBlockerManager.setProtectionEnabled(false);
+      }
     } catch (e) {
       debugPrint('[RoutineEngine] Platform blocking sync warning: $e');
     }

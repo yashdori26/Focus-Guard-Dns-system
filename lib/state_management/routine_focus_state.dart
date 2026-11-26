@@ -232,7 +232,18 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
 
   void _applyFocusBlocking(bool shouldBlock) {
     try {
-      FocusDnsBlockerManager.setStrictMode(shouldBlock);
+      if (shouldBlock) {
+        // Active Focus Session: ALL blocks are fully blocked!
+        FocusDnsBlockerManager.setRoutineInBreak(false);
+        FocusDnsBlockerManager.setProtectionEnabled(true);
+        if (state.isStrict) {
+          FocusDnsBlockerManager.setStrictMode(true);
+        }
+      } else {
+        // Break Session: Everything unblocked until break finishes!
+        FocusDnsBlockerManager.setRoutineInBreak(true);
+        FocusDnsBlockerManager.setProtectionEnabled(false);
+      }
     } catch (_) {}
   }
 
@@ -242,7 +253,11 @@ class RoutineFocusNotifier extends StateNotifier<RoutineFocusState> {
     }
     _ticker?.cancel();
     _ticker = null;
-    _applyFocusBlocking(false);
+    try {
+      FocusDnsBlockerManager.setRoutineInBreak(false);
+      FocusDnsBlockerManager.setProtectionEnabled(true);
+      FocusDnsBlockerManager.setStrictMode(false);
+    } catch (_) {}
     state = state.copyWith(
       phase: RoutinePhase.idle,
       remainingSeconds: 0,

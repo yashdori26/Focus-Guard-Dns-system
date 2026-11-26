@@ -151,6 +151,22 @@ class FocusDnsBlockerManager {
     return true;
   }
 
+  /// Sets temporary unblocked status during routine break timers
+  static Future<bool> setRoutineInBreak(bool inBreak) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final bool? result = await _channel.invokeMethod<bool>('setRoutineInBreak', {
+          'inBreak': inBreak,
+        });
+        return result ?? false;
+      } catch (e) {
+        debugPrint('[FocusDNS Blocker] Error setting routine break state: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Gets the remaining seconds for timed Strict Mode from native RulesStore.
   static Future<int> getStrictRemainingSeconds() async {
     if (!kIsWeb && Platform.isAndroid) {
