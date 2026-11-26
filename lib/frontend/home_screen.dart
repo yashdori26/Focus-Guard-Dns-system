@@ -1267,10 +1267,11 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                     ),
                   ),
 
-                  // ROUTINE SESSION / BREAK / CYCLES 3-BLOCK STRIP
-                  GestureDetector(
-                    key: const Key('routine_telemetry_strip'),
-                    behavior: HitTestBehavior.opaque,
+                  // ROUTINE SESSION / BREAK / CYCLES 3-BLOCK STRIP (POPS UP ONLY WHEN ROUTINE IS ACTIVE)
+                  if (routineFocus.isActive)
+                    GestureDetector(
+                      key: const Key('routine_telemetry_strip'),
+                      behavior: HitTestBehavior.opaque,
                     onTap: () {
                       if (!routineFocus.isActive) {
                         _showCircularRoutineSetupDialog(context);

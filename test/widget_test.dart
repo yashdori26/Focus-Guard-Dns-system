@@ -467,29 +467,45 @@ void main() {
   });
 
   group('HomeScreen 3-Block Routine Telemetry Tests', () {
-    testWidgets('Renders 3 blocks for Session Time, Break Time, and Session Cycles below telemetry strip', (WidgetTester tester) async {
+    testWidgets('3 blocks only pop up when routine is executed, hidden when idle', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: [
+            liveTelemetryProvider.overrideWith((ref) => LiveTelemetryNotifier(enablePolling: false)),
+          ],
+          child: const MaterialApp(
             home: FocusDNSHomeScreen(),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      // Micro telemetry strip
+      // Micro telemetry strip is always visible
       expect(find.text('DISTRACTIONS STOPPED'), findsOneWidget);
       expect(find.text('MINDFUL STREAK'), findsOneWidget);
       expect(find.text('TRACKERS BLOCKED'), findsOneWidget);
 
-      // Routine 3-block telemetry strip
+      // When routine is NOT executed (idle), 3-block strip is hidden!
+      expect(find.byKey(const Key('routine_telemetry_strip')), findsNothing);
+      expect(find.text('SESSION TIME'), findsNothing);
+
+      // Verify RoutineFocusCard ("Anti-Doomscroll Routine") was removed from home screen
+      expect(find.text('Anti-Doomscroll Routine'), findsNothing);
+
+      // Execute routine (e.g. after Apply Normally or Apply Strictly)
+      final element = tester.element(find.byType(FocusDNSHomeScreen));
+      final container = ProviderScope.containerOf(element);
+      container.read(routineFocusProvider.notifier).startRoutine(strict: false);
+      await tester.pump();
+
+      // Now the 3-block strip pops up!
       expect(find.byKey(const Key('routine_telemetry_strip')), findsOneWidget);
       expect(find.text('SESSION TIME'), findsOneWidget);
       expect(find.text('BREAK TIME'), findsOneWidget);
       expect(find.text('SESSION CYCLES'), findsOneWidget);
 
-      // Verify RoutineFocusCard ("Anti-Doomscroll Routine") was removed from home screen
-      expect(find.text('Anti-Doomscroll Routine'), findsNothing);
+      container.read(routineFocusProvider.notifier).cancelRoutine(force: true);
+      await tester.pump();
     });
 
     testWidgets('Normal mode allows pause and resume, strict mode locks pause', (WidgetTester tester) async {
