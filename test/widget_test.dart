@@ -12,6 +12,7 @@ import 'package:focus_dns/frontend/tabs/logs_tab.dart';
 import 'package:focus_dns/frontend/more_screen.dart';
 import 'package:focus_dns/frontend/theme/wabi_sabi_theme.dart';
 import 'package:focus_dns/frontend/screens/legal/privacy_policy_screen.dart';
+import 'package:focus_dns/frontend/widgets/routine_focus_card.dart';
 
 void main() {
   setUp(() {
@@ -379,6 +380,29 @@ void main() {
       expect(find.text('Delete Account?'), findsOneWidget);
       expect(find.byKey(const Key('confirm_delete_account_button')), findsOneWidget);
       expect(find.text('Keep My Account'), findsOneWidget);
+    });
+  });
+
+  group('RoutineFocusCard Tests', () {
+    testWidgets('Renders Session Timer, Break Timer, and Sessions on the screen', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: WabiSabiTheme.lightTheme,
+            home: const Scaffold(
+              body: RoutineFocusCard(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Anti-Doomscroll Routine'), findsOneWidget);
+      expect(find.text('Session Timer'), findsOneWidget);
+      expect(find.text('Break Timer'), findsOneWidget);
+      expect(find.text('Sessions'), findsOneWidget);
+      expect(find.byKey(const Key('start_routine_normal_button')), findsOneWidget);
+      expect(find.byKey(const Key('start_routine_strict_button')), findsOneWidget);
     });
   });
 }

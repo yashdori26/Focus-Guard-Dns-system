@@ -16,6 +16,7 @@ import 'more_screen.dart';
 import 'tabs/deep_focus_tab.dart';
 import 'tabs/logs_tab.dart';
 import 'widgets.dart';
+import 'widgets/routine_focus_card.dart';
 import 'screens/routine_focus_studio_screen.dart';
 
 class FocusDNSHomeScreen extends ConsumerStatefulWidget {
@@ -647,6 +648,12 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
               ),
             );
             ref.read(routineEngineProvider).startRoutine();
+            ref.read(routineFocusProvider.notifier).updateConfig(
+              sessionMinutes: focusMinutes,
+              breakMinutes: breakMinutes,
+              totalCycles: cycles,
+            );
+            ref.read(routineFocusProvider.notifier).startRoutine(strict: isStrict);
             ref.read(setupProvider.notifier).autoSyncAndLinkIp();
             await ref.read(protectionProvider.notifier).set(true);
             if (!kIsWeb) {
@@ -1242,6 +1249,9 @@ class _FocusDNSHomeScreenState extends ConsumerState<FocusDNSHomeScreen>
                       ],
                     ),
                   ),
+
+                  // ROUTINE FOCUS CARD (SESSION TIMER, BREAK TIMER, AND SESSIONS)
+                  const RoutineFocusCard(),
 
                   // PRIMARY SESSION ACTION / ACTIVE STRICT STATUS
                   if (strictState.isStrict)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../backend/blocker_service.dart';
 import '../../state_management/providers.dart';
 import '../theme/wabi_sabi_theme.dart';
 import '../screens/routine_focus_studio_screen.dart';
@@ -101,7 +102,7 @@ class RoutineFocusCard extends ConsumerWidget {
             Row(
               children: [
                 _buildConfigChip(
-                  label: 'Session',
+                  label: 'Session Timer',
                   value: '${routine.config.sessionMinutes}m',
                   onTap: () => _showPicker(
                     context,
@@ -114,7 +115,7 @@ class RoutineFocusCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 _buildConfigChip(
-                  label: 'Break (Max 30m)',
+                  label: 'Break Timer',
                   value: '${routine.config.breakMinutes}m',
                   onTap: () => _showPicker(
                     context,
@@ -127,8 +128,8 @@ class RoutineFocusCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 _buildConfigChip(
-                  label: 'Cycles',
-                  value: '${routine.config.totalCycles}x',
+                  label: 'Sessions',
+                  value: '${routine.config.totalCycles} cycles',
                   onTap: () => _showPicker(
                     context,
                     title: 'Total Cycles',
@@ -146,7 +147,10 @@ class RoutineFocusCard extends ConsumerWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     key: const Key('start_routine_normal_button'),
-                    onPressed: () => ref.read(routineFocusProvider.notifier).startRoutine(strict: false),
+                    onPressed: () {
+                      ref.read(routineFocusProvider.notifier).startRoutine(strict: false);
+                      ref.read(protectionProvider.notifier).set(true);
+                    },
                     icon: const Icon(Icons.play_arrow_rounded, size: 18),
                     label: const Text('Apply Normally', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
@@ -165,6 +169,8 @@ class RoutineFocusCard extends ConsumerWidget {
                       ref.read(routineFocusProvider.notifier).startRoutine(strict: true);
                       final total = (routine.config.sessionMinutes + routine.config.breakMinutes) * routine.config.totalCycles;
                       ref.read(strictModeProvider.notifier).set(true, durationMinutes: total);
+                      FocusDnsBlockerManager.setStrictMode(true, durationMinutes: total);
+                      ref.read(protectionProvider.notifier).set(true);
                     },
                     icon: const Icon(Icons.lock_rounded, size: 16),
                     label: const Text('Apply Strictly', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
@@ -199,6 +205,124 @@ class RoutineFocusCard extends ConsumerWidget {
               ),
             ),
           ] else ...[
+            // 3-Column live telemetry: Session Timer, Break Timer, Number of Sessions
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: routine.isFocus
+                          ? (routine.isStrict ? const Color(0xFF991B1B).withOpacity(0.08) : palette.strictAccent.withOpacity(0.08))
+                          : palette.canvas,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: routine.isFocus
+                            ? (routine.isStrict ? const Color(0xFF991B1B) : palette.strictAccent)
+                            : palette.border,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SESSION TIMER',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: routine.isFocus
+                                ? (routine.isStrict ? const Color(0xFF991B1B) : palette.strictAccent)
+                                : palette.mutedInk,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          routine.isFocus ? _formatTime(routine.remainingSeconds) : '${routine.config.sessionMinutes}m',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: routine.isFocus
+                                ? (routine.isStrict ? const Color(0xFF991B1B) : palette.strictAccent)
+                                : palette.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: routine.isBreak
+                          ? const Color(0xFF10B981).withOpacity(0.08)
+                          : palette.canvas,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: routine.isBreak ? const Color(0xFF10B981) : palette.border,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'BREAK TIMER',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: routine.isBreak ? const Color(0xFF10B981) : palette.mutedInk,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          routine.isBreak ? _formatTime(routine.remainingSeconds) : '${routine.config.breakMinutes}m',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: routine.isBreak ? const Color(0xFF10B981) : palette.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: palette.canvas,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: palette.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SESSIONS',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: palette.mutedInk,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${routine.currentCycle} of ${routine.config.totalCycles}',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: palette.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             // Active Progress Bar & Info
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
